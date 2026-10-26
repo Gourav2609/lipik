@@ -45,3 +45,21 @@ result
 
 # Python bytecode (scripts/)
 __pycache__/
+
+# Private working material
+reference/
+journey/
+
+# Voice training data, weights and benchmark output
+training/data/
+training/runs/
+training/models/
+training/bench/audio/
+training/bench/app/
+training/bench/models/
+training/bench/runs*
+
+# Recordings
+*.mkv
+*.wav
+!src-tauri/resources/*.wav

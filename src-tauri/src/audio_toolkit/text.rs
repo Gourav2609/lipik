@@ -25,10 +25,12 @@ fn build_match_key(word: &str) -> String {
 struct CustomWordMatchKey {
     word_index: usize,
     key: String,
+    multi_word: bool,
 }
 
 fn build_custom_word_match_keys(word: &str, word_index: usize) -> Vec<CustomWordMatchKey> {
     let primary_key = build_match_key(word);
+    let multi_word = word.split_whitespace().count() > 1;
     let mut keys = Vec::with_capacity(2);
 
     // The fallback matcher is intentionally limited to ASCII terms. Its
@@ -39,6 +41,7 @@ fn build_custom_word_match_keys(word: &str, word_index: usize) -> Vec<CustomWord
         keys.push(CustomWordMatchKey {
             word_index,
             key: primary_key.clone(),
+            multi_word,
         });
     }
 
@@ -48,6 +51,7 @@ fn build_custom_word_match_keys(word: &str, word_index: usize) -> Vec<CustomWord
             keys.push(CustomWordMatchKey {
                 word_index,
                 key: expanded_key,
+                multi_word,
             });
         }
     }
@@ -70,6 +74,7 @@ fn supports_soundex(key: &str) -> bool {
 ///
 /// # Arguments
 /// * `candidate` - The cleaned/lowercased candidate string to match
+/// * `candidate_words` - How many spoken words were joined into `candidate`
 /// * `custom_words` - Original custom words (for returning the replacement)
 /// * `custom_word_match_keys` - Normalized custom-word keys for comparison
 /// * `threshold` - Maximum similarity score to accept
@@ -78,6 +83,7 @@ fn supports_soundex(key: &str) -> bool {
 /// The best matching custom word and its score, if any match was found
 fn find_best_match<'a>(
     candidate: &str,
+    candidate_words: usize,
     custom_words: &'a [String],
     custom_word_match_keys: &[CustomWordMatchKey],
     threshold: f64,
@@ -112,7 +118,11 @@ fn find_best_match<'a>(
 
         // Soundex is an English/ASCII phonetic algorithm. Numeric terms can
         // still use edit distance, but must not receive a phonetic boost.
-        let phonetic_match = supports_soundex(candidate)
+        // Soundex codes only the first few consonants, so joined words that
+        // start like a multi-word term ("oshin thanks" vs "Oshin Dastur")
+        // would share its code; those pairs are scored on spelling alone.
+        let phonetic_match = !(candidate_words > 1 && custom_word_key.multi_word)
+            && supports_soundex(candidate)
             && supports_soundex(&custom_word_key.key)
             && soundex(candidate, &custom_word_key.key);
 
@@ -188,7 +198,7 @@ pub fn apply_custom_words(text: &str, custom_words: &[String], threshold: f64) -
             let ngram = build_ngram(ngram_words);
 
             if let Some((replacement, score)) =
-                find_best_match(&ngram, custom_words, &custom_word_match_keys, threshold)
+                find_best_match(&ngram, n, custom_words, &custom_word_match_keys, threshold)
             {
                 let is_better = best_match
                     .as_ref()
@@ -313,11 +323,19 @@ fn gated_filler_words_for_language(lang: &str) -> &'static [&'static str] {
     let base_lang = lang.split(&['-', '_'][..]).next().unwrap_or(lang);
 
     match base_lang {
-        "en" => &["um", "ah", "eh"],
+        "en" => &["um", "ah", "eh", "erm"],
         "de" => &["äh", "ähm"],
         "fr" => &["euh"],
         _ => &[],
     }
+}
+
+/// The built-in filler words removed for output in `lang`.
+pub fn builtin_filler_words(lang: &str) -> impl Iterator<Item = &'static str> {
+    UNIVERSAL_FILLER_WORDS
+        .iter()
+        .chain(gated_filler_words_for_language(lang))
+        .copied()
 }
 
 static MULTI_SPACE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s{2,}").unwrap());
@@ -385,15 +403,24 @@ fn push_restoring_capital(kept: &mut String, segment: &str, capital_owed: &mut b
     kept.push_str(segment);
 }
 
+/// "UM", "ERM": two or more letters, all capitals.
+fn is_acronym(token: &str) -> bool {
+    let letters: Vec<char> = token.chars().filter(|c| c.is_alphabetic()).collect();
+    letters.len() >= 2 && letters.iter().all(|c| c.is_uppercase())
+}
+
 /// Deletes every match of one filler pattern. A capitalized filler that opened
 /// a sentence hands its capital to the word that takes its place, so
 /// "Um, so I think" becomes "So I think" rather than "so I think".
-fn remove_filler_matches(text: &str, pattern: &Regex) -> String {
+fn remove_filler_matches(text: &str, pattern: &Regex, keep_acronyms: bool) -> String {
     let mut kept = String::with_capacity(text.len());
     let mut resume = 0;
     let mut capital_owed = false;
 
     for filler in pattern.find_iter(text) {
+        if keep_acronyms && is_acronym(filler.as_str()) {
+            continue;
+        }
         push_restoring_capital(&mut kept, &text[resume..filler.start()], &mut capital_owed);
         let capitalized = filler.as_str().starts_with(char::is_uppercase);
         capital_owed |= capitalized && opens_sentence(&kept);
@@ -433,28 +460,32 @@ pub fn remove_filler_words(
         return text.to_string();
     }
 
-    // Build filler patterns from custom list or the built-in tiers
-    let patterns: Vec<Regex> = match custom_filler_words {
+    let pattern = |word: &str| Regex::new(&format!(r"(?i)\b{}\b[,.]?", regex::escape(word)));
+    // Build filler patterns from custom list or the built-in tiers. Gated words
+    // are real words elsewhere, so in capitals ("UM", "ERM") they are kept.
+    let patterns: Vec<(Regex, bool)> = match custom_filler_words {
         Some(words) => words
             .iter()
-            .filter_map(|word| Regex::new(&format!(r"(?i)\b{}\b[,.]?", regex::escape(word))).ok())
+            .filter_map(|word| pattern(word).ok().map(|p| (p, false)))
             .collect(),
         None => UNIVERSAL_FILLER_WORDS
             .iter()
+            .map(|word| (pattern(word).unwrap(), false))
             .chain(
                 language
                     .language()
                     .map(gated_filler_words_for_language)
-                    .unwrap_or_default(),
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|word| (pattern(word).unwrap(), true)),
             )
-            .map(|word| Regex::new(&format!(r"(?i)\b{}\b[,.]?", regex::escape(word))).unwrap())
             .collect(),
     };
 
     // Remove filler words
     let mut filtered = text.to_string();
-    for pattern in &patterns {
-        filtered = remove_filler_matches(&filtered, pattern);
+    for (pattern, keep_acronyms) in &patterns {
+        filtered = remove_filler_matches(&filtered, pattern, *keep_acronyms);
     }
 
     filtered
@@ -528,6 +559,35 @@ mod tests {
         assert_eq!(extract_punctuation("你好。"), ("", "。"));
         assert_eq!(extract_punctuation("「你好」"), ("「", "」"));
         assert_eq!(extract_punctuation("你好！"), ("", "！"));
+    }
+
+    #[test]
+    fn test_full_name_does_not_swallow_following_words() {
+        let custom_words = vec![
+            "Oshin Dastur".to_string(),
+            "Ishita Venkatraman".to_string(),
+            "Meher Kapadia".to_string(),
+        ];
+        for text in [
+            "Oshin thanks for the notes",
+            "Talk to Ishita about the contract",
+            "Meher ko bolo kal aana",
+        ] {
+            assert_eq!(apply_custom_words(text, &custom_words, 0.18), text);
+        }
+    }
+
+    #[test]
+    fn test_full_name_still_matches_when_spoken() {
+        let custom_words = vec!["Ishita Venkatraman".to_string()];
+        assert_eq!(
+            apply_custom_words("ask ishita venkat raman", &custom_words, 0.18),
+            "ask Ishita Venkatraman"
+        );
+        assert_eq!(
+            apply_custom_words("ask ishita venkatramen", &custom_words, 0.18),
+            "ask Ishita Venkatraman"
+        );
     }
 
     #[test]
@@ -739,6 +799,30 @@ mod tests {
         let text = "the screw is 5 mm long";
         let result = filter_transcription_output(text, "en", &None);
         assert_eq!(result, "the screw is 5 mm long");
+    }
+
+    #[test]
+    fn test_filter_english_erm() {
+        assert_eq!(filter_transcription_output("erm I think so", "en", &None), "I think so");
+        assert_eq!(filter_transcription_output("Erm, so it works", "en", &None), "So it works");
+        assert_eq!(filter_transcription_output("er ist schon da", "en", &None), "er ist schon da");
+    }
+
+    #[test]
+    fn test_filter_keeps_all_caps_tokens() {
+        for text in [
+            "Go to the UM campus",
+            "The ERM team met",
+            "We took him to the ER last night",
+        ] {
+            assert_eq!(filter_transcription_output(text, "en", &None), text);
+        }
+    }
+
+    #[test]
+    fn test_filter_filler_only_text_is_empty() {
+        assert_eq!(filter_transcription_output("Um.", "en", &None), "");
+        assert_eq!(filter_transcription_output("Uh, um.", "en", &None), "");
     }
 
     #[test]

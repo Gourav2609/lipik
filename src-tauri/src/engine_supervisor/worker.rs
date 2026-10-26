@@ -429,13 +429,13 @@ fn ignore_app_signals() {
 }
 
 /// Started from /proc/self/exe, the kernel names this process "exe". Name it
-/// as Handy's, but not `handy`: `pkill`/`killall` match names case-sensitively,
-/// so `pkill -USR2 -n handy` keeps reaching the app, never this newer process.
+/// as Lipik's, but not `lipik`: `pkill`/`killall` match names case-sensitively,
+/// so `pkill -USR2 -n lipik` keeps reaching the app, never this newer process.
 #[cfg(target_os = "linux")]
 fn set_process_name() {
     // SAFETY: PR_SET_NAME copies a NUL-terminated name of up to 16 bytes.
     unsafe {
-        libc::prctl(libc::PR_SET_NAME, c"Handy-worker".as_ptr());
+        libc::prctl(libc::PR_SET_NAME, c"Lipik-worker".as_ptr());
     }
 }
 

@@ -1,7 +1,7 @@
 //! Process isolation for transcribe.cpp.
 //!
 //! All transcribe.cpp native code (backend init, device enumeration, model
-//! load, inference, streaming) runs in a child process: the Handy executable
+//! load, inference, streaming) runs in a child process: the app's executable
 //! re-launched with [`WORKER_FLAG`]. A GPU driver fault, `GGML_ASSERT` abort,
 //! or hang then kills only the worker.
 //!

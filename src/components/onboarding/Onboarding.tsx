@@ -5,7 +5,7 @@ import { ChevronDown, ChevronLeft } from "lucide-react";
 import type { ModelInfo } from "@/bindings";
 import type { ModelCardStatus } from "./ModelCard";
 import ModelCard, { isLegacySource } from "./ModelCard";
-import HandyTextLogo from "../icons/HandyTextLogo";
+import { Wordmark } from "@/flow/onboarding/Wordmark";
 import { Button } from "../ui/Button";
 import { useModelStore } from "../../stores/modelStore";
 
@@ -175,7 +175,7 @@ const Onboarding: React.FC<OnboardingProps> = ({
         </Button>
       )}
       <div className="flex flex-col items-center gap-2 shrink-0">
-        <HandyTextLogo width={200} />
+        <Wordmark width={200} />
         <p className="text-text/70 max-w-md font-medium mx-auto">
           {t("onboarding.subtitle")}
         </p>

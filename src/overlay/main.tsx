@@ -1,7 +1,9 @@
+import "@/lib/storageKeys";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
 import RecordingOverlay from "./RecordingOverlay";
+import Pill from "./Pill";
 import {
   applyTheme,
   getStoredTheme,
@@ -14,12 +16,17 @@ import "@/i18n";
 // `data-theme` on its own document: last-known theme before render (shared
 // localStorage) to avoid a flash, reconcile with the persisted setting in case
 // the overlay booted first, then follow live changes.
-applyTheme(getStoredTheme());
-syncThemeFromSettings();
-listen<Theme>("theme-changed", (event) => applyTheme(event.payload));
+const boot = () => {
+  applyTheme(getStoredTheme());
+  syncThemeFromSettings();
+  listen<Theme>("theme-changed", (event) => applyTheme(event.payload));
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <RecordingOverlay />
-  </React.StrictMode>,
-);
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      {navigator.userAgent.includes("Mac") ? <Pill /> : <RecordingOverlay />}
+    </React.StrictMode>,
+  );
+};
+
+if (import.meta.env.DEV) import("./pill/preview").then(boot);
+else boot();

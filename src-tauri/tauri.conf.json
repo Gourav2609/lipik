@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Handy",
-  "version": "0.9.8",
-  "identifier": "com.pais.handy",
+  "productName": "Lipik",
+  "version": "0.1.0",
+  "identifier": "com.gourav.lipik",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -25,7 +25,7 @@
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "targets": "all",
     "resources": ["resources/**/*"],
     "license": "MIT",
@@ -40,7 +40,7 @@
       "files": {},
       "hardenedRuntime": true,
       "minimumSystemVersion": "10.15",
-      "signingIdentity": "-",
+      "signingIdentity": "Lipik Dev",
       "entitlements": "Entitlements.plist"
     },
     "linux": {
@@ -70,7 +70,6 @@
       }
     },
     "windows": {
-      "signCommand": "trusted-signing-cli -e https://eus.codesigning.azure.net/ -a CJ-Signing -c cjpais-dev -d Handy %1",
       "nsis": {
         "template": "nsis/installer.nsi",
         "installerIcon": "icons/icon.ico"
@@ -79,10 +78,8 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBQjcyMDk1MjA2NjAxRjkKUldUNUFXWWdsU0MzdXRRZi8zYzhqV2FaNUVDbDd2Rk5VM1IvWWowVXdmRFNKQ1BrMXF5RFFsLy8K",
-      "endpoints": [
-        "https://github.com/cjpais/Handy/releases/latest/download/latest.json"
-      ]
+      "pubkey": "",
+      "endpoints": []
     }
   }
 }

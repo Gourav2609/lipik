@@ -1,3 +1,4 @@
+use crate::apple_speech::{pick, AppleSpeech, JobControl};
 use crate::audio_toolkit::chunking;
 use crate::audio_toolkit::{
     apply_custom_words, detect_output_language, normalize_transcription_output,
@@ -11,7 +12,8 @@ use crate::engine_supervisor::{
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::ModelManager;
 use crate::settings::{
-    get_settings, AppSettings, ChineseScript, ModelUnloadTimeout, TranscribeAcceleratorSetting,
+    get_settings, AppSettings, ChineseScript, ModelUnloadTimeout, SpeechEngine,
+    TranscribeAcceleratorSetting,
 };
 use anyhow::Result;
 use chunked::ChunkedDecode;
@@ -34,6 +36,40 @@ mod live;
 pub mod policy;
 
 const STREAM_PERF_LOG_INTERVAL: Duration = Duration::from_secs(5);
+/// One second of silence, decoded once after each model load.
+const WARM_UP_SAMPLES: usize = 16_000;
+/// A `.partial` download untouched this long belongs to no running download.
+const STALE_PARTIAL_AGE: Duration = Duration::from_secs(60 * 60);
+
+/// Deletes interrupted model downloads (`*.partial`) left in the models
+/// folder for over an hour.
+fn remove_stale_partials(app_handle: &AppHandle) {
+    let Ok(dir) = crate::portable::app_data_dir(app_handle).map(|d| d.join("models")) else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("partial") {
+            continue;
+        }
+        let stale = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age > STALE_PARTIAL_AGE);
+        if !stale || !entry.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
+        match std::fs::remove_file(&path) {
+            Ok(()) => info!("Deleted stale partial download {:?}", path.file_name()),
+            Err(e) => warn!("Could not delete stale partial download {:?}: {}", path, e),
+        }
+    }
+}
 
 fn panic_payload_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(message) = payload.downcast_ref::<&str>() {
@@ -232,6 +268,14 @@ impl Drop for StreamWorkerGuard {
     }
 }
 
+/// The selected model loaded a second time, in its own worker process, for
+/// a caller that streams beside dictation (the notetaker's live transcript):
+/// neither ever waits for the other. Dropping it stops the worker.
+pub struct SideEngine {
+    pub engine: EngineSupervisor,
+    pub run: RunOptions,
+}
+
 #[derive(Clone)]
 pub struct TranscriptionManager {
     /// The transcribe-cpp engine: owns the worker process, its model, and
@@ -263,10 +307,34 @@ pub struct TranscriptionManager {
     /// yet. This prevents a second worker from starting after finalize/cancel
     /// closes the router but before the first worker has fully exited.
     active_stream_worker: Arc<AtomicU64>,
+    /// Apple's on-device dictation, the second speech engine.
+    apple: AppleSpeech,
+    /// Bumped by every user cancel, so a finished Apple run can tell it was
+    /// cancelled.
+    apple_cancel_epoch: Arc<AtomicU64>,
 }
+
+/// An Apple transcription running beside the local model's. Dropping it
+/// without waiting drops the request if it has not reached the helper yet.
+struct AppleJob {
+    engine: SpeechEngine,
+    result: mpsc::Receiver<Result<String>>,
+    control: Arc<JobControl>,
+    cancel_epoch: u64,
+    started: Instant,
+}
+
+impl Drop for AppleJob {
+    fn drop(&mut self) {
+        self.control.skip.store(true, Ordering::SeqCst);
+    }
+}
+
+const APPLE_CANCEL_POLL: Duration = Duration::from_millis(20);
 
 impl TranscriptionManager {
     pub fn new(app_handle: &AppHandle, model_manager: Arc<ModelManager>) -> Result<Self> {
+        remove_stale_partials(app_handle);
         let manager = Self {
             engine: EngineSupervisor::new(!transcribe_gpu_disabled_for_host()),
             model_manager,
@@ -282,7 +350,10 @@ impl TranscriptionManager {
             stream_active: Arc::new(AtomicBool::new(false)),
             next_stream_worker_id: Arc::new(AtomicU64::new(1)),
             active_stream_worker: Arc::new(AtomicU64::new(0)),
+            apple: AppleSpeech::new(),
+            apple_cancel_epoch: Arc::new(AtomicU64::new(0)),
         };
+        manager.warm_apple_speech();
 
         // Start the idle watcher
         {
@@ -639,6 +710,17 @@ impl TranscriptionManager {
             *current_model = Some(model_id.to_string());
         }
 
+        // A new worker's first decode is slow (GPU kernels are set up on first
+        // use). Pay that now, while the user is still speaking.
+        let warm_up_started = Instant::now();
+        match self
+            .engine
+            .transcribe(vec![0.0; WARM_UP_SAMPLES], RunOptions::default())
+        {
+            Ok(_) => debug!("Warm-up decode took {:?}", warm_up_started.elapsed()),
+            Err(e) => debug!("Warm-up decode skipped: {}", e),
+        }
+
         // Reset idle timer so the watcher doesn't immediately unload a just-loaded model
         self.touch_activity();
 
@@ -871,7 +953,174 @@ impl TranscriptionManager {
     /// it is stopped; the model stays loaded and the next use starts a fresh
     /// worker for it.
     pub fn cancel_transcription(&self) {
+        self.apple_cancel_epoch.fetch_add(1, Ordering::SeqCst);
         self.engine.cancel();
+    }
+
+    pub fn apple_speech(&self) -> &AppleSpeech {
+        &self.apple
+    }
+
+    /// Starts Apple's helper and loads its model in the background when the
+    /// settings use it, so the first dictation does not pay for it.
+    pub fn warm_apple_speech(&self) {
+        let settings = get_settings(&self.app_handle);
+        if settings.speech_engine == SpeechEngine::Parakeet || !self.apple.maybe_supported() {
+            return;
+        }
+        let apple = self.apple.clone();
+        let locale = settings.apple_locale;
+        thread::spawn(move || {
+            let started = Instant::now();
+            match apple.prepare(&locale, false) {
+                Ok(resolved) => info!(
+                    "Apple speech ready for {} in {} ms",
+                    resolved,
+                    started.elapsed().as_millis()
+                ),
+                Err(e) => warn!("Apple speech not available: {}", e),
+            }
+        });
+    }
+
+    /// True when the selected local model only writes English, which is
+    /// what auto mode's pick rule assumes.
+    fn local_model_is_english_only(&self, settings: &AppSettings) -> bool {
+        let model_id = if settings.selected_model.is_empty() {
+            self.get_current_model().unwrap_or_default()
+        } else {
+            settings.selected_model.clone()
+        };
+        self.model_manager
+            .get_model_info(&model_id)
+            .is_some_and(|info| {
+                !info.supported_languages.is_empty()
+                    && info
+                        .supported_languages
+                        .iter()
+                        .all(|l| l == "en" || l.starts_with("en-"))
+            })
+    }
+
+    /// Starts Apple's transcription of `audio` on its own thread when the
+    /// settings call for it: always in Apple mode, and in auto mode only with
+    /// an English-only local model and a dictation language that fits.
+    fn start_apple(&self, audio: &[f32], settings: &AppSettings) -> Option<AppleJob> {
+        let engine = settings.speech_engine;
+        let language = settings.selected_language.as_str();
+        let language_fits = matches!(language, "auto" | "en" | "hi") || language.starts_with("en-");
+        if engine == SpeechEngine::Parakeet
+            || audio.is_empty()
+            || settings.translate_to_english
+            || !self.apple.maybe_supported()
+            || (engine == SpeechEngine::Auto
+                && !(language_fits && self.local_model_is_english_only(settings)))
+        {
+            return None;
+        }
+        let (tx, result) = mpsc::channel();
+        let apple = self.apple.clone();
+        let pcm = audio.to_vec();
+        let locale = settings.apple_locale.clone();
+        let words = settings.custom_words.clone();
+        let control = Arc::new(JobControl::default());
+        let job_control = Arc::clone(&control);
+        thread::spawn(move || {
+            let _ = tx.send(apple.transcribe(&pcm, &locale, &words, Some(&job_control)));
+        });
+        Some(AppleJob {
+            engine,
+            result,
+            control,
+            cancel_epoch: self.apple_cancel_epoch.load(Ordering::SeqCst),
+            started: Instant::now(),
+        })
+    }
+
+    /// Apple's text, or `None` when it failed. `Err` only for a user cancel.
+    fn wait_apple(&self, job: AppleJob) -> Result<Option<String>> {
+        let result = loop {
+            if self.apple_cancel_epoch.load(Ordering::SeqCst) != job.cancel_epoch {
+                job.control.kill.store(true, Ordering::SeqCst);
+                return Err(EngineError::Cancelled.into());
+            }
+            match job.result.recv_timeout(APPLE_CANCEL_POLL) {
+                Ok(result) => break result,
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    break Err(anyhow::anyhow!("Apple speech thread ended"))
+                }
+            }
+        };
+        if self.apple_cancel_epoch.load(Ordering::SeqCst) != job.cancel_epoch {
+            return Err(EngineError::Cancelled.into());
+        }
+        match result {
+            Ok(text) => {
+                info!(
+                    "Apple speech finished {} ms after the recording",
+                    job.started.elapsed().as_millis()
+                );
+                Ok(Some(text))
+            }
+            Err(e) => {
+                warn!("Apple speech failed, using the local model: {}", e);
+                Ok(None)
+            }
+        }
+    }
+
+    /// In Apple mode, Apple's text when it produced any; the caller falls
+    /// back to the local model otherwise.
+    fn apple_only(
+        &self,
+        job: &mut Option<AppleJob>,
+        settings: &AppSettings,
+    ) -> Result<Option<RunOutcome>> {
+        if job.as_ref().map(|j| j.engine) != Some(SpeechEngine::Apple) {
+            return Ok(None);
+        }
+        let job = job.take().expect("checked above");
+        Ok(self
+            .wait_apple(job)?
+            .filter(|text| !text.trim().is_empty())
+            .map(|text| apple_outcome(text, settings)))
+    }
+
+    /// Auto mode: the local model's text when it reads as English, else
+    /// Apple's. Apple also stands in when the local model failed.
+    fn pick_engine(
+        &self,
+        local: Result<RunOutcome>,
+        job: Option<AppleJob>,
+        settings: &AppSettings,
+    ) -> Result<RunOutcome> {
+        let Some(job) = job else { return local };
+        let local = match local {
+            Ok(outcome) if pick::local_text_looks_english(&outcome.text, &settings.custom_words) => {
+                debug!("Auto engine: kept the local model's text");
+                return Ok(outcome);
+            }
+            Ok(outcome) => Ok(outcome),
+            Err(e) if matches!(e.downcast_ref::<EngineError>(), Some(EngineError::Cancelled)) => {
+                return Err(e)
+            }
+            Err(e) => Err(e),
+        };
+        match self.wait_apple(job)? {
+            Some(text) if !text.trim().is_empty() => {
+                debug!("Auto engine: used Apple's text");
+                Ok(match local {
+                    Ok(outcome) => RunOutcome {
+                        text,
+                        model_detected_language: None,
+                        ..outcome
+                    },
+                    Err(_) => apple_outcome(text, settings),
+                })
+            }
+            _ => local,
+        }
     }
 
     /// Emit a working-phase event to the streaming overlay (spinner + label).
@@ -886,15 +1135,75 @@ impl TranscriptionManager {
     /// Transcribe a whole clip in batch: a re-transcribed history entry, or
     /// a file from the CLI.
     pub fn transcribe(&self, audio: Vec<f32>) -> Result<String> {
-        self.complete(Instant::now(), audio, None)
+        let started = Instant::now();
+        let settings = get_settings(&self.app_handle);
+        let mut apple = self.start_apple(&audio, &settings);
+        let live = self.apple_only(&mut apple, &settings)?;
+        self.complete(started, audio, live, apple)
+    }
+
+    /// `transcribe`, but the model stays loaded whatever the unload setting:
+    /// for callers that decode many clips in a row (the notetaker).
+    pub fn transcribe_keep_loaded(&self, audio: Vec<f32>) -> Result<String> {
+        if audio.is_empty() {
+            return Ok(String::new());
+        }
+        let outcome = self.decode_batch(audio)?;
+        Ok(finish_text(outcome, &get_settings(&self.app_handle)))
+    }
+
+    /// Loads the selected model in a new [`SideEngine`] on the same device
+    /// dictation would use. Fails when the model is missing or can't stream.
+    pub fn side_stream_engine(&self) -> Result<SideEngine> {
+        let settings = get_settings(&self.app_handle);
+        let model_id = settings.selected_model.clone();
+        let path = self.model_manager.get_model_path(&model_id)?;
+        let (backend, device) = match resolve_gpu_device(
+            settings.transcribe_accelerator,
+            settings.transcribe_gpu_device.as_deref(),
+        ) {
+            Some(key) => (Backend::Auto, DeviceSelector::Key(key)),
+            None => (
+                select_transcribe_backend(settings.transcribe_accelerator),
+                DeviceSelector::Auto,
+            ),
+        };
+        let engine = EngineSupervisor::new(!transcribe_gpu_disabled_for_host());
+        let info = engine
+            .load(LoadSpec {
+                path,
+                backend,
+                device,
+            })
+            .map_err(|e| anyhow::anyhow!("Failed to load model {}: {}", model_id, e))?;
+        if !info.capabilities.supports_streaming {
+            return Err(anyhow::anyhow!("Model {} can't stream", model_id));
+        }
+        if let Err(e) = engine.transcribe(vec![0.0; WARM_UP_SAMPLES], RunOptions::default()) {
+            debug!("Side engine warm-up decode skipped: {}", e);
+        }
+        let language =
+            effective_language_for_model(&settings, self.model_manager.as_ref(), &model_id);
+        let run = run_setup(&info, &settings, &language).run_options;
+        info!(
+            "Side streaming engine loaded '{}' on '{}'",
+            model_id, info.backend
+        );
+        Ok(SideEngine { engine, run })
     }
 
     /// Transcribe a finished recording: what its live decode produced, or a
     /// batch run of the whole recording when there is no live result.
     pub fn transcribe_recording(&self, samples: Vec<f32>) -> Result<String> {
         let started = Instant::now();
+        let settings = get_settings(&self.app_handle);
+        let mut apple = self.start_apple(&samples, &settings);
+        if let Some(outcome) = self.apple_only(&mut apple, &settings)? {
+            self.cancel_stream();
+            return self.complete(started, samples, Some(outcome), None);
+        }
         let live = self.finalize_live(samples.len())?;
-        self.complete(started, samples, live)
+        self.complete(started, samples, live, apple)
     }
 
     /// The final text of one transcription, from its live result or else a
@@ -904,6 +1213,7 @@ impl TranscriptionManager {
         started: Instant,
         audio: Vec<f32>,
         live: Option<RunOutcome>,
+        apple: Option<AppleJob>,
     ) -> Result<String> {
         #[cfg(debug_assertions)]
         if std::env::var("HANDY_FORCE_TRANSCRIPTION_FAILURE").is_ok() {
@@ -920,11 +1230,12 @@ impl TranscriptionManager {
             return Ok(String::new());
         }
 
-        let outcome = match live {
-            Some(outcome) => outcome,
-            None => self.decode_batch(audio)?,
+        let local = match live {
+            Some(outcome) => Ok(outcome),
+            None => self.decode_batch(audio),
         };
         let settings = get_settings(&self.app_handle);
+        let outcome = self.pick_engine(local, apple, &settings)?;
         let final_result = finish_text(outcome, &settings);
 
         let translation_note = if settings.translate_to_english {
@@ -947,8 +1258,9 @@ impl TranscriptionManager {
             info!("Transcription result is empty");
         } else {
             info!(
-                "Transcription result: {}",
-                crate::utils::redact_text(&final_result)
+                "Transcription result: {} words, {} chars",
+                final_result.split_whitespace().count(),
+                final_result.chars().count()
             );
         }
 
@@ -1087,6 +1399,24 @@ struct RunOutcome {
     text: String,
     /// The language the model itself detected, if it reported one.
     model_detected_language: Option<String>,
+}
+
+/// Apple's text as a run of its own, for when no local run is used. The
+/// dictionary words went to Apple as context, so they count as prompted.
+fn apple_outcome(text: String, settings: &AppSettings) -> RunOutcome {
+    RunOutcome {
+        setup: RunSetup {
+            run_options: RunOptions {
+                vocabulary: settings.custom_words.clone(),
+                ..Default::default()
+            },
+            languages: vec!["en".to_string()],
+            applied_language_hint: Some("en".to_string()),
+            output_was_translated: false,
+        },
+        text,
+        model_detected_language: None,
+    }
 }
 
 /// One transcription's final text: its output language resolved, then

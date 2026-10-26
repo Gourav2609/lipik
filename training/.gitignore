@@ -1,0 +1,5 @@
+# Voice data and trained weights are personal. Never commit them.
+data/
+runs/
+models/
+corrections*.jsonl

@@ -1,0 +1,13 @@
+Lipik
+Copyright (c) 2026 Gourav
+
+This product is a modified version of Handy
+(https://github.com/cjpais/Handy), copyright (c) 2025 CJ Pais, released
+under the MIT License. The full licence text is in the LICENSE file.
+
+Changes in Lipik include a new interface, local AI clean-up through Ollama,
+a dictionary and snippets, text transforms, a meeting notetaker and voice
+training scripts.
+
+Third-party libraries keep their own licences, listed in src-tauri/Cargo.toml
+(Rust) and package.json (JavaScript).

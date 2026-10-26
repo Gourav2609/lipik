@@ -1,37 +1,24 @@
 ---
-name: Bug Report
-about: Create a report to help us improve Handy
-title: "[BUG] "
+name: Bug report
+about: Something in Lipik does not work as expected
+title: ""
 labels: ["bug"]
 assignees: ""
 ---
 
-## Before You Submit
+Search this repository's Issues first; your bug may already be reported.
 
-**Please search [existing issues](https://github.com/cjpais/Handy/issues) to avoid duplicates.** Your bug may already be reported! Right now it's just me maintaining this project so many issues can be overwhelming! Help me out by checking first.
+## What happened
 
-## Bug Description
+What you did, what you expected, and what you got instead.
 
-A clear and concise description of what the bug is.
+## Your Mac
 
-## System Information
-
-**App Version:**
-
-<!-- You can find this in the app settings or about section -->
-
-**Operating System:**
-
-<!-- e.g., macOS 14.1, Windows 11, Ubuntu 22.04 -->
-
-**CPU:**
-
-<!-- e.g., Apple M2, Intel i7-12700K, AMD Ryzen 7 5800X -->
-
-**GPU:**
-
-<!-- e.g., Apple M2 GPU, NVIDIA RTX 4080, AMD RX 6800 XT, Intel UHD Graphics -->
+- Lipik version (Settings → About):
+- macOS version:
+- Mac (Apple silicon or Intel):
+- Speech model and engine (Settings → General):
 
 ## Logs
 
-<!-- Please attach relevant logs to help us diagnose the issue. You can find the log directory by going to Settings > About in the app. -->
+Attach `lipik.log` if you can. It is in `~/Library/Logs/com.gourav.lipik/`.

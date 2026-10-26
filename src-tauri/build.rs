@@ -6,10 +6,10 @@ fn main() {
 
     // Linux ships transcribe-cpp as a shared libtranscribe + loadable ggml
     // backend modules (the `dynamic-backends` posture in Cargo.toml). Bake an
-    // $ORIGIN-relative rpath into the `handy` binary so it finds libtranscribe
+    // $ORIGIN-relative rpath into the `lipik` binary so it finds libtranscribe
     // next to it in the package — deb/rpm install into the app-private
     // `/usr/lib/Handy` (the dir tauri already uses for resources; keeps
-    // Handy's libs out of the ldconfig-scanned `/usr/lib`, issue #1639) while
+    // the app's libs out of the ldconfig-scanned `/usr/lib`, issue #1639) while
     // the AppImage keeps them in `usr/lib` (linuxdeploy's layout), hence both
     // entries. transcribe's
     // init_backends_default() then loads the ggml modules co-located there.
@@ -36,7 +36,90 @@ fn main() {
     // Must run after transcribe staging because that helper recreates transcribe-libs/.
     stage_vc_runtime_dlls();
 
+    // Must run before tauri_build, which checks that every externalBin exists.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        build_apple_speech_helper();
+    }
+
     tauri_build::build()
+}
+
+/// Compile the Apple dictation helper (`apple-speech/main.swift`) into
+/// `apple-speech/bin/apple-speech-<target triple>`, the name tauri's
+/// `externalBin` (tauri.macos.conf.json) expects; it ships next to the app
+/// binary. An SDK without macOS 26's SpeechAnalyzer gets a stub helper that
+/// reports itself unsupported, so the app falls back to the local model.
+fn build_apple_speech_helper() {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    const SOURCE: &str = "apple-speech/main.swift";
+    println!("cargo:rerun-if-changed={SOURCE}");
+    println!("cargo:rerun-if-env-changed=SDKROOT");
+    println!("cargo:rerun-if-env-changed=SWIFTC");
+
+    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let triple = std::env::var("TARGET").unwrap();
+    let arch = match std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
+        Ok("aarch64") => "arm64",
+        Ok("x86_64") => "x86_64",
+        other => panic!("unsupported macOS arch for the Apple speech helper: {other:?}"),
+    };
+    let bin_dir = manifest.join("apple-speech/bin");
+    std::fs::create_dir_all(&bin_dir).expect("create apple-speech/bin");
+    let out = bin_dir.join(format!("apple-speech-{triple}"));
+
+    let xcrun = |args: &[&str]| -> Option<String> {
+        let output = Command::new("xcrun").args(args).output().ok()?;
+        output
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    };
+    let sdk = std::env::var("SDKROOT")
+        .ok()
+        .or_else(|| xcrun(&["--sdk", "macosx", "--show-sdk-path"]))
+        .expect("Failed to locate macOS SDK");
+    let swiftc = std::env::var("SWIFTC")
+        .ok()
+        .or_else(|| xcrun(&["--find", "swiftc"]))
+        .expect("Failed to locate swiftc");
+    let target = format!("{arch}-apple-macos12.0");
+    let compile = |source: &std::path::Path| {
+        Command::new(&swiftc)
+            .args(["-O", "-target", &target, "-sdk", &sdk])
+            .arg(source)
+            .arg("-o")
+            .arg(&out)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+
+    let sdk_major = xcrun(&["--sdk", &sdk, "--show-sdk-version"])
+        .and_then(|v| v.split('.').next()?.parse::<u32>().ok())
+        .unwrap_or(0);
+    if sdk_major >= 26 {
+        assert!(
+            compile(&manifest.join(SOURCE)),
+            "swiftc failed to build {SOURCE}"
+        );
+        return;
+    }
+    println!(
+        "cargo:warning=Apple speech helper needs the macOS 26 SDK (found {sdk_major}); building \
+         a stub that reports Apple dictation as unavailable."
+    );
+    let stub = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("apple_speech_stub.swift");
+    std::fs::write(
+        &stub,
+        "import Foundation\n\
+         print(#\"{\"ready\":true,\"supported\":false}\"#)\n\
+         fflush(stdout)\n\
+         while let line = readLine() { _ = line }\n",
+    )
+    .expect("write apple speech stub");
+    assert!(compile(&stub), "swiftc failed to build the Apple speech stub");
 }
 
 /// Link clang's compiler runtime, which provides `__isPlatformVersionAtLeast`.
@@ -70,7 +153,7 @@ fn link_clang_rt_osx() {
 /// Stage the MSVC runtime DLLs into `transcribe-libs/` for app-local deployment.
 ///
 /// Handy's native stack links the VC++ runtime dynamically (/MD). Shipping the
-/// DLLs beside `handy.exe` covers machines with no redistributable installed and
+/// DLLs beside `lipik.exe` covers machines with no redistributable installed and
 /// machines whose system redist is older than the CI toolset (issue #1527).
 ///
 /// Driven by `HANDY_VC_REDIST_DIRS`, set by CI to the redist dirs from the same
@@ -145,7 +228,7 @@ fn stage_vc_runtime_dlls() {
 /// this is a no-op there. `RUNTIME_DIR` (core libs) and `MODULE_DIR` (dlopen'd
 /// ggml modules) may be the same dir — the `BTreeSet` below dedups them.
 ///
-/// Where the staged dir lands: Windows bundles it beside `handy.exe` (DLLs resolve
+/// Where the staged dir lands: Windows bundles it beside `lipik.exe` (DLLs resolve
 /// from the exe dir); Linux deb/rpm map it into the app-private `/usr/lib/Handy`
 /// and the AppImage into `usr/lib`, both on the binary's rpath.
 fn stage_transcribe_runtime_libs() {

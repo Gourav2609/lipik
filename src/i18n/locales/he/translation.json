@@ -1,7 +1,6 @@
 {
   "tray": {
     "settings": "הגדרות...",
-    "checkUpdates": "בדוק עדכונים...",
     "copyLastTranscript": "העתק את התמלול האחרון",
     "unloadModel": "פרוק מודל",
     "model": "מודל",
@@ -28,7 +27,7 @@
     "customModelDescription": "לא נתמך באופן רשמי",
     "migration": {
       "title": "המודלים שלך צריכים עדכון",
-      "description": "Handy משתמש כעת בסוג חדש יותר של מודלים. יש להוריד את הגרסה החדשה כדי להמשיך לתמלל. גרסאות ישנות יוסרו.",
+      "description": "{{appName}} משתמש כעת בסוג חדש יותר של מודלים. יש להוריד את הגרסה החדשה כדי להמשיך לתמלל. גרסאות ישנות יוסרו.",
       "replaces": "מחליף את {{name}}",
       "oldFormat": "פורמט ישן",
       "failed": "ההורדה נכשלה",
@@ -69,7 +68,7 @@
     },
     "permissions": {
       "title": "נדרשות הרשאות",
-      "description": "Handy צריך כמה הרשאות כדי לעבוד כמו שצריך.",
+      "description": "{{appName}} צריך כמה הרשאות כדי לעבוד כמו שצריך.",
       "microphone": {
         "title": "גישה למיקרופון",
         "description": "נדרש כדי לשמוע את הקול שלך לצורך תמלול."
@@ -126,7 +125,7 @@
     "general": {
       "title": "כללי",
       "shortcut": {
-        "title": "קיצורי מקשים של Handy",
+        "title": "קיצורי מקשים של {{appName}}",
         "description": "הגדר קיצורי מקשים כדי להפעיל הקלטה ותמלול דיבור",
         "loading": "טוען קיצורי מקשים...",
         "none": "לא הוגדרו קיצורי מקשים",
@@ -183,7 +182,7 @@
       "deleteActiveConfirm": "{{modelName}} הוא המודל הפעיל שלך כרגע. מחיקה שלו תעצור את התמלול עד שתבחר מודל חדש. להמשיך?",
       "deleteTitle": "מחיקת מודל",
       "retiredNotice": {
-        "title": "מודלים ישנים כבר לא עובדים עם Handy",
+        "title": "מודלים ישנים כבר לא עובדים עם {{appName}}",
         "description": "הם תופסים {{size}} במחשב שלך.",
         "delete": "מחיקת מודלים",
         "deleted": "המודלים הישנים נמחקו",
@@ -198,7 +197,7 @@
       "searchPlaceholder": "חיפוש מודלים לפי שם…",
       "rescan": {
         "label": "סריקה מחדש",
-        "tooltip": "סריקה מחדש לאיתור מודלים שנוספו לתיקיית המודלים או למטמון של Hugging Face מחוץ ל-Handy"
+        "tooltip": "סריקה מחדש לאיתור מודלים שנוספו לתיקיית המודלים או למטמון של Hugging Face מחוץ ל-{{appName}}"
       }
     },
     "sound": {
@@ -261,11 +260,11 @@
       },
       "autostart": {
         "label": "הפעל עם עליית המערכת",
-        "description": "הפעל את Handy אוטומטית כשאתה מתחבר למחשב."
+        "description": "הפעל את {{appName}} אוטומטית כשאתה מתחבר למחשב."
       },
       "showTrayIcon": {
         "label": "הצג אייקון במגש",
-        "description": "הצג את האייקון של Handy במגש המערכת."
+        "description": "הצג את האייקון של {{appName}} במגש המערכת."
       },
       "overlay": {
         "style": {
@@ -483,7 +482,7 @@
       },
       "updateChecks": {
         "label": "בדוק עדכונים",
-        "description": "בדוק אוטומטית אם קיימות גרסאות חדשות של Handy",
+        "description": "בדוק אוטומטית אם קיימות גרסאות חדשות של {{appName}}",
         "lockedDescription": "מושבת על ידי תצורת המערכת (HANDY_DISABLE_UPDATER)"
       },
       "soundTheme": {
@@ -561,7 +560,7 @@
       },
       "keyboardDiagnostic": {
         "title": "אבחון מקלדת",
-        "description": "בודק אם אירועי מקלדת מגיעים ל-Handy. נרשם רק מספר האירועים — לעולם לא אילו מקשים הקשת.",
+        "description": "בודק אם אירועי מקלדת מגיעים ל-{{appName}}. נרשם רק מספר האירועים — לעולם לא אילו מקשים הקשת.",
         "run": "הרצת אבחון של 10 שניות",
         "running": "מאזין… הקש על קיצור המקשים שלך כמה פעמים (למשל Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -575,7 +574,7 @@
         "mouse": "עכבר",
         "verdictBlocked": "Secure Input חוסם אירועי מקשים — קיצורים הכוללים מקש רגיל לא יוכלו לפעול עד שהבעיה תיפתר.",
         "verdictSuspicious": "הגיעו אירועים של מקשי החלפה אך לא אירועי מקשים — משהו מדכא מקשים למרות ש-Secure Input מדווח כמושבת. אנא דווח על כך ב-GitHub.",
-        "verdictOk": "אירועי מקשים מגיעים ל-Handy כרגיל.",
+        "verdictOk": "אירועי מקשים מגיעים ל-{{appName}} כרגיל.",
         "verdictNoEvents": "לא נקלטו אירועים — האם הקשת על מקשים במהלך הבדיקה?",
         "failed": "האבחון נכשל: {{error}}"
       },
@@ -598,11 +597,11 @@
       "title": "אודות",
       "version": {
         "title": "גרסה",
-        "description": "הגרסה הנוכחית של Handy"
+        "description": "הגרסה הנוכחית של {{appName}}"
       },
       "appDataDirectory": {
         "title": "תיקיית נתוני אפליקציה",
-        "description": "המיקום שבו Handy שומר את הנתונים שלו"
+        "description": "המיקום שבו {{appName}} שומר את הנתונים שלו"
       },
       "sourceCode": {
         "title": "קוד מקור",
@@ -611,7 +610,7 @@
       },
       "supportDevelopment": {
         "title": "תמיכה בפיתוח",
-        "description": "עזור לנו להמשיך לבנות את Handy",
+        "description": "עזור לנו להמשיך לבנות את {{appName}}",
         "button": "תרומה"
       },
       "acknowledgments": {
@@ -619,12 +618,12 @@
         "ggml": {
           "title": "ggml",
           "description": "הסקה מהירה לביצועים גבוהים עבור מודל זיהוי הדיבור Whisper של OpenAI",
-          "details": "Handy משתמש ב-ggml לתמלול מהיר ומקומי. תודה לעבודה המדהימה של Georgi Gerganov וכל התורמים."
+          "details": "{{appName}} משתמש ב-ggml לתמלול מהיר ומקומי. תודה לעבודה המדהימה של Georgi Gerganov וכל התורמים."
         }
       },
       "whatsNewUpdates": {
         "label": "הצג מה חדש",
-        "description": "הצג הערות גרסה לאחר עדכוני Handy"
+        "description": "הצג הערות גרסה לאחר עדכוני {{appName}}"
       }
     }
   },
@@ -654,7 +653,7 @@
     "noOptionsFound": "לא נמצאו אפשרויות"
   },
   "accessibility": {
-    "permissionsDescription": "Handy צריך הרשאות נגישות כדי להקליד את הטקסט המתומלל.",
+    "permissionsDescription": "{{appName}} צריך הרשאות נגישות כדי להקליד את הטקסט המתומלל.",
     "openSettings": "פתח את הגדרות המערכת"
   },
   "errors": {
@@ -677,11 +676,11 @@
   },
   "appLanguage": {
     "title": "שפת האפליקציה",
-    "description": "שנה את שפת הממשק של Handy"
+    "description": "שנה את שפת הממשק של {{appName}}"
   },
   "theme": {
     "title": "ערכת נושא של האפליקציה",
-    "description": "בחר אם Handy יעקוב אחר ערכת הנושא של המערכת או יישאר בהיר או כהה",
+    "description": "בחר אם {{appName}} יעקוב אחר ערכת הנושא של המערכת או יישאר בהיר או כהה",
     "options": {
       "system": "מערכת",
       "light": "בהיר",
@@ -694,7 +693,7 @@
     "loadingModel": "טוען מודל..."
   },
   "whatsNew": {
-    "title": "חדש ב-Handy v{{version}}"
+    "title": "חדש ב-{{appName}} v{{version}}"
   },
   "secureInput": {
     "blockedWithCulprit_one": "ייתכן ש-{{name}} חוסם קיצור דרך אחד",

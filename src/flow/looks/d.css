@@ -1,0 +1,751 @@
+/* Look d, "Ivory, refined": look a rebuilt on the research in reference/research.
+   Warm OKLCH neutrals with one job per step, a sidebar quieter than the page,
+   layered warm shadows instead of borders, two-line history rows grouped by day.
+   Scoped to .fk[data-look="d"]. */
+@import "@fontsource-variable/inter";
+@import "@fontsource/instrument-serif/400.css";
+@import "@fontsource/instrument-serif/400-italic.css";
+
+/* ---------- Tokens: light ---------- */
+
+.fk[data-look="d"] {
+  --fk-font-sans: "Inter Variable", "Mukta", -apple-system, system-ui, sans-serif;
+  --fk-font-display: "Instrument Serif", "Martel", "Iowan Old Style", Georgia, serif;
+  --fk-font-serif: var(--fk-font-display);
+
+  /* Neutral steps, hue ~80 (warm paper), chroma kept low so it never turns muddy.
+     ground  oklch(92.5% .013 80)  window + sidebar, the dimmest layer
+     panel   oklch(98.4% .005 85)  the page sheet
+     surface oklch(96.4% .008 82)  row hover, inputs, soft cards
+     surf-2  oklch(94.2% .010 80)  control track, secondary fill
+     menu    oklch(99.6% .003 85)  raised: menus, dialogs, key caps
+     border  oklch(90.5% .011 80)  quiet separators
+     strong  oklch(83%   .014 78)  control edges, scrollbars */
+  --fk-bg: #ebe6dc;
+  --fk-panel: #fbf9f4;
+  --fk-surface: #f5f2eb;
+  --fk-surface-2: #eeeae1;
+  --fk-menu-bg: #fffefb;
+  --fk-border: #e6e0d5;
+  --fk-border-strong: #d1cabd;
+  --fk-hover: rgba(66, 50, 24, 0.05);
+  --fk-active: rgba(66, 50, 24, 0.075);
+  --fk-text: #1d1b17;
+  --fk-text-muted: #58534a;
+  --fk-text-faint: #696357;
+  --fk-accent: #285a44;
+  --fk-accent-hover: #1f4a37;
+  --fk-accent-soft: #e5ece4;
+  --fk-accent-text: #fbf9f4;
+  --fk-live: #a8322f;
+  --fk-live-soft: #f6e5df;
+  --fk-ok: #2e6440;
+  --fk-ok-soft: #e3eddf;
+  --fk-inverse-bg: #1d1b17;
+  --fk-inverse-text: #f6f2ea;
+  --fk-scrim: rgba(36, 28, 14, 0.28);
+  --fk-focus: 0 0 0 1px var(--fk-panel), 0 0 0 3.5px rgba(40, 90, 68, 0.32);
+  --fk-toggle-on: var(--fk-accent);
+  --fk-toggle-off: #8b8475;
+  --fk-btn-secondary: var(--fk-menu-bg);
+  --fk-btn-secondary-hover: #f7f4ee;
+
+  --fk-ink: #1d1b17;
+  --fk-ink-hover: #36322b;
+  --fk-ink-text: #fbf9f4;
+
+  /* One light source straight above; warm brown-grey shadow hue; each layer
+     doubles offset and blur, alpha falls as it spreads (Comeau, Ahlin). */
+  --fk-shadow-hue: 35deg 22% 26%;
+  --fk-sheet-shadow: 0 0 0 0.5px hsl(var(--fk-shadow-hue) / 0.1),
+    0 1px 1px hsl(var(--fk-shadow-hue) / 0.04), 0 2px 4px hsl(var(--fk-shadow-hue) / 0.035),
+    0 8px 16px -4px hsl(var(--fk-shadow-hue) / 0.045),
+    0 24px 48px -16px hsl(var(--fk-shadow-hue) / 0.07);
+  --fk-elev-1: 0 0 0 0.5px hsl(var(--fk-shadow-hue) / 0.14),
+    0 1px 1.5px hsl(var(--fk-shadow-hue) / 0.08), 0 2px 4px -1px hsl(var(--fk-shadow-hue) / 0.05);
+  --fk-elev-2: 0 0 0 0.5px hsl(var(--fk-shadow-hue) / 0.14),
+    0 1px 2px hsl(var(--fk-shadow-hue) / 0.06), 0 4px 8px -2px hsl(var(--fk-shadow-hue) / 0.07),
+    0 12px 24px -8px hsl(var(--fk-shadow-hue) / 0.1);
+  --fk-elev-3: 0 0 0 0.5px hsl(var(--fk-shadow-hue) / 0.16),
+    0 2px 4px hsl(var(--fk-shadow-hue) / 0.06), 0 8px 16px -4px hsl(var(--fk-shadow-hue) / 0.08),
+    0 24px 48px -12px hsl(var(--fk-shadow-hue) / 0.14),
+    0 48px 96px -24px hsl(var(--fk-shadow-hue) / 0.16);
+  --fk-shadow: var(--fk-elev-3);
+
+  /* Radius scale; nested radius = outer minus the gap between them. */
+  --fk-r-xs: 5px;
+  --fk-r-sm: 8px;
+  --fk-r-md: 10px;
+  --fk-r-lg: 14px;
+  --fk-r-xl: 20px;
+  --fk-inset: 8px;
+  --fk-sheet-r: 14px;
+
+  --fk-measure: 65ch;
+
+  font-feature-settings: "cv11", "ss01", "calt";
+  font-size: 14.5px;
+  letter-spacing: -0.008em;
+  text-rendering: optimizeLegibility;
+}
+
+.fk[data-look="d"] ::selection {
+  background: rgba(40, 90, 68, 0.18);
+}
+
+/* ---------- Tokens: dark ---------- */
+
+.fk[data-look="d"][data-fk-theme="dark"] {
+  /* Same hue, lightness steps ~3-4% apart; higher surfaces are lighter. */
+  --fk-bg: #121110;
+  --fk-panel: #1b1a17;
+  --fk-surface: #22201d;
+  --fk-surface-2: #292724;
+  --fk-menu-bg: #2c2a26;
+  --fk-border: #2c2a26;
+  --fk-border-strong: #45413a;
+  --fk-hover: rgba(255, 244, 222, 0.045);
+  --fk-active: rgba(255, 244, 222, 0.075);
+  --fk-text: #ede8de;
+  --fk-text-muted: #aba495;
+  --fk-text-faint: #9b9486;
+  --fk-accent: #9cc8ae;
+  --fk-accent-hover: #b4d8c2;
+  --fk-accent-soft: #1f2c25;
+  --fk-accent-text: #11201a;
+  --fk-live: #f08578;
+  --fk-live-soft: #3a1f1c;
+  --fk-ok: #8fcf9d;
+  --fk-ok-soft: #1c2d21;
+  --fk-inverse-bg: #ede8de;
+  --fk-inverse-text: #1d1b17;
+  --fk-scrim: rgba(6, 5, 3, 0.6);
+  --fk-focus: 0 0 0 1px var(--fk-panel), 0 0 0 3.5px rgba(156, 200, 174, 0.38);
+  --fk-toggle-off: #6c665c;
+  --fk-toggle-knob-on: #11201a;
+  --fk-toggle-knob-off: #ede8de;
+  --fk-btn-secondary: #2a2825;
+  --fk-btn-secondary-hover: #32302c;
+
+  --fk-ink: #efeae0;
+  --fk-ink-hover: #ffffff;
+  --fk-ink-text: #1a1814;
+
+  --fk-sheet-shadow: 0 0 0 0.5px rgba(255, 244, 222, 0.07),
+    inset 0 0.5px 0 rgba(255, 244, 222, 0.06), 0 1px 2px rgba(0, 0, 0, 0.3),
+    0 16px 40px -12px rgba(0, 0, 0, 0.55);
+  --fk-elev-1: 0 0 0 0.5px rgba(255, 244, 222, 0.09), inset 0 0.5px 0 rgba(255, 244, 222, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+  --fk-elev-2: 0 0 0 0.5px rgba(255, 244, 222, 0.1), inset 0 0.5px 0 rgba(255, 244, 222, 0.07),
+    0 4px 10px -2px rgba(0, 0, 0, 0.4), 0 16px 36px -10px rgba(0, 0, 0, 0.55);
+  --fk-elev-3: 0 0 0 0.5px rgba(255, 244, 222, 0.1), inset 0 0.5px 0 rgba(255, 244, 222, 0.07),
+    0 32px 80px -16px rgba(0, 0, 0, 0.75);
+}
+
+.fk[data-look="d"][data-fk-theme="dark"] ::selection {
+  background: rgba(156, 200, 174, 0.26);
+}
+
+/* ---------- Window: a floating sheet on a warm ground ---------- */
+
+.fk[data-look="d"] .fk-main {
+  top: var(--fk-inset);
+  bottom: var(--fk-inset);
+  right: var(--fk-inset);
+  border: 0;
+  border-radius: var(--fk-sheet-r);
+  box-shadow: var(--fk-sheet-shadow);
+}
+
+.fk[data-look="d"] .fk-header {
+  top: var(--fk-inset);
+  right: var(--fk-inset);
+  padding-left: 12px;
+  padding-right: 12px;
+  height: calc(var(--fk-header-h) - var(--fk-inset));
+}
+.fk[data-look="d"] .fk-main > .fk-scroll {
+  top: calc(var(--fk-header-h) - var(--fk-inset));
+}
+.fk[data-look="d"] .fk-header button {
+  color: var(--fk-text-faint);
+}
+.fk[data-look="d"] .fk-header button:hover {
+  color: var(--fk-text);
+  background: var(--fk-hover);
+}
+.fk[data-look="d"] .fk-header svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.6;
+}
+
+/* ---------- Type ---------- */
+
+.fk[data-look="d"] .fk-display,
+.fk[data-look="d"] .fk-serif {
+  font-family: var(--fk-font-display);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+.fk[data-look="d"] .fk-eyebrow {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fk-text-faint);
+}
+
+.fk[data-look="d"] .fk-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "cv11", "ss01", "calt";
+}
+
+/* ---------- Page head ---------- */
+
+.fk[data-look="d"] .fk-page {
+  padding-left: 56px;
+  padding-right: 56px;
+  padding-bottom: 64px;
+}
+
+.fk[data-look="d"] .fk-page-head {
+  align-items: flex-end;
+  margin-top: 28px;
+  padding-bottom: 0;
+  margin-bottom: 40px;
+  border-bottom: 0;
+}
+.fk[data-look="d"] .fk-page-head h1 {
+  font-size: 44px;
+  line-height: 48px;
+  letter-spacing: -0.012em;
+}
+.fk[data-look="d"] .fk-page-head h1 + p {
+  margin-top: 10px;
+  font-size: 14.5px;
+  line-height: 22px;
+  letter-spacing: -0.008em;
+  color: var(--fk-text-muted);
+}
+
+/* Home: one calm centred column, like a page of a journal. */
+.fk[data-look="d"] .fk-page:has(> section > .sticky) {
+  max-width: 900px;
+}
+
+.fk[data-look="d"] .fk-notice {
+  padding-left: 56px;
+  padding-right: 56px;
+}
+.fk[data-look="d"] .fk-scroll:has(.fk-page > section > .sticky) > .fk-notice {
+  max-width: 900px;
+}
+
+/* ---------- Sidebar: a few notches dimmer than the page ---------- */
+
+.fk[data-look="d"] .fk-sidebar .fk-display {
+  font-size: 23px;
+  letter-spacing: -0.005em;
+  font-weight: 400;
+}
+.fk[data-look="d"] .fk-sidebar nav {
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.fk[data-look="d"] .fk-nav-item {
+  border-radius: var(--fk-r-sm);
+  color: var(--fk-text-muted);
+  box-shadow: none;
+  background: transparent;
+}
+.fk[data-look="d"] .fk-nav-item:not([data-rail]) {
+  height: 32px;
+  padding-left: 10px;
+  gap: 11px;
+}
+.fk[data-look="d"] .fk-nav-item:not([data-rail]) > span {
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.006em;
+}
+.fk[data-look="d"] .fk-nav-item svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.6;
+  color: var(--fk-text-faint);
+  transition: color var(--fk-t-quick) var(--fk-ease);
+}
+.fk[data-look="d"] .fk-nav-item[aria-current="page"] {
+  background: var(--fk-active);
+  color: var(--fk-text);
+  box-shadow: none;
+}
+.fk[data-look="d"] .fk-nav-item[aria-current="page"] svg {
+  color: var(--fk-accent);
+}
+.fk[data-look="d"] .fk-nav-item[aria-current="page"]::before {
+  display: none;
+}
+.fk[data-look="d"] .fk-nav-item:not([aria-current="page"]):hover {
+  background: var(--fk-hover);
+  color: var(--fk-text);
+}
+.fk[data-look="d"] .fk-nav-item:hover svg {
+  color: var(--fk-text-muted);
+}
+
+/* Hold-to-speak hint: a quiet note, no box. */
+.fk[data-look="d"] .fk-sidebar .bg-\[var\(--fk-surface-2\)\] {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0 10px 14px;
+  margin-bottom: 4px;
+}
+.fk[data-look="d"] .fk-sidebar .bg-\[var\(--fk-surface-2\)\] > div {
+  font-size: 13px;
+  line-height: 22px;
+  font-weight: 500;
+  letter-spacing: -0.006em;
+  color: var(--fk-text-muted);
+}
+.fk[data-look="d"] .fk-sidebar .bg-\[var\(--fk-surface-2\)\] > p {
+  font-size: 12px;
+  line-height: 16px;
+  margin-top: 4px;
+  color: var(--fk-text-faint);
+}
+.fk[data-look="d"] .fk-sidebar .border-t {
+  border-color: transparent;
+}
+
+/* ---------- Key caps ---------- */
+
+.fk[data-look="d"] kbd {
+  font-family: var(--fk-font-sans);
+  font-weight: 500;
+  font-feature-settings: "cv11", "ss01";
+  border: 0;
+  background: linear-gradient(to bottom, var(--fk-menu-bg), var(--fk-surface));
+  color: var(--fk-text);
+  box-shadow: 0 0 0 0.5px var(--fk-border-strong), 0 1px 0 0.5px var(--fk-border-strong),
+    0 1.5px 2px hsl(var(--fk-shadow-hue) / 0.08);
+  height: 20px;
+  min-width: 20px;
+  border-radius: var(--fk-r-xs);
+  font-size: 11.5px;
+  line-height: 1;
+  letter-spacing: 0.004em;
+  padding: 0 6px;
+  margin-bottom: 1px;
+  vertical-align: 1px;
+}
+.fk[data-look="d"][data-fk-theme="dark"] kbd {
+  background: linear-gradient(to bottom, #34322d, #2b2925);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.6), inset 0 0.5px 0 rgba(255, 244, 222, 0.1),
+    0 1px 0 0.5px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Buttons ---------- */
+
+.fk[data-look="d"] button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Primary: near-black ink with a top highlight and a contact shadow. */
+.fk[data-look="d"] button[class*="bg-[var(--fk-accent)]"] {
+  background: var(--fk-ink);
+  color: var(--fk-ink-text);
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14), 0 0 0 0.5px rgba(20, 14, 4, 0.6),
+    0 1px 2px rgba(28, 20, 8, 0.22), 0 4px 10px -4px rgba(28, 20, 8, 0.28);
+  letter-spacing: -0.006em;
+  font-weight: 550;
+  transition:
+    background-color var(--fk-t-quick) var(--fk-ease),
+    transform var(--fk-t-quick) var(--fk-ease);
+}
+.fk[data-look="d"] button[class*="bg-[var(--fk-accent)]"]:not(:disabled):hover {
+  background: var(--fk-ink-hover);
+}
+.fk[data-look="d"][data-fk-theme="dark"] button[class*="bg-[var(--fk-accent)]"] {
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+/* Secondary: a raised paper button, like a native push button. */
+.fk[data-look="d"] button[class*="bg-[var(--fk-btn-secondary)]"] {
+  background: var(--fk-btn-secondary);
+  box-shadow: var(--fk-elev-1);
+  font-weight: 500;
+}
+.fk[data-look="d"] button[class*="bg-[var(--fk-btn-secondary)]"]:not(:disabled):hover {
+  background: var(--fk-btn-secondary-hover);
+}
+.fk[data-look="d"] button[class*="bg-[var(--fk-btn-secondary)]"] svg {
+  color: var(--fk-text-muted);
+}
+.fk[data-look="d"] button.font-semibold {
+  font-weight: 550;
+}
+.fk[data-look="d"] button:not(:disabled):active:not([role="tab"]):not(.fk-nav-item) {
+  transform: scale(0.97);
+}
+
+.fk[data-look="d"] button.h-\[36px\].text-\[14\.5px\] {
+  height: 32px;
+  font-size: 13.5px;
+  border-radius: var(--fk-r-sm);
+  padding-left: 12px;
+  padding-right: 13px;
+  gap: 7px;
+}
+.fk[data-look="d"] button.h-\[36px\].text-\[14\.5px\] svg {
+  width: 15px;
+  height: 15px;
+}
+.fk[data-look="d"] button.h-\[30px\].text-\[13\.5px\] {
+  height: 28px;
+  font-size: 13px;
+  border-radius: 7px;
+}
+.fk[data-look="d"] button.h-\[32px\].text-\[14px\] {
+  height: 32px;
+  font-size: 13.5px;
+  border-radius: var(--fk-r-sm);
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+/* ---------- Margin note (HeroBanner): a soft paper card ---------- */
+
+.fk[data-look="d"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\] {
+  background: var(--fk-surface) !important;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 0.5px var(--fk-border);
+}
+.fk[data-look="d"][data-fk-theme="dark"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\] {
+  box-shadow: inset 0 0.5px 0 rgba(255, 244, 222, 0.05);
+}
+.fk[data-look="d"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\]::before {
+  display: none;
+}
+.fk[data-look="d"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\] h2 {
+  font-size: 28px;
+  line-height: 34px;
+  letter-spacing: -0.008em;
+}
+.fk[data-look="d"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\] h2 + p {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 21px;
+  max-width: var(--fk-measure);
+}
+.fk[data-look="d"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\] > .relative {
+  max-width: 640px;
+  padding: 26px 32px 28px;
+}
+.fk[data-look="d"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\] > .relative > div {
+  margin-top: 18px;
+}
+.fk[data-look="d"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\] > button[aria-label="Dismiss"] {
+  top: 14px;
+  right: 14px;
+  color: var(--fk-text-faint);
+}
+.fk[data-look="d"] .fk-page .before\:bg-\[var\(--fk-accent\)\].rounded-\[14px\] > button[aria-label="Dismiss"]:hover {
+  background: var(--fk-hover);
+  color: var(--fk-text);
+}
+
+/* ---------- Home stats: big serif numbers over small captions ---------- */
+
+.fk[data-look="d"] .fk-page-head button:has(.fk-display.fk-num) {
+  gap: 28px;
+  padding: 6px 8px 6px 12px;
+  margin-right: -8px;
+  margin-bottom: -4px;
+  border-radius: var(--fk-r-md);
+}
+.fk[data-look="d"] .fk-page-head button:has(.fk-display.fk-num):hover {
+  background: var(--fk-hover);
+}
+.fk[data-look="d"] .fk-page-head button:has(.fk-display.fk-num) > span {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border-left: 0;
+  padding-left: 0;
+}
+.fk[data-look="d"] .fk-page-head button .fk-display.fk-num {
+  font-size: 32px;
+  line-height: 32px;
+  letter-spacing: -0.01em;
+  font-feature-settings: "lnum", "tnum";
+}
+.fk[data-look="d"] .fk-page-head button .fk-display.fk-num + span {
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0;
+  color: var(--fk-text-faint);
+}
+.fk[data-look="d"] .fk-page-head button:has(.fk-display.fk-num) > svg {
+  align-self: center;
+  color: var(--fk-text-faint);
+}
+
+/* ---------- History: two calm lines per dictation, grouped by day ---------- */
+
+.fk[data-look="d"] .fk-page section > .sticky {
+  height: 56px;
+  background: var(--fk-panel);
+}
+.fk[data-look="d"] .fk-page section > .sticky h2 {
+  font-family: var(--fk-font-display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 32px;
+  letter-spacing: -0.008em;
+}
+.fk[data-look="d"] .fk-page section > .sticky h2 > span {
+  font-family: var(--fk-font-sans);
+  font-size: 12.5px;
+  letter-spacing: 0;
+  vertical-align: 4px;
+  margin-left: 10px;
+  color: var(--fk-text-faint);
+}
+
+/* Day labels: small, quiet, sentence case; space above does the separating. */
+.fk[data-look="d"] .fk-page section .fk-eyebrow.sticky {
+  top: 56px;
+  height: 40px;
+  padding-bottom: 10px;
+  padding-left: 0;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--fk-text-faint);
+}
+.fk[data-look="d"] .fk-page section > div:has(> .fk-eyebrow) + div {
+  margin-top: 12px;
+}
+.fk[data-look="d"] .fk-page section .fk-eyebrow + .border-t {
+  border-top: 0;
+}
+
+.fk[data-look="d"] .fk-page section .group.relative.border-b {
+  border-bottom: 0;
+  border-radius: var(--fk-r-md);
+  padding: 10px 12px 11px;
+  margin-left: -12px;
+  margin-right: -12px;
+  min-height: 0;
+  background: transparent;
+  transition: background-color var(--fk-t-quick) var(--fk-ease);
+}
+.fk[data-look="d"] .fk-page section .group.relative.border-b + .group.relative.border-b {
+  margin-top: 2px;
+}
+.fk[data-look="d"] .fk-page section .group.relative.border-b:hover,
+.fk[data-look="d"] .fk-page section .group.relative.border-b.bg-\[var\(--fk-surface\)\] {
+  background: var(--fk-surface);
+}
+
+/* Text first, time on the right in small tabular figures. */
+.fk[data-look="d"] .fk-page section .group.relative.border-b > .fk-num {
+  order: 2;
+  width: auto;
+  min-width: 56px;
+  margin-left: 24px;
+  padding-top: 1px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 22px;
+  letter-spacing: 0;
+  color: var(--fk-text-faint);
+  transition: opacity var(--fk-t-quick) var(--fk-ease);
+}
+.fk[data-look="d"] .fk-page section .group.relative.border-b > .min-w-0 {
+  max-width: none;
+}
+.fk[data-look="d"] .fk-page section .group.relative.border-b p.select-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  max-width: var(--fk-measure);
+  font-size: 14.5px;
+  line-height: 22px;
+  letter-spacing: -0.008em;
+  color: var(--fk-text);
+}
+
+/* Bookmarked: a thin ink mark in the margin (Bear). */
+.fk[data-look="d"] .fk-page section .group.relative.border-b > span[aria-hidden] {
+  top: 14px;
+  bottom: 14px;
+  left: 2px;
+  width: 2px;
+}
+
+/* Actions appear on hover in place of the time, centred on the row. */
+.fk[data-look="d"] .fk-page section .group.relative.border-b > .absolute.z-\[15\] {
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  border-radius: var(--fk-r-md);
+  padding: 2px;
+  gap: 0;
+  box-shadow: var(--fk-elev-2);
+}
+.fk[data-look="d"] .fk-page section .group.relative.border-b > .absolute.z-\[15\] button {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--fk-r-sm);
+}
+.fk[data-look="d"] .fk-page section .group.relative.border-b:hover > .fk-num,
+.fk[data-look="d"] .fk-page section .group.relative.border-b.bg-\[var\(--fk-surface\)\] > .fk-num,
+.fk[data-look="d"] .fk-page section .group.relative.border-b:focus-within > .fk-num {
+  opacity: 0;
+}
+
+/* Empty history. */
+.fk[data-look="d"] .fk-page section > p.border-y {
+  border: 0;
+  padding: 32px 12px;
+  color: var(--fk-text-muted);
+}
+
+/* ---------- Ruled lists elsewhere (Vocabulary, Snippets): softer rules ---------- */
+
+.fk[data-look="d"] .fk-page .group.flex.min-h-\[48px\].border-b {
+  border-bottom-color: color-mix(in oklab, var(--fk-border) 70%, transparent);
+  min-height: 46px;
+  font-size: 14px;
+}
+.fk[data-look="d"] .fk-page .group.flex.min-h-\[48px\].border-b:hover,
+.fk[data-look="d"] .fk-page .group.flex.min-h-\[48px\].border-b.bg-\[var\(--fk-surface\)\] {
+  background: var(--fk-surface);
+}
+
+/* ---------- Inputs, tabs, cards ---------- */
+
+.fk[data-look="d"] [role="tablist"] {
+  height: 32px;
+  padding: 2px;
+  border-radius: var(--fk-r-md);
+  background: var(--fk-surface-2);
+  box-shadow: none;
+}
+.fk[data-look="d"] [role="tab"] {
+  border-radius: var(--fk-r-sm);
+  font-size: 13px;
+  padding-left: 11px;
+  padding-right: 11px;
+}
+.fk[data-look="d"] [role="tab"][aria-selected="true"] {
+  background: var(--fk-menu-bg);
+  box-shadow: var(--fk-elev-1);
+}
+.fk[data-look="d"][data-fk-theme="dark"] [role="tab"][aria-selected="true"] {
+  background: #3a3833;
+}
+
+.fk[data-look="d"] .fk-page label.h-\[38px\] {
+  height: 34px;
+  border-radius: var(--fk-r-md);
+  background: var(--fk-surface);
+  box-shadow: inset 0 0 0 0.5px var(--fk-border);
+}
+.fk[data-look="d"] .fk-page label.h-\[38px\] input {
+  font-size: 13.5px;
+}
+
+/* ---------- Stats page ---------- */
+
+.fk[data-look="d"] .fk-insights section[aria-label="Totals"] {
+  gap: 12px;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.fk[data-look="d"] .fk-insights section[aria-label="Totals"] > div {
+  border-left: 0;
+  padding: 20px 20px 18px;
+  border-radius: var(--fk-r-lg);
+  background: var(--fk-surface);
+}
+.fk[data-look="d"] .fk-insights section[aria-label="Totals"] > div:first-child {
+  padding-left: 20px;
+  background: var(--fk-menu-bg);
+  box-shadow: var(--fk-elev-1);
+}
+.fk[data-look="d"][data-fk-theme="dark"] .fk-insights section[aria-label="Totals"] > div:first-child {
+  background: var(--fk-surface-2);
+}
+.fk[data-look="d"] .fk-insights .fk-display.fk-num.text-\[32px\] {
+  font-size: 48px;
+  line-height: 48px;
+  letter-spacing: -0.012em;
+  font-feature-settings: "lnum", "tnum";
+}
+.fk[data-look="d"] .fk-insights section[aria-label="Totals"] > div > div:nth-child(2) {
+  margin-top: 12px;
+  font-size: 13.5px;
+  font-weight: 550;
+  letter-spacing: -0.006em;
+}
+.fk[data-look="d"] .fk-insights section[aria-label="Totals"] > div > div:nth-child(3) {
+  font-size: 12px;
+  line-height: 16px;
+  margin-top: 2px;
+  color: var(--fk-text-faint);
+}
+.fk[data-look="d"] .fk-insights h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.011em;
+}
+.fk[data-look="d"] .fk-insights .border-t {
+  border-top-color: color-mix(in oklab, var(--fk-border) 70%, transparent);
+}
+.fk[data-look="d"] .fk-insights .border-b {
+  border-bottom-color: color-mix(in oklab, var(--fk-border) 70%, transparent);
+}
+
+/* ---------- Settings dialog ---------- */
+
+.fk[data-look="d"] .fk-dialog {
+  border-radius: var(--fk-r-xl);
+}
+.fk[data-look="d"] .fk-dialog > nav {
+  border-right: 0;
+  box-shadow: inset -0.5px 0 0 var(--fk-border);
+}
+.fk[data-look="d"] .fk-dialog > nav .border-t {
+  border-top-color: transparent;
+}
+.fk[data-look="d"] .fk-dialog > nav .fk-display {
+  font-size: 24px;
+  line-height: 30px;
+}
+
+/* ---------- Scrollbars ---------- */
+
+.fk[data-look="d"] .fk-scroll::-webkit-scrollbar {
+  width: 12px;
+}
+.fk[data-look="d"] .fk-scroll::-webkit-scrollbar-thumb {
+  border: 4px solid transparent;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fk[data-look="d"] button:active {
+    transform: none !important;
+  }
+}

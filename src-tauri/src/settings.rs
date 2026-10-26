@@ -1,4 +1,3 @@
-use crate::utils;
 use log::{debug, warn};
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -145,16 +144,26 @@ pub enum OverlayStyle {
     Live,
 }
 
+/// Screen edge the macOS side pill docks to (bottom = bottom centre).
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PillSide {
+    Left,
+    Right,
+    #[default]
+    Bottom,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelUnloadTimeout {
     Never,
     Immediately,
     Min2,
-    #[default]
     Min5,
     Min10,
     Min15,
+    #[default]
     Hour1,
     Sec15, // Debug mode only
 }
@@ -218,6 +227,8 @@ pub enum AutoSubmitKey {
 #[serde(rename_all = "snake_case")]
 pub enum RecordingRetentionPeriod {
     Never,
+    /// Keep every recording and transcript; same as `Never` (never delete).
+    Forever,
     PreserveLimit,
     Days3,
     Weeks2,
@@ -535,13 +546,38 @@ pub struct AppSettings {
     /// `overlay_position` (position `none` → style `None`).
     #[serde(default = "default_overlay_style")]
     pub overlay_style: OverlayStyle,
+    #[serde(default)]
+    pub pill_side: PillSide,
+    #[serde(default)]
+    pub notetaker: crate::notetaker::NotetakerSettings,
+    /// Which speech engine turns dictation into text: the selected local
+    /// model, Apple's on-device dictation (macOS 26+), or both with a
+    /// per-dictation pick for Hinglish. See src/apple_speech/README.md.
+    #[serde(default)]
+    pub speech_engine: SpeechEngine,
+    /// Locale for Apple's on-device dictation, e.g. "en-IN".
+    #[serde(default = "default_apple_locale")]
+    pub apple_locale: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechEngine {
+    Parakeet,
+    Apple,
+    #[default]
+    Auto,
+}
+
+fn default_apple_locale() -> String {
+    "en-IN".to_string()
 }
 
 fn default_model() -> String {
     "".to_string()
 }
 
-const CURRENT_SETTINGS_SCHEMA_VERSION: u32 = 2;
+const CURRENT_SETTINGS_SCHEMA_VERSION: u32 = 4;
 
 fn default_settings_schema_version() -> u32 {
     CURRENT_SETTINGS_SCHEMA_VERSION
@@ -568,7 +604,7 @@ fn default_autostart_enabled() -> bool {
 }
 
 fn default_update_checks_enabled() -> bool {
-    true
+    false
 }
 
 fn default_show_whats_new_on_update() -> bool {
@@ -628,8 +664,17 @@ fn default_word_correction_threshold() -> f64 {
     0.18
 }
 
+/// The macOS pasteboard holds the text as soon as the write returns, so Cmd+V
+/// can follow almost at once. Other platforms keep the longer wait their
+/// clipboard tools (e.g. wl-copy) need.
+const OLD_DEFAULT_PASTE_DELAY_MS: u64 = 60;
+
 fn default_paste_delay_ms() -> u64 {
-    60
+    if cfg!(target_os = "macos") {
+        10
+    } else {
+        OLD_DEFAULT_PASTE_DELAY_MS
+    }
 }
 
 fn default_paste_delay_after_ms() -> u64 {
@@ -645,7 +690,7 @@ fn default_history_limit() -> usize {
 }
 
 fn default_recording_retention_period() -> RecordingRetentionPeriod {
-    RecordingRetentionPeriod::PreserveLimit
+    RecordingRetentionPeriod::Forever
 }
 
 fn default_audio_feedback_volume() -> f32 {
@@ -910,7 +955,7 @@ pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
     let default_shortcut = "ctrl+space";
     #[cfg(target_os = "macos")]
-    let default_shortcut = "option+space";
+    let default_shortcut = "fn";
     #[cfg(target_os = "linux")]
     let default_shortcut = "ctrl+space";
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
@@ -957,6 +1002,18 @@ pub fn get_default_settings() -> AppSettings {
             current_binding: "escape".to_string(),
         },
     );
+    #[cfg(target_os = "macos")]
+    bindings.insert(
+        "transcribe_handsfree".to_string(),
+        ShortcutBinding {
+            id: "transcribe_handsfree".to_string(),
+            name: "Hands-free".to_string(),
+            description: "Starts or stops a dictation that keeps going after you let go."
+                .to_string(),
+            default_binding: "fn+space".to_string(),
+            current_binding: "fn+space".to_string(),
+        },
+    );
 
     AppSettings {
         settings_schema_version: default_settings_schema_version(),
@@ -999,7 +1056,7 @@ pub fn get_default_settings() -> AppSettings {
         post_process_models: default_post_process_models(),
         post_process_prompts: default_post_process_prompts(),
         post_process_selected_prompt_id: None,
-        mute_while_recording: false,
+        mute_while_recording: true,
         append_trailing_space: false,
         app_language: default_app_language(),
         theme: default_theme(),
@@ -1022,6 +1079,10 @@ pub fn get_default_settings() -> AppSettings {
         vad_backend: VadBackend::default(),
         long_form_chunking: default_long_form_chunking(),
         overlay_style: default_overlay_style(),
+        pill_side: PillSide::default(),
+        notetaker: crate::notetaker::NotetakerSettings::default(),
+        speech_engine: SpeechEngine::default(),
+        apple_locale: default_apple_locale(),
     }
 }
 
@@ -1056,10 +1117,17 @@ impl AppSettings {
 
 /// Startup entry point. Same load-or-create/salvage/migrate behavior as
 /// `get_settings`; kept as a named alias for call-site clarity, plus a
-/// one-time debug dump of the loaded settings.
+/// one-time debug line with counts only (no words, prompts or keys).
 pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
     let settings = get_settings(app);
-    debug!("Loaded settings: {:?}", settings);
+    debug!(
+        "Loaded settings: schema v{}, {} bindings, {} custom words, {} filler words, {} post-process prompts",
+        settings.settings_schema_version,
+        settings.bindings.len(),
+        settings.custom_words.len(),
+        settings.custom_filler_words.as_ref().map_or(0, |w| w.len()),
+        settings.post_process_prompts.len()
+    );
     settings
 }
 
@@ -1226,6 +1294,29 @@ fn apply_settings_migrations(
         settings.settings_schema_version = CURRENT_SETTINGS_SCHEMA_VERSION;
         updated = true;
     }
+    if stored_schema_version < 3 {
+        // Recordings are kept as voice training data: move stores still on the
+        // old default (keep the latest 5) to keeping everything.
+        if settings.recording_retention_period == RecordingRetentionPeriod::PreserveLimit
+            && settings.history_limit == 5
+        {
+            settings.recording_retention_period = RecordingRetentionPeriod::Forever;
+        }
+        settings.settings_schema_version = CURRENT_SETTINGS_SCHEMA_VERSION;
+        updated = true;
+    }
+    if stored_schema_version < 4 {
+        // Speed defaults: move stores still on the old ones (unload the model
+        // after 5 minutes, wait 60 ms before Cmd+V) to the new ones.
+        if settings.model_unload_timeout == ModelUnloadTimeout::Min5 {
+            settings.model_unload_timeout = ModelUnloadTimeout::default();
+        }
+        if settings.paste_delay_ms == OLD_DEFAULT_PASTE_DELAY_MS {
+            settings.paste_delay_ms = default_paste_delay_ms();
+        }
+        settings.settings_schema_version = CURRENT_SETTINGS_SCHEMA_VERSION;
+        updated = true;
+    }
 
     // The generic GPU choice was removed in favor of Auto or an exact device.
     // Normalize settings created by builds that exposed that short-lived option.
@@ -1257,17 +1348,14 @@ fn apply_settings_migrations(
     updated
 }
 
-/// Update checks are forced off (without touching the persisted setting) when
-/// `HANDY_DISABLE_UPDATER` is set — e.g. by the Nix package, since self-update
-/// can't work against an immutable /nix/store install.
+/// Update checks are always off (without touching the persisted setting):
+/// Lipik has no update feed or signing key yet.
 pub fn update_checks_forced_disabled() -> bool {
-    use std::sync::OnceLock;
-    static IS_UPDATER_DISABLED: OnceLock<bool> = OnceLock::new();
-    *IS_UPDATER_DISABLED.get_or_init(|| utils::env_flag_enabled("HANDY_DISABLE_UPDATER"))
+    true
 }
 
 /// Effective updater state: the user's stored preference, overridden to `false`
-/// while `HANDY_DISABLE_UPDATER` is set. Callers deciding whether to actually
+/// while update checks are forced off. Callers deciding whether to actually
 /// check for updates must use this rather than reading `update_checks_enabled`
 /// directly, so the forced-off state never leaks into the persisted setting.
 pub fn update_checks_effectively_enabled(settings: &AppSettings) -> bool {
@@ -1769,6 +1857,38 @@ mod tests {
             TranscribeAcceleratorSetting::Auto
         );
         assert_eq!(settings.transcribe_gpu_device, None);
+    }
+
+    #[test]
+    fn retention_migration_moves_old_default_to_forever() {
+        let raw = serde_json::json!({ "settings_schema_version": 2 });
+        let mut settings = get_default_settings();
+        settings.recording_retention_period = RecordingRetentionPeriod::PreserveLimit;
+        assert!(apply_settings_migrations(&mut settings, &raw));
+        assert_eq!(settings.recording_retention_period, RecordingRetentionPeriod::Forever);
+
+        let mut settings = get_default_settings();
+        settings.recording_retention_period = RecordingRetentionPeriod::Days3;
+        apply_settings_migrations(&mut settings, &raw);
+        assert_eq!(settings.recording_retention_period, RecordingRetentionPeriod::Days3);
+    }
+
+    #[test]
+    fn speed_migration_moves_only_old_defaults() {
+        let raw = serde_json::json!({ "settings_schema_version": 3 });
+        let mut settings = get_default_settings();
+        settings.model_unload_timeout = ModelUnloadTimeout::Min5;
+        settings.paste_delay_ms = OLD_DEFAULT_PASTE_DELAY_MS;
+        assert!(apply_settings_migrations(&mut settings, &raw));
+        assert_eq!(settings.model_unload_timeout, ModelUnloadTimeout::Hour1);
+        assert_eq!(settings.paste_delay_ms, default_paste_delay_ms());
+
+        let mut settings = get_default_settings();
+        settings.model_unload_timeout = ModelUnloadTimeout::Min15;
+        settings.paste_delay_ms = 120;
+        apply_settings_migrations(&mut settings, &raw);
+        assert_eq!(settings.model_unload_timeout, ModelUnloadTimeout::Min15);
+        assert_eq!(settings.paste_delay_ms, 120);
     }
 
     #[test]

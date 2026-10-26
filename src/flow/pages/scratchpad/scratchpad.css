@@ -1,0 +1,9 @@
+.fk-ruled {
+  background-image: linear-gradient(
+    to bottom,
+    transparent 27px,
+    var(--fk-border) 27px
+  );
+  background-size: 100% 28px;
+  background-attachment: local;
+}

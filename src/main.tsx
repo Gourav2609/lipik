@@ -1,3 +1,5 @@
+import "./lib/storageKeys";
+import "./flow/dev/preview";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { platform } from "@tauri-apps/plugin-os";

@@ -233,6 +233,14 @@ fn restore_mute(prev_muted: Option<bool>) {
 
 const WHISPER_SAMPLE_RATE: usize = 16000;
 
+/// Pads a recording shorter than a second with silence.
+fn pad_short(mut samples: Vec<f32>) -> Vec<f32> {
+    if samples.len() < WHISPER_SAMPLE_RATE && !samples.is_empty() {
+        samples.resize(WHISPER_SAMPLE_RATE * 5 / 4, 0.0);
+    }
+    samples
+}
+
 /* ──────────────────────────────────────────────────────────────── */
 
 #[derive(Clone, Debug)]
@@ -651,10 +659,16 @@ impl AudioRecordingManager {
     }
 
     fn schedule_lazy_close(&self) {
+        self.schedule_close(STREAM_IDLE_TIMEOUT);
+    }
+
+    /// Closes the microphone on another thread after `delay`, unless a new
+    /// recording starts first.
+    fn schedule_close(&self, delay: Duration) {
         let gen = self.close_generation.fetch_add(1, Ordering::SeqCst) + 1;
         let app = self.app_handle.clone();
         std::thread::spawn(move || {
-            std::thread::sleep(STREAM_IDLE_TIMEOUT);
+            std::thread::sleep(delay);
             let rm = app.state::<Arc<AudioRecordingManager>>();
             // Hold state lock across the check AND close to serialize against
             // try_start_recording, preventing a race where the stream is closed
@@ -665,10 +679,7 @@ impl AudioRecordingManager {
             {
                 // stop_microphone_stream does not acquire the state lock,
                 // so holding it here is safe (no deadlock).
-                info!(
-                    "Closing idle microphone stream after {:?}",
-                    STREAM_IDLE_TIMEOUT
-                );
+                info!("Closing idle microphone stream after {:?}", delay);
                 rm.stop_microphone_stream();
             }
         });
@@ -1216,12 +1227,14 @@ impl AudioRecordingManager {
                 *self.is_recording.lock().unwrap() = false;
                 self.set_state(&mut self.state.lock().unwrap(), RecordingState::Idle);
 
-                // In on-demand mode, close the mic (lazily if the setting is enabled)
+                // In on-demand mode, close the mic (lazily if the setting is
+                // enabled). The samples are already collected, so the close
+                // runs on its own thread and the transcription starts now.
                 if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
                     if get_settings(&self.app_handle).lazy_stream_close {
                         self.schedule_lazy_close();
                     } else {
-                        self.stop_microphone_stream();
+                        self.schedule_close(Duration::ZERO);
                     }
                 }
 
@@ -1230,16 +1243,7 @@ impl AudioRecordingManager {
                     return None;
                 }
 
-                // Pad if very short
-                let s_len = samples.len();
-                // debug!("Got {} samples", s_len);
-                if s_len < WHISPER_SAMPLE_RATE && s_len > 0 {
-                    let mut padded = samples;
-                    padded.resize(WHISPER_SAMPLE_RATE * 5 / 4, 0.0);
-                    Some(padded)
-                } else {
-                    Some(samples)
-                }
+                Some(pad_short(samples))
             }
             _ => None,
         }
@@ -1253,20 +1257,23 @@ impl AudioRecordingManager {
         self.recording_active.load(Ordering::SeqCst)
     }
 
-    /// Cancel any ongoing recording without returning audio samples
-    pub fn cancel_recording(&self) {
+    /// Cancel any ongoing recording. Returns the recording's binding and the
+    /// audio captured so far, so the caller can offer to undo the cancel.
+    pub fn cancel_recording(&self) -> Option<(String, Vec<f32>)> {
         self.invalidate_recording_readiness();
         self.cancel_generation.fetch_add(1, Ordering::AcqRel);
         let mut state = self.state.lock().unwrap();
 
-        match *state {
-            RecordingState::Recording { .. } => {
+        match &*state {
+            RecordingState::Recording { binding_id } => {
+                let binding_id = binding_id.clone();
                 self.set_state(&mut state, RecordingState::Idle);
                 drop(state);
 
-                if let Some(microphone) = self.recorder.lock().unwrap().as_ref() {
-                    let _ = self.collect_recording(microphone); // Discard the result
-                }
+                let samples = match self.recorder.lock().unwrap().as_ref() {
+                    Some(microphone) => pad_short(self.collect_recording(microphone)),
+                    None => Vec::new(),
+                };
 
                 *self.is_recording.lock().unwrap() = false;
 
@@ -1278,11 +1285,13 @@ impl AudioRecordingManager {
                         self.stop_microphone_stream();
                     }
                 }
+                Some((binding_id, samples))
             }
             RecordingState::Stopping => {
                 debug!("Cancellation requested while recording is stopping");
+                None
             }
-            RecordingState::Idle => {}
+            RecordingState::Idle => None,
         }
     }
 }

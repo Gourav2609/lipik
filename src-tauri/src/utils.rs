@@ -12,14 +12,10 @@ pub use crate::clipboard::*;
 pub use crate::overlay::*;
 pub use crate::tray::*;
 
-/// Preserve diagnostic text in development builds, but redact it in releases.
-/// Do not use for secrets such as API keys, which must always be redacted.
-pub fn redact_text(text: &str) -> &str {
-    if cfg!(debug_assertions) {
-        text
-    } else {
-        "[REDACTED]"
-    }
+/// User content never goes to the log, not even in debug builds (which are
+/// the builds run day to day). Log counts instead.
+pub fn redact_text(_text: &str) -> &str {
+    "[REDACTED]"
 }
 
 #[cfg(any(test, all(target_os = "windows", target_arch = "x86_64")))]
@@ -92,7 +88,7 @@ pub fn cancel_current_operation(app: &AppHandle) {
     // Cancel any ongoing recording
     let audio_manager = app.state::<Arc<AudioRecordingManager>>();
     let recording_was_active = audio_manager.is_recording();
-    audio_manager.cancel_recording();
+    let kept = audio_manager.cancel_recording();
 
     // Abandon any live streaming transcription, and stop a transcription
     // already in progress
@@ -112,6 +108,10 @@ pub fn cancel_current_operation(app: &AppHandle) {
     // Notify coordinator so it can keep lifecycle state coherent.
     if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
         coordinator.notify_cancel(recording_was_active);
+    }
+
+    if let Some((binding_id, samples)) = kept.filter(|(_, samples)| !samples.is_empty()) {
+        crate::pill::keep_cancelled(app, binding_id, samples);
     }
 
     info!("Operation cancellation completed - returned to idle state");

@@ -1,0 +1,30 @@
+.fk-insights .ins-cell {
+  opacity: 0;
+}
+
+.fk-insights .ins-cell.ins-in {
+  opacity: 1;
+  animation: ins-fade var(--fk-t-base) var(--fk-ease) both;
+}
+
+.fk-insights .ins-bar {
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+.fk-insights .ins-bar.ins-in {
+  transform: none;
+  animation: ins-draw var(--fk-t-ink) var(--fk-ease) both;
+}
+
+@keyframes ins-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ins-draw {
+  from {
+    transform: scaleX(0);
+  }
+}

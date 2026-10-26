@@ -6,10 +6,10 @@
 # posture: a shared `libtranscribe` plus loadable per-ISA ggml backend modules
 # (`libggml-cpu-<isa>.so`, `libggml-vulkan.so`, ...). These are produced by the
 # transcribe-cpp-sys CMake install during the cargo build, but nothing ships
-# them. This script copies them, as a co-located set, next to where the `handy`
+# them. This script copies them, as a co-located set, next to where the `lipik`
 # binary will find them at runtime:
 #   - the loader resolves `libtranscribe` via the $ORIGIN-relative rpath baked
-#     into `handy` (see src-tauri/build.rs);
+#     into `lipik` (see src-tauri/build.rs);
 #   - transcribe's init_backends_default() then loads the ggml modules from
 #     libtranscribe's own directory (a strictly package-local scan), so the
 #     modules MUST sit beside it.

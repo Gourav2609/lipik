@@ -2,14 +2,19 @@ use crate::actions::ACTION_MAP;
 use crate::managers::audio::AudioRecordingManager;
 use crate::settings::ShortcutActivation;
 use log::{debug, error, warn};
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
 const DEBOUNCE: Duration = Duration::from_millis(30);
+/// macOS sends no synthesized auto-repeat presses for a held key, so a
+/// release there stops at once.
+#[cfg(not(target_os = "macos"))]
 const RELEASE_GRACE: Duration = Duration::from_millis(50);
+#[cfg(target_os = "macos")]
+const RELEASE_GRACE: Duration = Duration::ZERO;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PttAction {
@@ -170,8 +175,22 @@ enum Effect {
 /// Commands processed sequentially by the coordinator thread.
 enum Command {
     Input(InputEvent),
-    Cancel { recording_was_active: bool },
+    Cancel {
+        recording_was_active: bool,
+    },
     ProcessingFinished,
+    HandsFree {
+        binding_id: String,
+        hotkey_string: String,
+    },
+    Resume {
+        binding_id: String,
+        samples: Vec<f32>,
+        accepted: Sender<bool>,
+    },
+    Finish {
+        source: String,
+    },
 }
 
 /// Decide whether a key-up should be deferred (so auto-repeat can cancel it)
@@ -472,6 +491,50 @@ impl CoordinatorState {
         }
     }
 
+    /// Hands-free press: start a locked session, lock the one the key is
+    /// holding open, or stop a locked one.
+    fn on_handsfree(
+        &mut self,
+        binding_id: String,
+        hotkey_string: String,
+        now: Instant,
+    ) -> Option<Effect> {
+        match &self.stage {
+            Stage::Idle => Some(self.begin_recording(binding_id, hotkey_string, now, true)),
+            Stage::Recording(id) if *id == binding_id => {
+                if self.is_locked() {
+                    return Some(self.begin_processing(binding_id, hotkey_string));
+                }
+                self.pending_release = None;
+                if let Some(hold) = self.hold.as_mut() {
+                    hold.locked = true;
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// Stop whatever is recording, locked or held.
+    fn on_finish(&mut self, source: String) -> Option<Effect> {
+        let Stage::Recording(id) = &self.stage else {
+            return None;
+        };
+        let binding_id = id.clone();
+        self.pending_release = None;
+        Some(self.begin_processing(binding_id, source))
+    }
+
+    /// Whether kept audio may be transcribed now (only when nothing else runs).
+    fn on_resume(&mut self) -> bool {
+        if self.stage != Stage::Idle {
+            return false;
+        }
+        self.stage = Stage::Processing;
+        self.hold = None;
+        true
+    }
+
     fn on_processing_finished(&mut self) -> Option<Effect> {
         self.stage = Stage::Idle;
         self.hold = None;
@@ -579,6 +642,34 @@ impl TranscriptionCoordinator {
                                 run_effect(&app, &mut state, effect);
                             }
                         }
+                        Command::HandsFree {
+                            binding_id,
+                            hotkey_string,
+                        } => {
+                            if let Some(effect) =
+                                state.on_handsfree(binding_id, hotkey_string, Instant::now())
+                            {
+                                run_effect(&app, &mut state, effect);
+                            }
+                        }
+                        Command::Finish { source } => {
+                            if let Some(effect) = state.on_finish(source) {
+                                run_effect(&app, &mut state, effect);
+                            }
+                        }
+                        Command::Resume {
+                            binding_id,
+                            samples,
+                            accepted,
+                        } => {
+                            let resumed = state.on_resume();
+                            let _ = accepted.send(resumed);
+                            if resumed {
+                                crate::actions::resume_transcription(&app, &binding_id, samples);
+                            } else {
+                                debug!("Dropping kept audio: a dictation is already running");
+                            }
+                        }
                     }
                 }
                 debug!("Transcription coordinator exited");
@@ -645,6 +736,38 @@ impl TranscriptionCoordinator {
             }))
             .is_err()
         {
+            warn!("Transcription coordinator channel closed");
+        }
+    }
+
+    pub fn send_handsfree(&self, binding_id: &str, hotkey_string: &str) {
+        self.post(Command::HandsFree {
+            binding_id: binding_id.to_string(),
+            hotkey_string: hotkey_string.to_string(),
+        });
+    }
+
+    /// Transcribe audio kept from a cancelled dictation, as if it had stopped
+    /// normally. The receiver says whether it was taken (nothing else running).
+    pub fn resume(&self, binding_id: &str, samples: Vec<f32>) -> Receiver<bool> {
+        let (accepted, reply) = mpsc::channel();
+        self.post(Command::Resume {
+            binding_id: binding_id.to_string(),
+            samples,
+            accepted,
+        });
+        reply
+    }
+
+    /// Stop the current recording and transcribe it (the pill's ✓ button).
+    pub fn finish(&self, source: &str) {
+        self.post(Command::Finish {
+            source: source.to_string(),
+        });
+    }
+
+    fn post(&self, command: Command) {
+        if self.tx.send(command).is_err() {
             warn!("Transcription coordinator channel closed");
         }
     }
@@ -1613,5 +1736,86 @@ mod tests {
             "held 400ms since the real key-down: must stop, not lock"
         );
         assert_eq!(state.stage, Stage::Processing);
+    }
+
+    fn handsfree(state: &mut CoordinatorState, at: Instant) -> Option<Effect> {
+        state.on_handsfree(BINDING.to_string(), BINDING.to_string(), at)
+    }
+
+    #[test]
+    fn handsfree_from_idle_starts_a_locked_session() {
+        let mut state = CoordinatorState::new();
+        assert!(matches!(
+            handsfree(&mut state, Instant::now()),
+            Some(Effect::Start { .. })
+        ));
+        assert!(state.is_locked());
+        assert_eq!(state.stage, Stage::Recording(BINDING.to_string()));
+    }
+
+    #[test]
+    fn handsfree_locks_a_held_session_and_stops_a_locked_one() {
+        let mut state = CoordinatorState::new();
+        let t0 = Instant::now();
+        assert!(matches!(
+            state.on_input(ptt_input(true), t0),
+            Some(Effect::Start { .. })
+        ));
+        assert!(state.on_input(ptt_input(false), t0 + ms(100)).is_none());
+        assert!(handsfree(&mut state, t0 + ms(110)).is_none());
+        assert!(state.is_locked());
+        assert!(
+            state.on_grace_expired().is_none(),
+            "the key's release must not stop a locked session"
+        );
+        assert!(state.on_input(ptt_input(false), t0 + ms(300)).is_none());
+        assert_eq!(state.stage, Stage::Recording(BINDING.to_string()));
+
+        assert!(matches!(
+            handsfree(&mut state, t0 + ms(400)),
+            Some(Effect::Stop { .. })
+        ));
+        assert_eq!(state.stage, Stage::Processing);
+    }
+
+    /// Unlike a key press, hands-free is not remembered while busy.
+    #[test]
+    fn handsfree_while_processing_is_dropped() {
+        let mut state = CoordinatorState::new();
+        let t0 = Instant::now();
+        handsfree(&mut state, t0);
+        handsfree(&mut state, t0 + ms(100));
+        assert_eq!(state.stage, Stage::Processing);
+
+        assert!(handsfree(&mut state, t0 + ms(200)).is_none());
+        assert!(state.on_processing_finished().is_none());
+        assert_eq!(state.stage, Stage::Idle);
+    }
+
+    #[test]
+    fn finish_stops_a_held_session_and_ignores_idle() {
+        let mut state = CoordinatorState::new();
+        assert!(state.on_finish("pill".to_string()).is_none());
+
+        assert!(state.on_input(ptt_input(true), Instant::now()).is_some());
+        assert!(matches!(
+            state.on_finish("pill".to_string()),
+            Some(Effect::Stop { .. })
+        ));
+        assert_eq!(state.stage, Stage::Processing);
+        assert!(state.grace_deadline().is_none());
+    }
+
+    #[test]
+    fn resume_runs_only_when_idle() {
+        let mut state = CoordinatorState::new();
+        assert!(state.on_resume());
+        assert_eq!(state.stage, Stage::Processing);
+        assert!(!state.on_resume());
+
+        state.on_processing_finished();
+        state.on_input(ptt_input(true), Instant::now());
+        assert!(!state.on_resume());
+        assert_eq!(state.stage, Stage::Recording(BINDING.to_string()));
     }
 }

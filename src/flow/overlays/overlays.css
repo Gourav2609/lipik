@@ -1,0 +1,46 @@
+.fk-scrim-in {
+  animation: fk-fade-in var(--fk-t-base) var(--fk-ease) both;
+}
+.fk-dialog {
+  animation: fk-dialog-in var(--fk-t-base) var(--fk-ease) both;
+}
+[data-fk-closing] .fk-scrim-in,
+[data-fk-closing] .fk-dialog {
+  animation: fk-fade-out var(--fk-t-quick) var(--fk-ease) forwards;
+  pointer-events: none;
+}
+
+@keyframes fk-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+.fk-toast {
+  animation: fk-toast-in var(--fk-t-base) var(--fk-ease) both;
+}
+
+@keyframes fk-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.fk-ink-moment {
+  animation:
+    fk-fade-in var(--fk-t-base) var(--fk-ease) both,
+    fk-fade-out var(--fk-t-layout) var(--fk-ease) 1500ms forwards;
+}
+.fk-ink-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: fk-ink-write var(--fk-t-ink) var(--fk-ease) 120ms forwards;
+}
+
+@keyframes fk-ink-write {
+  to {
+    stroke-dashoffset: 0;
+  }
+}

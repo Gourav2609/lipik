@@ -1,0 +1,286 @@
+@import "@fontsource/mukta/400.css";
+@import "@fontsource/mukta/500.css";
+@import "@fontsource/mukta/600.css";
+@import "@fontsource/mukta/700.css";
+@import "@fontsource/martel/400.css";
+@import "@fontsource/martel/600.css";
+@import "./looks/index.css";
+
+/* Lipik tokens. The spec, with the reasons behind each value, is docs/DESIGN.md. */
+.fk {
+  --fk-font-sans: "Mukta", -apple-system, system-ui, sans-serif;
+  --fk-font-display: "Martel", Georgia, serif;
+  --fk-font-serif: var(--fk-font-display);
+
+  --fk-bg: #eceff4;
+  --fk-panel: #fbfcfd;
+  --fk-surface: #f2f4f8;
+  --fk-surface-2: #e8ebf1;
+  --fk-border: #dadfe7;
+  --fk-border-strong: #c3c9d5;
+  --fk-hover: #e6e9f0;
+  --fk-active: #dfe4f6;
+  --fk-text: #141826;
+  --fk-text-muted: #596175;
+  --fk-text-faint: #646c80;
+  --fk-accent: #3245c4;
+  --fk-accent-hover: #2a3aa8;
+  --fk-accent-soft: #e3e7fb;
+  --fk-accent-text: #ffffff;
+  --fk-live: #c23346;
+  --fk-live-soft: #fbe5e8;
+  --fk-ok: #276b44;
+  --fk-ok-soft: #e1f1e7;
+  --fk-inverse-bg: #141826;
+  --fk-inverse-text: #f4f6fb;
+  --fk-menu-bg: #ffffff;
+  --fk-scrim: rgba(20, 24, 38, 0.32);
+  --fk-focus: 0 0 0 3px rgba(50, 69, 196, 0.22);
+
+  --fk-elev-1: 0 1px 2px rgba(20, 24, 38, 0.06), 0 0 0 1px rgba(20, 24, 38, 0.05);
+  --fk-elev-2: 0 10px 28px -8px rgba(20, 24, 38, 0.2), 0 0 0 1px rgba(20, 24, 38, 0.07);
+  --fk-elev-3: 0 28px 72px -16px rgba(16, 20, 40, 0.32), 0 0 0 1px rgba(20, 24, 38, 0.08);
+  --fk-shadow: var(--fk-elev-3);
+
+  --fk-checklist-bg: var(--fk-surface);
+  --fk-progress-track: var(--fk-accent-soft);
+  --fk-progress-fill: var(--fk-accent);
+  --fk-check-bg: var(--fk-accent-soft);
+  --fk-check-fg: var(--fk-accent);
+  --fk-toggle-on: var(--fk-accent);
+  --fk-toggle-off: #7f879b;
+  --fk-toggle-knob-on: #ffffff;
+  --fk-toggle-knob-off: #ffffff;
+  --fk-btn-secondary: var(--fk-surface-2);
+  --fk-btn-secondary-hover: #dde1ea;
+  --fk-modal-nav: var(--fk-bg);
+  --fk-modal-content: var(--fk-panel);
+
+  --fk-r-xs: 4px;
+  --fk-r-sm: 8px;
+  --fk-r-md: 10px;
+  --fk-r-lg: 14px;
+  --fk-r-xl: 20px;
+
+  --fk-sidebar-w: 232px;
+  --fk-rail-w: 80px;
+  --fk-header-h: 52px;
+
+  --fk-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --fk-ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+  --fk-ease-snap: var(--fk-ease);
+  --fk-t-quick: 120ms;
+  --fk-t-base: 180ms;
+  --fk-t-size: 240ms;
+  --fk-t-layout: 300ms;
+  --fk-t-ink: 600ms;
+
+  font-family: var(--fk-font-sans);
+  color: var(--fk-text);
+  background: var(--fk-bg);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.fk[data-fk-theme="dark"] {
+  --fk-bg: #0f121a;
+  --fk-panel: #151923;
+  --fk-surface: #1b202c;
+  --fk-surface-2: #222836;
+  --fk-border: #2a3040;
+  --fk-border-strong: #3a4256;
+  --fk-hover: #222838;
+  --fk-active: #262e4e;
+  --fk-text: #e7eaf3;
+  --fk-text-muted: #9aa2b6;
+  --fk-text-faint: #868ea4;
+  --fk-accent: #8d9cff;
+  --fk-accent-hover: #a5b1ff;
+  --fk-accent-soft: #232a4d;
+  --fk-accent-text: #0d1024;
+  --fk-live: #ff6b7d;
+  --fk-live-soft: #3a1c25;
+  --fk-ok: #6fcf97;
+  --fk-ok-soft: #173326;
+  --fk-inverse-bg: #eef1f8;
+  --fk-inverse-text: #141826;
+  --fk-menu-bg: #212634;
+  --fk-scrim: rgba(5, 7, 12, 0.6);
+  --fk-focus: 0 0 0 3px rgba(141, 156, 255, 0.3);
+
+  --fk-elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --fk-elev-2: 0 12px 32px -8px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --fk-elev-3: 0 32px 80px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.07);
+
+  --fk-toggle-off: #646d86;
+  --fk-toggle-knob-on: #0d1024;
+  --fk-toggle-knob-off: #e7eaf3;
+  --fk-btn-secondary-hover: #2a3142;
+}
+
+@layer base {
+  .fk *,
+  .fk *::before,
+  .fk *::after {
+    box-sizing: border-box;
+  }
+
+  .fk button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    cursor: default;
+  }
+
+  .fk :focus-visible {
+    outline: none;
+    box-shadow: var(--fk-focus);
+  }
+
+  .fk label:focus-within > input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+  .fk label:focus-within > textarea:focus-visible {
+    box-shadow: none;
+  }
+}
+
+@layer components {
+  .fk-display,
+  .fk-serif {
+    font-family: var(--fk-font-display);
+    font-weight: 400;
+    letter-spacing: -0.005em;
+  }
+
+  .fk-eyebrow {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--fk-text-muted);
+  }
+
+  .fk-num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .fk-page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 8px 48px 48px;
+  }
+
+  .fk-page-head {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--fk-border);
+  }
+
+  .fk-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--fk-border-strong) transparent;
+  }
+  .fk-scroll::-webkit-scrollbar {
+    width: 10px;
+  }
+  .fk-scroll::-webkit-scrollbar-thumb {
+    background: var(--fk-border-strong);
+    border-radius: 5px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  .fk-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+.fk[data-fk-collapsed] {
+  --fk-sidebar-w: var(--fk-rail-w);
+}
+
+.fk-sidebar,
+.fk-main,
+.fk-header {
+  transition-property: width, left;
+  transition-duration: var(--fk-t-layout);
+  transition-timing-function: var(--fk-ease-move);
+}
+.fk-sidebar {
+  width: var(--fk-sidebar-w);
+}
+.fk-main,
+.fk-header {
+  left: var(--fk-sidebar-w);
+}
+
+.fk-redraw {
+  animation: fk-fade-in var(--fk-t-base) var(--fk-ease) 120ms both;
+}
+
+.fk-nav-item {
+  transition:
+    background-color var(--fk-t-quick) var(--fk-ease),
+    color var(--fk-t-quick) var(--fk-ease);
+}
+.fk-nav-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--fk-accent);
+  animation: fk-ink-down var(--fk-t-base) var(--fk-ease) both;
+}
+.fk-nav-item[data-rail][aria-current="page"]::before {
+  top: 14px;
+  bottom: 14px;
+}
+
+.fk-menu {
+  transform-origin: top right;
+  animation: fk-menu-in var(--fk-t-base) var(--fk-ease) both;
+}
+[data-fk-closing] .fk-menu {
+  animation: fk-fade-out var(--fk-t-quick) var(--fk-ease) forwards;
+  pointer-events: none;
+}
+
+@keyframes fk-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes fk-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes fk-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes fk-ink-down {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fk *,
+  .fk *::before {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

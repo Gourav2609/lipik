@@ -26,6 +26,9 @@ use tauri::Manager;
 use tauri::{AppHandle, Emitter};
 
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(25);
+/// The focus check taken at release is trusted at paste time only when the
+/// paste follows this soon after release.
+const FOCUS_CHECK_MAX_AGE: Duration = Duration::from_millis(300);
 
 /// Bumped each time a recording session takes over the tray and overlay. A
 /// paste still finishing for an earlier session compares against it so its
@@ -355,21 +358,25 @@ pub(crate) struct ProcessedTranscription {
     pub final_text: String,
     pub post_processed_text: Option<String>,
     pub post_process_prompt: Option<String>,
+    /// After dictionary replacements and snippets, before any model ran.
+    pub prepared_text: String,
+    pub replacements: usize,
 }
 
 pub(crate) async fn process_transcription_output(
     app: &AppHandle,
     transcription: &str,
     post_process: bool,
+    target: &crate::textflow::Target,
 ) -> ProcessedTranscription {
     let settings = get_settings(app);
-    let mut final_text = transcription.to_string();
-    let mut post_processed_text: Option<String> = None;
+    let prepared = crate::textflow::prepare(app, transcription);
+    let prepared_text = prepared.text();
+    let mut final_text = prepared_text.clone();
     let mut post_process_prompt: Option<String> = None;
 
     if post_process {
         if let Some(processed_text) = post_process_transcription(&settings, &final_text).await {
-            post_processed_text = Some(processed_text.clone());
             final_text = processed_text;
 
             if let Some(prompt_id) = &settings.post_process_selected_prompt_id {
@@ -382,12 +389,17 @@ pub(crate) async fn process_transcription_output(
                 }
             }
         }
+    } else if let Some(cleaned) = crate::textflow::clean_up(app, &prepared, target).await {
+        final_text = cleaned;
     }
+    final_text = crate::textflow::auto_transform(app, final_text).await;
 
     ProcessedTranscription {
+        post_processed_text: (final_text != transcription).then(|| final_text.clone()),
         final_text,
-        post_processed_text,
         post_process_prompt,
+        prepared_text,
+        replacements: prepared.replacements,
     }
 }
 
@@ -493,6 +505,7 @@ impl ShortcutAction for TranscribeAction {
                     "Recording request accepted in {:?}; waiting for first microphone samples",
                     recording_start_time.elapsed()
                 );
+                crate::textflow::on_recording_start(app);
                 let generation = readiness.generation();
                 let app_clone = app.clone();
                 let rm_clone = Arc::clone(&rm);
@@ -570,6 +583,24 @@ impl ShortcutAction for TranscribeAction {
     }
 
     fn stop(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
+        self.finish(app, binding_id, None);
+    }
+}
+
+/// Transcribe and paste audio kept from a cancelled dictation (the pill's Undo).
+pub fn resume_transcription(app: &AppHandle, binding_id: &str, samples: Vec<f32>) {
+    app.state::<Arc<TranscriptionManager>>().initiate_model_load();
+    RECORDING_SESSION.fetch_add(1, Ordering::SeqCst);
+    TranscribeAction {
+        post_process: binding_id == "transcribe_with_post_process",
+    }
+    .finish(app, binding_id, Some(samples));
+}
+
+impl TranscribeAction {
+    /// Stops the recording (or takes `kept` audio instead) and runs the
+    /// transcribe-paste pipeline.
+    fn finish(&self, app: &AppHandle, binding_id: &str, kept: Option<Vec<f32>>) {
         // Prevent a slow microphone from emitting a ready event or start chime
         // after the user has already requested stop.
         app.state::<Arc<AudioRecordingManager>>()
@@ -604,8 +635,9 @@ impl ShortcutAction for TranscribeAction {
         // Unmute before playing audio feedback so the stop sound is audible
         rm.remove_mute();
 
-        // Play audio feedback for recording stop
-        play_feedback_sound(app, SoundType::Stop);
+        if kept.is_none() {
+            play_feedback_sound(app, SoundType::Stop);
+        }
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = self.post_process;
@@ -619,7 +651,11 @@ impl ShortcutAction for TranscribeAction {
             );
 
             let stop_recording_time = Instant::now();
-            if let Some(samples) = rm.stop_recording(&binding_id, cancel_generation) {
+            let samples = match kept {
+                Some(samples) => Some(samples),
+                None => rm.stop_recording(&binding_id, cancel_generation),
+            };
+            if let Some(samples) = samples {
                 debug!(
                     "Recording stopped and samples retrieved in {:?}, sample count: {}",
                     stop_recording_time.elapsed(),
@@ -651,6 +687,13 @@ impl ShortcutAction for TranscribeAction {
                     let wav_handle = tauri::async_runtime::spawn_blocking(move || {
                         crate::audio_toolkit::save_wav_file(&wav_path, &samples_for_wav)
                     });
+
+                    // The focus check asks the target app over Accessibility,
+                    // which can take a while; run it while the model decodes.
+                    let focus_check = {
+                        let ah = ah.clone();
+                        std::thread::spawn(move || crate::pill::text_field_has_focus(&ah))
+                    };
 
                     // Transcribe concurrently with WAV save: the live decode's
                     // result when it has one (all audio was already fed to it),
@@ -693,12 +736,30 @@ impl ShortcutAction for TranscribeAction {
                     match transcription_result {
                         Ok(transcription) => {
                             debug!(
-                                "Transcription completed in {:?}: '{}'",
+                                "Transcription completed in {:?} ({} words)",
                                 transcription_time.elapsed(),
-                                utils::redact_text(&transcription)
+                                transcription.split_whitespace().count()
                             );
 
-                            if post_process {
+                            let target = crate::textflow::Target::live();
+                            let uses_model =
+                                post_process || crate::textflow::waits_on_llm(&ah, &transcription);
+                            // Saved before the model runs so a cancel during
+                            // that wait still keeps the raw transcript.
+                            let early_entry = if wav_saved && uses_model {
+                                hm.save_entry(
+                                    file_name.clone(),
+                                    transcription.clone(),
+                                    post_process,
+                                    None,
+                                    None,
+                                )
+                                .map_err(|e| error!("Failed to save history entry: {}", e))
+                                .ok()
+                            } else {
+                                None
+                            };
+                            if uses_model {
                                 if use_streaming_overlay {
                                     tm.emit_stream_working(StreamWorkKind::Polishing);
                                 } else {
@@ -706,7 +767,12 @@ impl ShortcutAction for TranscribeAction {
                                 }
                             }
                             let Some(processed) = complete_unless_cancelled(
-                                process_transcription_output(&ah, &transcription, post_process),
+                                process_transcription_output(
+                                    &ah,
+                                    &transcription,
+                                    post_process,
+                                    &target,
+                                ),
                                 || rm.was_cancelled_since(cancel_generation),
                             )
                             .await
@@ -724,22 +790,68 @@ impl ShortcutAction for TranscribeAction {
                                 return;
                             }
 
-                            // Save to history if WAV was saved
-                            if wav_saved {
-                                if let Err(err) = hm.save_entry(
-                                    file_name,
-                                    transcription,
-                                    post_process,
-                                    processed.post_processed_text.clone(),
-                                    processed.post_process_prompt.clone(),
-                                ) {
-                                    error!("Failed to save history entry: {}", err);
+                            // Saved to history (if the WAV was saved) once the
+                            // text has landed, so the database write and the
+                            // main window's refresh never delay the paste.
+                            let save_history = {
+                                let ah = ah.clone();
+                                let hm = Arc::clone(&hm);
+                                let post_processed_text = processed.post_processed_text.clone();
+                                let post_process_prompt = processed.post_process_prompt.clone();
+                                let prepared_text = processed.prepared_text.clone();
+                                let final_text = processed.final_text.clone();
+                                let replacements = processed.replacements;
+                                move || {
+                                    if !wav_saved {
+                                        return;
+                                    }
+                                    let saved = match early_entry {
+                                        Some(entry)
+                                            if post_processed_text.is_none()
+                                                && post_process_prompt.is_none() =>
+                                        {
+                                            Ok(entry)
+                                        }
+                                        Some(entry) => hm.update_transcription(
+                                            entry.id,
+                                            transcription,
+                                            post_processed_text,
+                                            post_process_prompt,
+                                        ),
+                                        None => hm.save_entry(
+                                            file_name,
+                                            transcription,
+                                            post_process,
+                                            post_processed_text,
+                                            post_process_prompt,
+                                        ),
+                                    };
+                                    match saved {
+                                        Ok(entry) => crate::textflow::record_meta(
+                                            &ah,
+                                            entry.id,
+                                            target,
+                                            prepared_text,
+                                            final_text,
+                                            replacements,
+                                            sample_count,
+                                        ),
+                                        Err(err) => error!("Failed to save history entry: {}", err),
+                                    }
                                 }
-                            }
+                            };
+                            // After a slow decode or the model's wait, focus may
+                            // have moved since the recording stopped; check
+                            // again at paste time.
+                            let focus_check = (!uses_model
+                                && stop_time.elapsed() <= FOCUS_CHECK_MAX_AGE)
+                                .then_some(focus_check);
 
                             if processed.final_text.is_empty() {
                                 utils::hide_recording_overlay(&ah);
                                 set_tray_state(&ah, TrayIconState::Idle);
+                                crate::pill::emit_result(&ah, "", true);
+                                save_history();
                             } else {
                                 let ah_clone = ah.clone();
                                 let paste_time = Instant::now();
@@ -760,25 +872,42 @@ impl ShortcutAction for TranscribeAction {
                                             );
                                             utils::hide_recording_overlay(&ah_clone);
                                             set_tray_state(&ah_clone, TrayIconState::Idle);
+                                            save_history();
                                             return;
                                         }
 
-                                        match utils::paste(final_text, ah_clone.clone()) {
-                                            Ok(()) => debug!(
-                                                "Text pasted successfully in {:?}",
-                                                paste_time.elapsed()
-                                            ),
-                                            Err(e) => {
-                                                error!("Failed to paste transcription: {}", e);
-                                                let _ = ah_clone.emit("paste-error", ());
-                                            }
-                                        }
+                                        let has_field = match focus_check {
+                                            Some(check) => check.join().unwrap_or(true),
+                                            None => crate::pill::text_field_has_focus(&ah_clone),
+                                        };
                                         // A new session may have started while
-                                        // this paste ran; the UI is now its.
+                                        // the field check ran; the UI is now its.
+                                        // Otherwise the pill collapses as the
+                                        // text lands.
                                         if RECORDING_SESSION.load(Ordering::SeqCst) == session {
                                             utils::hide_recording_overlay(&ah_clone);
                                             set_tray_state(&ah_clone, TrayIconState::Idle);
                                         }
+                                        let inserted = has_field
+                                            && match utils::paste(final_text.clone(), ah_clone.clone()) {
+                                                Ok(()) => {
+                                                    debug!(
+                                                        "Text pasted successfully in {:?}",
+                                                        paste_time.elapsed()
+                                                    );
+                                                    true
+                                                }
+                                                Err(e) => {
+                                                    error!("Failed to paste transcription: {}", e);
+                                                    let _ = ah_clone.emit("paste-error", ());
+                                                    false
+                                                }
+                                            };
+                                        if !has_field {
+                                            debug!("No text field has focus; not pasting");
+                                        }
+                                        crate::pill::emit_result(&ah_clone, &final_text, inserted);
+                                        save_history();
                                     })
                                     .map(|_| ())
                                     .unwrap_or_else(|e| {
@@ -800,7 +929,7 @@ impl ShortcutAction for TranscribeAction {
 
                             error!("Transcription failed: {}", err);
                             // Surface the failure to the UI (toast). The full
-                            // message is also in handy.log via the line above.
+                            // message is also in lipik.log via the line above.
                             let _ = ah.emit("transcription-error", err.to_string());
                             // Save entry with empty text so user can retry
                             if wav_saved {
@@ -892,6 +1021,12 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "test".to_string(),
         Arc::new(TestAction) as Arc<dyn ShortcutAction>,
     );
+    for index in 1..=9 {
+        map.insert(
+            format!("transform_{index}"),
+            Arc::new(crate::textflow::transforms::TransformAction(index)) as Arc<dyn ShortcutAction>,
+        );
+    }
     map
 });
 

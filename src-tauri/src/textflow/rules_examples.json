@@ -1,0 +1,702 @@
+{
+ "_about": "Examples for the clean-up rules (rules.rs) and checks, run by the Rust tests and by training/cleanup/guards.py. vocab is the dictionary every example uses.",
+ "vocab": [
+  "Quorvia",
+  "Brightlane",
+  "Supabase",
+  "Next.js",
+  "GraphQL",
+  "PostgreSQL",
+  "Meher Kapadia",
+  "Linear"
+ ],
+ "words": [
+  [
+   "rivaan_m@quorvia.com",
+   [
+    "rivaan",
+    "m",
+    "quorvia",
+    "com"
+   ]
+  ],
+  [
+   "Next.js at 3:30, I’ll pay ₹1,500",
+   [
+    "next",
+    "js",
+    "at",
+    "3",
+    "30",
+    "i'll",
+    "pay",
+    "1500"
+   ]
+  ],
+  [
+   "मुझे कल की मीटिंग के बारे में बताओ",
+   [
+    "मुझे",
+    "कल",
+    "की",
+    "मीटिंग",
+    "के",
+    "बारे",
+    "में",
+    "बताओ"
+   ]
+  ]
+ ],
+ "added": [
+  [
+   "aaj raat dinner pe chalein kya, main aath baje free hoon",
+   "Aaj raat dinner pe chalein kya? Main 8 baje free hoon.",
+   []
+  ],
+  [
+   "Hey can we, move the call to four, no, five.",
+   "Hey, can we move the call to 5?",
+   []
+  ],
+  [
+   "We need about fifteen hundred rupees for the cab tonight",
+   "We need about ₹1,500 for the cab tonight.",
+   []
+  ],
+  [
+   "the invoice comes to two thousand four hundred and fifty dollars",
+   "The invoice comes to $2,450.",
+   []
+  ],
+  [
+   "call me at nine eight seven six five four three two one zero",
+   "Call me at 9876543210.",
+   []
+  ],
+  [
+   "call me at nine oh five",
+   "Call me at 905.",
+   []
+  ],
+  [
+   "the launch is on March fourteenth twenty twenty seven",
+   "The launch is on March 14, 2027.",
+   []
+  ],
+  [
+   "we shipped version two point four point one",
+   "We shipped version 2.4.1.",
+   []
+  ],
+  [
+   "I'll reach by eight fifteen",
+   "I'll reach by 8:15.",
+   []
+  ],
+  [
+   "Let's meet at 3.30 p.m. on Thursday.",
+   "Let's meet at 3:30 PM on Thursday.",
+   []
+  ],
+  [
+   "I'll probably reach by 815 so go ahead",
+   "I'll probably reach by 8:15, so go ahead.",
+   []
+  ],
+  [
+   "My email is Rivaan underscore m at quavia.com",
+   "My email is rivaan_m@quorvia.com.",
+   []
+  ],
+  [
+   "the Next J S app is calling the A P I twice",
+   "The Next.js app is calling the API twice.",
+   []
+  ],
+  [
+   "add a graph Q L endpoint",
+   "Add a GraphQL endpoint.",
+   []
+  ],
+  [
+   "missing env variable in superbase",
+   "Missing env variable in Supabase.",
+   []
+  ],
+  [
+   "three things for today number one finish the deck number two call the vendor",
+   "Three things for today:\n1. Finish the deck\n2. Call the vendor",
+   []
+  ],
+  [
+   "So quick update on the migration we moved half the tables",
+   "Here's the cleaned text: So, quick update on the migration: we moved half the tables.",
+   [
+    "here's",
+    "cleaned",
+    "text"
+   ]
+  ],
+  [
+   "The TypeScript build fails because of a missing env variable",
+   "The TypeScript build fails due to a missing environment variable.",
+   [
+    "due",
+    "to",
+    "environment"
+   ]
+  ],
+  [
+   "Thanks for the update I'll look tomorrow",
+   "Thank you for the update, I'll look tomorrow.",
+   [
+    "thank",
+    "you"
+   ]
+  ],
+  [
+   "ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi",
+   "Call Zubin and ask whether the budget is finalized.",
+   [
+    "and",
+    "ask",
+    "whether",
+    "the",
+    "is",
+    "finalized"
+   ]
+  ],
+  [
+   "please tell Rivaan the meeting is at five today ok",
+   "Please tell Rivaan the meeting is at 5 today, ok. ठीक है",
+   [
+    "ठीक",
+    "है"
+   ]
+  ]
+ ],
+ "hinglish": [
+  [
+   "ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi",
+   "Call Zubin and ask whether the budget is finalized.",
+   true
+  ],
+  [
+   "ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi",
+   "Ek kaam karo, Zubin ko call karo aur pucho ki budget final hua ya nahi.",
+   false
+  ],
+  [
+   "Client ke email aya kya abhi tak muje kuch nahi mila.",
+   "Kuch nahi mila.",
+   true
+  ],
+  [
+   "Send the report to Zubin sorry I meant Tavish",
+   "Send the report to Tavish.",
+   false
+  ],
+  [
+   "main paanch baje aaunga, nahi nahi, chhe baje",
+   "Main chhe baje aaunga.",
+   false
+  ],
+  [
+   "it was a mere formality per se",
+   "It was a formality.",
+   false
+  ]
+ ],
+ "dropped": [
+  [
+   "So the thing is we need the signed copy before Friday",
+   "We need the signed copy before Friday.",
+   [
+    "so",
+    "thing",
+    "is"
+   ]
+  ],
+  [
+   "the launch is on March fourteenth twenty twenty seven",
+   "March 14, 2027",
+   [
+    "the",
+    "launch",
+    "is",
+    "on"
+   ]
+  ],
+  [
+   "That's amazing exclamation mark congrats to the whole team",
+   "Congrats to the whole team",
+   [
+    "that's",
+    "amazing"
+   ]
+  ],
+  [
+   "You know the dashboard is like really slow",
+   "The dashboard is really slow.",
+   []
+  ],
+  [
+   "um so erm the dashboard is slow",
+   "So the dashboard is slow.",
+   []
+  ],
+  [
+   "use a 5 mm drill bit for the hinge",
+   "Use a 5 drill bit for the hinge.",
+   [
+    "mm"
+   ]
+  ],
+  [
+   "the Next J S app is calling the A P I twice",
+   "The Next.js app is calling the API twice.",
+   []
+  ],
+  [
+   "three things for today number one finish the deck number two call the vendor",
+   "Three things for today:\n1. Finish the deck\n2. Call the vendor",
+   []
+  ],
+  [
+   "I I think the the numbers look fine to me honestly",
+   "I think the numbers look fine to me, honestly.",
+   []
+  ],
+  [
+   "मुझे कल की मीटिंग के बारे में सब कुछ बताओ",
+   "मीटिंग।",
+   [
+    "मुझे",
+    "कल",
+    "की",
+    "के",
+    "बारे",
+    "में",
+    "सब",
+    "कुछ",
+    "बताओ"
+   ]
+  ]
+ ],
+ "check": [
+  [
+   "Send the report to Zubin sorry I meant Tavish now",
+   "Send the report to Tavish now.",
+   "ok"
+  ],
+  [
+   "So the thing is we need the signed copy before Friday",
+   "We need the signed copy before Friday.",
+   "Dropped"
+  ],
+  [
+   "So quick update on the migration we moved half the tables",
+   "Here's the cleaned text: So, quick update on the migration: we moved half the tables.",
+   "Added"
+  ],
+  [
+   "ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi",
+   "Call Zubin and ask whether the budget is finalized.",
+   "HinglishLost"
+  ],
+  [
+   "hey can we move the call to four no five please",
+   "Hey, can we move the call to 5 please.",
+   "ok"
+  ],
+  [
+   "is the build green yet can you check it",
+   "Is the build green yet? Can you check it? Also, here is a summary of what a green build means for your team and why it matters.",
+   "TooLong"
+  ],
+  [
+   "I have no idea why the tests keep failing on the main branch since yesterday",
+   "The tests are failing.",
+   "Dropped"
+  ],
+  [
+   "Actually I think we should postpone the launch until the payment bug is fixed",
+   "We should postpone the launch.",
+   "Dropped"
+  ],
+  [
+   "the meeting is on Tuesday, actually no, Wednesday at ten",
+   "The meeting is on Wednesday at 10.",
+   "ok"
+  ],
+  [
+   "hey can you push the fix today, um, scratch that, tomorrow morning",
+   "Hey, can you push the fix tomorrow morning?",
+   "ok"
+  ],
+  [
+   "मुझे कल की मीटिंग के बारे में सब कुछ बताओ",
+   "मीटिंग।",
+   "Dropped"
+  ],
+  [
+   "मुझे कल की मीटिंग के बारे में सब कुछ बताओ",
+   "मुझे कल की मीटिंग के बारे में सब कुछ बताओ।",
+   "ok"
+  ],
+  [
+   "please tell Rivaan the meeting is at five today ok",
+   "Please tell Rivaan the meeting is at 5 today, ok. ठीक है",
+   "NewScript"
+  ],
+  [
+   "mujhe kal subah wali meeting ka agenda bhej do please",
+   "मुझे कल सुबह वाली मीटिंग का एजेंडा भेज दो प्लीज़।",
+   "NewScript"
+  ]
+ ],
+ "apply": [
+  [
+   "Is the build green question mark?",
+   "Is the build green?"
+  ],
+  [
+   "is the build green question mark",
+   "Is the build green?"
+  ],
+  [
+   "That's amazing exclamation mark congrats to the whole team",
+   "That's amazing! Congrats to the whole team"
+  ],
+  [
+   "thanks for the update comma I'll take a look tomorrow period",
+   "Thanks for the update, I'll take a look tomorrow."
+  ],
+  [
+   "The options are red comma blue comma or green period.",
+   "The options are red, blue, or green."
+  ],
+  [
+   "Hi Meher new line please find the quote attached period new line thanks.",
+   "Hi Meher\nPlease find the quote attached.\nThanks."
+  ],
+  [
+   "My email is Rivaan underscore m at quavia.com",
+   "My email is rivaan_m@quavia.com"
+  ],
+  [
+   "send it to meher dot kapadia at velocore dot io",
+   "Send it to meher.kapadia@velocore.io"
+  ],
+  [
+   "rivaan underscore m at quavia dot com",
+   "rivaan_m@quavia.com"
+  ],
+  [
+   "write to kabir dot rao at lumora dot ai",
+   "Write to kabir.rao@lumora.ai"
+  ],
+  [
+   "the form is on lumora dot ai slash signup",
+   "The form is on lumora.ai/signup"
+  ],
+  [
+   "the docs are at docs dot brightlane dot dev slash setup",
+   "The docs are at docs.brightlane.dev/setup"
+  ],
+  [
+   "The docs are at docs.brightlane.dev slash setup.",
+   "The docs are at docs.brightlane.dev/setup."
+  ],
+  [
+   "pricing is on quorvia.com slash pricing",
+   "Pricing is on quorvia.com/pricing"
+  ],
+  [
+   "check example.com/search?q=shoes",
+   "Check example.com/search?q=shoes"
+  ],
+  [
+   "Let's meet at 3.30 p.m. on Thursday.",
+   "Let's meet at 3:30 PM on Thursday."
+  ],
+  [
+   "meet at 1.10 pm",
+   "Meet at 1:10 PM"
+  ],
+  [
+   "I'll probably reach by 8.15 so go ahead",
+   "I'll probably reach by 8.15 so go ahead"
+  ],
+  [
+   "we shipped version 2.4.1 at 3.30",
+   "We shipped version 2.4.1 at 3.30"
+  ],
+  [
+   "we upgraded from 1.10 to 1.12",
+   "We upgraded from 1.10 to 1.12"
+  ],
+  [
+   "the price went up by 1.10",
+   "The price went up by 1.10"
+  ],
+  [
+   "the trial period ends Friday",
+   "The trial period ends Friday"
+  ],
+  [
+   "we met at the office",
+   "We met at the office"
+  ],
+  [
+   "Hum okay so the logo",
+   "Hum okay so the logo"
+  ],
+  [
+   "Hey can we, move the call to four, no, five.",
+   "Hey can we, move the call to 5?"
+  ],
+  [
+   "Hey can we, move the call to 4 no 5",
+   "Hey can we, move the call to 5?"
+  ],
+  [
+   "four, no, five",
+   "5"
+  ],
+  [
+   "see you at four, no, five pm",
+   "See you at 5 pm"
+  ],
+  [
+   "Oh no one told me about the meeting",
+   "Oh no one told me about the meeting"
+  ],
+  [
+   "Oh, no, one more thing",
+   "Oh, no, one more thing"
+  ],
+  [
+   "The one no one wants",
+   "The one no one wants"
+  ],
+  [
+   "Oh no two of the builds failed",
+   "Oh no two of the builds failed"
+  ],
+  [
+   "I asked two, no one replied",
+   "I asked two, no one replied"
+  ],
+  [
+   "Hey, can we move the call to five.",
+   "Hey, can we move the call to five?"
+  ],
+  [
+   "Hi Meher, can you check the invoice.",
+   "Hi Meher, can you check the invoice?"
+  ],
+  [
+   "Can you check. I sent it.",
+   "Can you check. I sent it."
+  ],
+  [
+   "So the thing is we need it.",
+   "So the thing is we need it."
+  ],
+  [
+   "no I said no",
+   "No I said no"
+  ],
+  [
+   "what time is the standup tomorrow",
+   "What time is the standup tomorrow?"
+  ],
+  [
+   "what time is the call",
+   "What time is the call?"
+  ],
+  [
+   "how much does it cost",
+   "How much does it cost?"
+  ],
+  [
+   "do it now",
+   "Do it now"
+  ],
+  [
+   "do you have the keys",
+   "Do you have the keys?"
+  ],
+  [
+   "is the build green.",
+   "Is the build green?"
+  ],
+  [
+   "when I get home I'll call you.",
+   "When I get home I'll call you."
+  ],
+  [
+   "what I mean is we should ship it",
+   "What I mean is we should ship it"
+  ],
+  [
+   "When you have time, call me back",
+   "When you have time, call me back"
+  ],
+  [
+   "What we do is ship every Friday",
+   "What we do is ship every Friday"
+  ],
+  [
+   "What you should do is restart it",
+   "What you should do is restart it"
+  ],
+  [
+   "how do I reverse a list",
+   "How do I reverse a list?"
+  ],
+  [
+   "which one should we pick",
+   "Which one should we pick?"
+  ],
+  [
+   "We're launching a new line of shoes",
+   "We're launching a new line of shoes"
+  ],
+  [
+   "The car came to a full stop at the light",
+   "The car came to a full stop at the light"
+  ],
+  [
+   "There's a question mark over the deal",
+   "There's a question mark over the deal"
+  ],
+  [
+   "He had colon surgery last year",
+   "He had colon surgery last year"
+  ],
+  [
+   "There's a red dot in the corner",
+   "There's a red dot in the corner"
+  ],
+  [
+   "Put a dot in the middle",
+   "Put a dot in the middle"
+  ],
+  [
+   "Add a dot so it looks right",
+   "Add a dot so it looks right"
+  ],
+  [
+   "It was a dot com company",
+   "It was a dot com company"
+  ],
+  [
+   "The page dot com was down",
+   "The page dot com was down"
+  ],
+  [
+   "three things colon milk, eggs and bread",
+   "Three things: milk, eggs and bread"
+  ],
+  [
+   "Use a 5 mm drill bit",
+   "Use a 5 mm drill bit"
+  ],
+  [
+   "We took him to the ER last night",
+   "We took him to the ER last night"
+  ],
+  [
+   "Eu tenho um carro novo",
+   "Eu tenho um carro novo"
+  ],
+  [
+   "wir treffen uns um 5 Uhr",
+   "Wir treffen uns um 5 Uhr"
+  ],
+  [
+   "er ist schon da",
+   "Er ist schon da"
+  ],
+  [
+   "we trained a linear model",
+   "We trained a linear model"
+  ],
+  [
+   "the linear ticket is ready",
+   "The linear ticket is ready"
+  ],
+  [
+   "the brightlane deal closed",
+   "The Brightlane deal closed"
+  ],
+  [
+   "Wait... what happened",
+   "Wait... what happened"
+  ],
+  [
+   "new line",
+   ""
+  ],
+  [
+   "thanks new paragraph",
+   "Thanks"
+  ]
+ ],
+ "fillers": [
+  [
+   "um so uh what time is it",
+   "So what time is it?"
+  ],
+  [
+   "Um.",
+   ""
+  ],
+  [
+   "uh, um, hmm",
+   ""
+  ],
+  [
+   "erm the build is green",
+   "The build is green"
+  ],
+  [
+   "Go to the UM campus",
+   "Go to the UM campus"
+  ]
+ ],
+ "paste": [
+  [
+   "So the thing is we need the signed copy before Friday period",
+   "We need the signed copy before Friday.",
+   "So the thing is we need the signed copy before Friday."
+  ],
+  [
+   "hey can we move the call to four no five please",
+   "Hey, can we move the call to 5 please.",
+   "Hey, can we move the call to 5 please."
+  ],
+  [
+   "hey can we move the call to four no five please",
+   "Hey, can we move the call to 5 please",
+   "Hey, can we move the call to 5 please?"
+  ],
+  [
+   "hey can we, um, move the call to four, no, five",
+   "<transcript>\nHey, can we move the call to 5?\n</transcript>",
+   "Hey, can we move the call to 5?"
+  ],
+  [
+   "ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi",
+   "Call Zubin and ask whether the budget is finalized.",
+   "Ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi"
+  ],
+  [
+   "ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi",
+   "\"\"",
+   "Ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi"
+  ]
+ ]
+}

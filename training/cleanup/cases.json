@@ -1,0 +1,443 @@
+[
+ {
+  "id": "fil01",
+  "category": "filler",
+  "spoken": "um so I was thinking we could, uh, maybe start the review a bit earlier tomorrow",
+  "expected": "So I was thinking we could maybe start the review a bit earlier tomorrow.",
+  "app": "Slack"
+ },
+ {
+  "id": "fil02",
+  "category": "filler",
+  "spoken": "you know the dashboard is like really slow when you open the filters",
+  "expected": "The dashboard is really slow when you open the filters.",
+  "app": "Slack"
+ },
+ {
+  "id": "fil03",
+  "category": "filler",
+  "spoken": "hmm okay so basically the client wants the logo, uh, bigger on the home page",
+  "expected": "Okay, so basically the client wants the logo bigger on the home page.",
+  "app": "Notes"
+ },
+ {
+  "id": "fil04",
+  "category": "filler",
+  "spoken": "uh hey Rivaan, um, just checking if you got a chance to look at the, uh, pricing sheet",
+  "expected": "Hey Rivaan, just checking if you got a chance to look at the pricing sheet.",
+  "app": "Slack"
+ },
+ {
+  "id": "fil05",
+  "category": "filler",
+  "spoken": "I I think the the numbers look fine to me, honestly",
+  "expected": "I think the numbers look fine to me, honestly.",
+  "app": "Messages"
+ },
+ {
+  "id": "fil06",
+  "category": "filler",
+  "spoken": "so, uh, the thing is, um, we need the signed copy before Friday",
+  "expected": "So the thing is, we need the signed copy before Friday.",
+  "app": "Mail"
+ },
+ {
+  "id": "cor01",
+  "category": "correction",
+  "spoken": "hey can we, um, move the call to four, no, five",
+  "expected": "Hey, can we move the call to 5?",
+  "app": "Slack"
+ },
+ {
+  "id": "cor02",
+  "category": "correction",
+  "spoken": "send the report to Zubin, sorry, I meant Tavish",
+  "expected": "Send the report to Tavish.",
+  "app": "Slack"
+ },
+ {
+  "id": "cor03",
+  "category": "correction",
+  "spoken": "the meeting is on Tuesday, actually no, Wednesday at ten",
+  "expected": "The meeting is on Wednesday at 10.",
+  "app": "Mail"
+ },
+ {
+  "id": "cor04",
+  "category": "correction",
+  "spoken": "let's order twenty units, scratch that, let's order fifty units",
+  "expected": "Let's order 50 units.",
+  "app": "Slack"
+ },
+ {
+  "id": "cor05",
+  "category": "correction",
+  "spoken": "I'll be there by six, I mean seven, if the traffic is okay",
+  "expected": "I'll be there by 7, if the traffic is okay.",
+  "app": "Messages"
+ },
+ {
+  "id": "cor06",
+  "category": "correction",
+  "spoken": "can you ping Meher, no wait, ping Ishita about the contract",
+  "expected": "Can you ping Ishita about the contract?",
+  "app": "Slack"
+ },
+ {
+  "id": "cor07",
+  "category": "correction",
+  "spoken": "the budget is ten lakh, no sorry, twelve lakh for this quarter",
+  "expected": "The budget is 12 lakh for this quarter.",
+  "app": "Mail"
+ },
+ {
+  "id": "cor08",
+  "category": "correction",
+  "spoken": "we should, we should probably push the release to Friday",
+  "expected": "We should probably push the release to Friday.",
+  "app": "Slack"
+ },
+ {
+  "id": "pun01",
+  "category": "spoken_punct",
+  "spoken": "thanks for the update comma I'll take a look tomorrow period",
+  "expected": "Thanks for the update, I'll take a look tomorrow.",
+  "app": "Slack"
+ },
+ {
+  "id": "pun02",
+  "category": "spoken_punct",
+  "spoken": "hi Meher new line please find the revised quote attached period new line thanks",
+  "expected": "Hi Meher,\nPlease find the revised quote attached.\nThanks",
+  "app": "Mail"
+ },
+ {
+  "id": "pun03",
+  "category": "spoken_punct",
+  "spoken": "is the build green question mark",
+  "expected": "Is the build green?",
+  "app": "Slack"
+ },
+ {
+  "id": "pun04",
+  "category": "spoken_punct",
+  "spoken": "that's amazing exclamation mark congrats to the whole team",
+  "expected": "That's amazing! Congrats to the whole team.",
+  "app": "Messages"
+ },
+ {
+  "id": "pun05",
+  "category": "spoken_punct",
+  "spoken": "the options are red comma blue comma or green period",
+  "expected": "The options are red, blue, or green.",
+  "app": "Notes"
+ },
+ {
+  "id": "num01",
+  "category": "numbers",
+  "spoken": "the invoice comes to two thousand four hundred and fifty dollars",
+  "expected": "The invoice comes to $2,450.",
+  "app": "Mail"
+ },
+ {
+  "id": "num02",
+  "category": "numbers",
+  "spoken": "let's meet at three thirty PM on Thursday",
+  "expected": "Let's meet at 3:30 PM on Thursday.",
+  "app": "Slack"
+ },
+ {
+  "id": "num03",
+  "category": "numbers",
+  "spoken": "conversion went up by twelve percent last week",
+  "expected": "Conversion went up by 12% last week.",
+  "app": "Slack"
+ },
+ {
+  "id": "num04",
+  "category": "numbers",
+  "spoken": "the launch is on March fourteenth twenty twenty seven",
+  "expected": "The launch is on March 14, 2027.",
+  "app": "Mail"
+ },
+ {
+  "id": "num05",
+  "category": "numbers",
+  "spoken": "we need about fifteen hundred rupees for the cab tonight",
+  "expected": "We need about ₹1,500 for the cab tonight.",
+  "app": "Messages"
+ },
+ {
+  "id": "num06",
+  "category": "numbers",
+  "spoken": "call me at nine eight seven six five four three two one zero",
+  "expected": "Call me at 9876543210.",
+  "app": "Messages"
+ },
+ {
+  "id": "num07",
+  "category": "numbers",
+  "spoken": "we shipped version two point four point one yesterday",
+  "expected": "We shipped version 2.4.1 yesterday.",
+  "app": "Slack"
+ },
+ {
+  "id": "eml01",
+  "category": "email_url",
+  "spoken": "send it to meher dot kapadia at velocore dot io",
+  "expected": "Send it to meher.kapadia@velocore.io.",
+  "app": "Slack"
+ },
+ {
+  "id": "eml02",
+  "category": "email_url",
+  "spoken": "the docs are at docs dot brightlane dot dev slash setup",
+  "expected": "The docs are at docs.brightlane.dev/setup.",
+  "app": "Slack"
+ },
+ {
+  "id": "eml03",
+  "category": "email_url",
+  "spoken": "my email is rivaan underscore m at quorvia dot com",
+  "expected": "My email is rivaan_m@quorvia.com.",
+  "app": "Mail"
+ },
+ {
+  "id": "eml04",
+  "category": "email_url",
+  "spoken": "go to quorvia dot com slash pricing and check the annual plan",
+  "expected": "Go to quorvia.com/pricing and check the annual plan.",
+  "app": "Messages"
+ },
+ {
+  "id": "eml05",
+  "category": "email_url",
+  "spoken": "please CC tavish at brightlane dot dev on the thread",
+  "expected": "Please CC tavish@brightlane.dev on the thread.",
+  "app": "Mail"
+ },
+ {
+  "id": "lst01",
+  "category": "list",
+  "spoken": "three things for today, number one, finish the deck, number two, call the vendor, number three, send the invoice",
+  "expected": "Three things for today:\n1. Finish the deck\n2. Call the vendor\n3. Send the invoice",
+  "app": "Notes"
+ },
+ {
+  "id": "lst02",
+  "category": "list",
+  "spoken": "agenda, bullet, budget review, bullet, hiring plan, bullet, Q4 roadmap",
+  "expected": "Agenda:\n- Budget review\n- Hiring plan\n- Q4 roadmap",
+  "app": "Notes"
+ },
+ {
+  "id": "lst03",
+  "category": "list",
+  "spoken": "next steps are one, ping Zubin about the API keys, two, update the Kubernetes config, and three, rerun the tests",
+  "expected": "Next steps are:\n1. Ping Zubin about the API keys\n2. Update the Kubernetes config\n3. Rerun the tests",
+  "app": "Claude Code"
+ },
+ {
+  "id": "lst04",
+  "category": "list",
+  "spoken": "for the offsite we need, first, a venue, second, a budget, and third, a date everyone can make",
+  "expected": "For the offsite we need:\n1. A venue\n2. A budget\n3. A date everyone can make",
+  "app": "Slack"
+ },
+ {
+  "id": "voc01",
+  "category": "vocab",
+  "spoken": "Ishita Venkatraman will join the call from the Velocore side",
+  "expected": "Ishita Venkatraman will join the call from the Velocore side.",
+  "app": "Slack"
+ },
+ {
+  "id": "voc02",
+  "category": "vocab",
+  "spoken": "can you add Tavish and Rivaan to the Quorvia channel",
+  "expected": "Can you add Tavish and Rivaan to the Quorvia channel?",
+  "app": "Slack"
+ },
+ {
+  "id": "voc03",
+  "category": "vocab",
+  "spoken": "Brightlane signed the renewal, please let Meher Kapadia know today",
+  "expected": "Brightlane signed the renewal, please let Meher Kapadia know today.",
+  "app": "Mail"
+ },
+ {
+  "id": "voc04",
+  "category": "vocab",
+  "spoken": "Zubin said the Quorvia demo went really well yesterday",
+  "expected": "Zubin said the Quorvia demo went really well yesterday.",
+  "app": "Messages"
+ },
+ {
+  "id": "voc05",
+  "category": "vocab",
+  "spoken": "please loop in Oshin Dastur from legal before we sign anything",
+  "expected": "Please loop in Oshin Dastur from legal before we sign anything.",
+  "app": "Mail"
+ },
+ {
+  "id": "tec01",
+  "category": "tech",
+  "spoken": "we should move the sessions table from Redis to Postgres Q L",
+  "expected": "We should move the sessions table from Redis to PostgreSQL.",
+  "app": "Slack"
+ },
+ {
+  "id": "tec02",
+  "category": "tech",
+  "spoken": "the Next J S app is calling the A P I twice on every render",
+  "expected": "The Next.js app is calling the API twice on every render.",
+  "app": "Claude Code"
+ },
+ {
+  "id": "tec03",
+  "category": "tech",
+  "spoken": "the Kubernetes pods keep restarting after the deploy, um, can you check",
+  "expected": "The Kubernetes pods keep restarting after the deploy, can you check?",
+  "app": "Slack"
+ },
+ {
+  "id": "tec04",
+  "category": "tech",
+  "spoken": "add a graph Q L endpoint for the orders A P I and write tests for it",
+  "expected": "Add a GraphQL endpoint for the orders API and write tests for it.",
+  "app": "Claude Code"
+ },
+ {
+  "id": "tec05",
+  "category": "tech",
+  "spoken": "the type script build fails because of a missing env variable in Supabase",
+  "expected": "The TypeScript build fails because of a missing env variable in Supabase.",
+  "app": "Claude Code"
+ },
+ {
+  "id": "que01",
+  "category": "question",
+  "spoken": "hey do you know if the, uh, the contract got signed",
+  "expected": "Hey, do you know if the contract got signed?",
+  "app": "Slack"
+ },
+ {
+  "id": "que02",
+  "category": "question",
+  "spoken": "what time is the standup tomorrow",
+  "expected": "What time is the standup tomorrow?",
+  "app": "Slack"
+ },
+ {
+  "id": "que03",
+  "category": "question",
+  "spoken": "can you explain why the tests are failing on the main branch",
+  "expected": "Can you explain why the tests are failing on the main branch?",
+  "app": "Claude Code"
+ },
+ {
+  "id": "que04",
+  "category": "question",
+  "spoken": "um so how do I reverse a linked list in Python without using extra memory",
+  "expected": "So how do I reverse a linked list in Python without using extra memory?",
+  "app": "Claude Code"
+ },
+ {
+  "id": "run01",
+  "category": "run_on",
+  "spoken": "so quick update on the migration we moved about half the tables last night and um the rest should be done by Thursday but the reporting jobs are going to be a bit slow until then so if anyone sees timeouts just let me know",
+  "expected": "So, quick update on the migration: we moved about half the tables last night and the rest should be done by Thursday, but the reporting jobs are going to be a bit slow until then. So if anyone sees timeouts, just let me know.",
+  "app": "Slack"
+ },
+ {
+  "id": "run02",
+  "category": "run_on",
+  "spoken": "hi Oshin thanks for sending the draft I went through it and I think section two needs a bit more detail on the payment terms and also uh the dates in the appendix don't match the main contract can you take a look",
+  "expected": "Hi Oshin, thanks for sending the draft. I went through it and I think section 2 needs a bit more detail on the payment terms, and also the dates in the appendix don't match the main contract. Can you take a look?",
+  "app": "Mail"
+ },
+ {
+  "id": "run03",
+  "category": "run_on",
+  "spoken": "okay so I want you to refactor the auth module so that it uses the new token service and um make sure the old tests still pass and then also add a test for the expired token case",
+  "expected": "Okay, so I want you to refactor the auth module so that it uses the new token service and make sure the old tests still pass, and then also add a test for the expired token case.",
+  "app": "Claude Code"
+ },
+ {
+  "id": "run04",
+  "category": "run_on",
+  "spoken": "hey I'm running a bit late the metro is super crowded today I'll probably reach by eight fifteen so you guys go ahead and order",
+  "expected": "Hey, I'm running a bit late. The metro is super crowded today. I'll probably reach by 8:15, so you guys go ahead and order.",
+  "app": "Messages"
+ },
+ {
+  "id": "hng01",
+  "category": "hinglish",
+  "spoken": "um kal ki meeting cancel kar do, Rivaan ko bata dena",
+  "expected": "Kal ki meeting cancel kar do, Rivaan ko bata dena.",
+  "app": "Slack"
+ },
+ {
+  "id": "hng02",
+  "category": "hinglish",
+  "spoken": "yaar build phir se fail ho gaya, uh, logs check karo",
+  "expected": "Yaar, build phir se fail ho gaya, logs check karo.",
+  "app": "Slack"
+ },
+ {
+  "id": "hng03",
+  "category": "hinglish",
+  "spoken": "main paanch baje aaunga, nahi nahi, chhe baje",
+  "expected": "Main 6 baje aaunga.",
+  "app": "Messages"
+ },
+ {
+  "id": "hng04",
+  "category": "hinglish",
+  "spoken": "Meher ko bolo ki invoice kal tak bhej de, client wait kar raha hai",
+  "expected": "Meher ko bolo ki invoice kal tak bhej de, client wait kar raha hai.",
+  "app": "Slack"
+ },
+ {
+  "id": "hng05",
+  "category": "hinglish",
+  "spoken": "matlab deploy aaj shaam tak ho jayega na",
+  "expected": "Matlab deploy aaj shaam tak ho jayega na?",
+  "app": "Slack"
+ },
+ {
+  "id": "hng06",
+  "category": "hinglish",
+  "spoken": "client ka email aaya kya, uh, abhi tak, mujhe kuch nahi mila",
+  "expected": "Client ka email aaya kya abhi tak? Mujhe kuch nahi mila.",
+  "app": "Slack"
+ },
+ {
+  "id": "hng07",
+  "category": "hinglish",
+  "spoken": "mujhe lagta hai ki hum, hum log Friday ko launch kar sakte hain",
+  "expected": "Mujhe lagta hai ki hum log Friday ko launch kar sakte hain.",
+  "app": "Slack"
+ },
+ {
+  "id": "hng08",
+  "category": "hinglish",
+  "spoken": "bhai woh PR merge kar de please, tests pass ho gaye hain",
+  "expected": "Bhai, woh PR merge kar de please, tests pass ho gaye hain.",
+  "app": "Messages"
+ },
+ {
+  "id": "hng09",
+  "category": "hinglish",
+  "spoken": "ek kaam karo, Zubin ko call karo aur pucho ki budget final hua ya nahi",
+  "expected": "Ek kaam karo, Zubin ko call karo aur pucho ki budget final hua ya nahi.",
+  "app": "Slack"
+ },
+ {
+  "id": "hng10",
+  "category": "hinglish",
+  "spoken": "aaj raat dinner pe chalein kya, main aath baje free hoon",
+  "expected": "Aaj raat dinner pe chalein kya? Main 8 baje free hoon.",
+  "app": "Messages"
+ }
+]

@@ -184,13 +184,31 @@ pub fn initialize_shortcuts(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
+    // Without accessibility the key listener can't start; leave it uninitialised so
+    // the frontend can call this again once the permission is granted.
+    #[cfg(target_os = "macos")]
+    if !accessibility_trusted() {
+        return Err("Accessibility permission not granted".to_string());
+    }
+
     // Initialize shortcuts
     crate::shortcut::init_shortcuts(&app);
 
     // Mark as initialized before reconciling the macOS Secure Input fallback.
     app.manage(ShortcutsInitialized);
     crate::secure_input::reconcile_fallback(&app);
+    crate::textflow::transforms::shortcuts_ready(&app);
 
     log::info!("Shortcuts initialized successfully");
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn accessibility_trusted() -> bool {
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        fn AXIsProcessTrusted() -> bool;
+    }
+    // SAFETY: a read-only query with no arguments.
+    unsafe { AXIsProcessTrusted() }
 }

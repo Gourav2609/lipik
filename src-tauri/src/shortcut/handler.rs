@@ -50,6 +50,17 @@ pub fn handle_shortcut_event(
         return;
     }
 
+    // Hands-free starts a locked "transcribe" session, locks one the key is
+    // holding open, or stops a locked one. Releases do nothing.
+    if binding_id == "transcribe_handsfree" {
+        if is_pressed {
+            if let Some(coordinator) = app.try_state::<TranscriptionCoordinator>() {
+                coordinator.send_handsfree("transcribe", hotkey_string);
+            }
+        }
+        return;
+    }
+
     let Some(action) = ACTION_MAP.get(binding_id) else {
         warn!(
             "No action defined in ACTION_MAP for shortcut ID '{}'. Shortcut: '{}', Pressed: {}",

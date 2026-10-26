@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Check, Loader2 } from "lucide-react";
 import type { RetiredModel } from "@/bindings";
-import HandyTextLogo from "../icons/HandyTextLogo";
+import { Wordmark } from "@/flow/onboarding/Wordmark";
 import { Button } from "../ui/Button";
 import { useModelStore } from "../../stores/modelStore";
 import { formatModelSize } from "../../lib/utils/format";
@@ -271,7 +271,7 @@ const ModelMigration: React.FC<ModelMigrationProps> = ({
 
   return (
     <div className="h-screen w-full flex flex-col p-6 gap-5 items-center justify-center">
-      <HandyTextLogo width={160} className="shrink-0" />
+      <Wordmark width={160} className="shrink-0" />
 
       <div className="text-center max-w-md shrink-0">
         <h2 className="text-xl font-semibold text-text mb-1.5">

@@ -20,7 +20,8 @@
 //! a hidden tray relies on tray-icon recreating it from the last applied
 //! icon/menu/tooltip, so those must only ever be set through the applier.
 
-use crate::managers::history::{HistoryEntry, HistoryManager};
+use crate::brand::APP_NAME;
+use crate::managers::history::HistoryManager;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings;
@@ -62,7 +63,6 @@ struct MenuInputs {
     /// `(id, name)` of downloaded models, sorted by name.
     downloaded_models: Vec<(String, String)>,
     locale: String,
-    update_checks_enabled: bool,
 }
 
 /// Complete description of what the tray should look like.
@@ -207,7 +207,7 @@ pub fn get_icon_path(theme: AppTheme, state: TrayIconState, warning: bool) -> &'
         (AppTheme::Light, TrayIconState::Idle) => "resources/tray_idle_dark.png",
         (AppTheme::Light, TrayIconState::Recording) => "resources/tray_recording_dark.png",
         (AppTheme::Light, TrayIconState::Transcribing) => "resources/tray_transcribing_dark.png",
-        // Colored theme uses pink icons (for Linux)
+        // Colored theme uses ink tile icons (for Linux)
         (AppTheme::Colored, TrayIconState::Idle) => "resources/handy.png",
         (AppTheme::Colored, TrayIconState::Recording) => "resources/recording.png",
         (AppTheme::Colored, TrayIconState::Transcribing) => "resources/transcribing.png",
@@ -333,7 +333,6 @@ fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
             selected_model: settings.selected_model,
             downloaded_models,
             locale: settings.app_language,
-            update_checks_enabled: settings.update_checks_enabled,
         },
     }
 }
@@ -445,16 +444,14 @@ pub fn tray_tooltip() -> String {
 
 fn version_label() -> String {
     if cfg!(debug_assertions) {
-        format!("Handy v{} (Dev)", env!("CARGO_PKG_VERSION"))
+        format!("{} v{} (Dev)", APP_NAME, env!("CARGO_PKG_VERSION"))
     } else {
-        format!("Handy v{}", env!("CARGO_PKG_VERSION"))
+        format!("{} v{}", APP_NAME, env!("CARGO_PKG_VERSION"))
     }
 }
 
 /// Builds the tray menu and tooltip for the given inputs. Pure with respect
-/// to app state: everything it depends on is in `inputs`, plus the
-/// process-constant `HANDY_DISABLE_UPDATER` env flag behind
-/// `update_checks_forced_disabled()`, which cannot change during a run.
+/// to app state: everything it depends on is in `inputs`.
 fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri::Wry>, String)> {
     let strings = get_tray_translations(Some(inputs.locale.clone()));
 
@@ -495,13 +492,6 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         true,
         settings_accelerator,
     )?;
-    let check_updates_i = MenuItem::with_id(
-        app,
-        "check_updates",
-        &strings.check_updates,
-        inputs.update_checks_enabled,
-        None::<&str>,
-    )?;
     let copy_last_transcript_i = MenuItem::with_id(
         app,
         "copy_last_transcript",
@@ -524,7 +514,6 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
                 &copy_last_transcript_i,
                 &separator()?,
                 &settings_i,
-                &check_updates_i,
                 &separator()?,
                 &quit_i,
             ],
@@ -565,22 +554,11 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
                 &unload_model_i,
                 &separator()?,
                 &settings_i,
-                &check_updates_i,
                 &separator()?,
                 &quit_i,
             ],
         )?
     };
-
-    // When update checks are forced off (e.g. HANDY_DISABLE_UPDATER, set by
-    // the Nix package), the item is dropped from the menu rather than shown
-    // disabled — it can never do anything in that case, and a disabled item
-    // still shifts every entry below it by one position. A manually-disabled
-    // toggle in Debug Settings keeps the old greyed-out behavior via the
-    // enabled flag.
-    if settings::update_checks_forced_disabled() {
-        menu.remove(&check_updates_i)?;
-    }
 
     // Both layouts start with [version, separator, ...]; slot the warning in
     // right below the version line so it's the first actionable thing seen.
@@ -592,13 +570,6 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
     }
 
     Ok((menu, tooltip))
-}
-
-fn last_transcript_text(entry: &HistoryEntry) -> &str {
-    entry
-        .post_processed_text
-        .as_deref()
-        .unwrap_or(&entry.transcription_text)
 }
 
 pub fn set_tray_visibility(app: &AppHandle, visible: bool) {
@@ -652,7 +623,7 @@ pub fn copy_last_transcript(app: &AppHandle) {
         }
     };
 
-    let text = last_transcript_text(&entry);
+    let text = entry.final_text();
     if text.trim().is_empty() {
         warn!("Last completed transcription is empty; skipping tray copy.");
         return;
@@ -668,7 +639,7 @@ pub fn copy_last_transcript(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{last_transcript_text, load_tray_icon, MenuInputs, TrayDesired, TrayIconState};
+    use super::{load_tray_icon, MenuInputs, TrayDesired, TrayIconState};
     use crate::managers::history::HistoryEntry;
 
     fn build_entry(transcription: &str, post_processed: Option<&str>) -> HistoryEntry {
@@ -682,6 +653,7 @@ mod tests {
             post_processed_text: post_processed.map(|text| text.to_string()),
             post_process_prompt: None,
             post_process_requested: false,
+            corrected_text: None,
         }
     }
 
@@ -693,20 +665,19 @@ mod tests {
             selected_model: "small".to_string(),
             downloaded_models: vec![("small".to_string(), "Small".to_string())],
             locale: "en".to_string(),
-            update_checks_enabled: true,
         }
     }
 
     #[test]
     fn uses_post_processed_text_when_available() {
         let entry = build_entry("raw", Some("processed"));
-        assert_eq!(last_transcript_text(&entry), "processed");
+        assert_eq!(entry.final_text(), "processed");
     }
 
     #[test]
     fn falls_back_to_raw_transcription() {
         let entry = build_entry("raw", None);
-        assert_eq!(last_transcript_text(&entry), "raw");
+        assert_eq!(entry.final_text(), "raw");
     }
 
     #[test]

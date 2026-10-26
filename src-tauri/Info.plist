@@ -4,5 +4,13 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>Request microphone access to transcribe audio locally</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Notetaker records the other people in your calls from your computer's audio and transcribes them locally</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>Notetaker reads your calendar to show upcoming meetings, name your notes and know who attended</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Transcribes your dictation with Apple's on-device speech recognition. Audio stays on your Mac.</string>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Notetaker reads your calendar to show upcoming meetings, name your notes and know who attended</string>
 </dict>
 </plist>

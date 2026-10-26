@@ -1,0 +1,86 @@
+.fk .fk-ob-enter {
+  animation: fk-ob-enter var(--fk-t-layout) var(--fk-ease) both;
+}
+.fk .fk-ob-enter-late {
+  animation: fk-ob-enter var(--fk-t-layout) 60ms var(--fk-ease) both;
+}
+@keyframes fk-ob-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fk .fk-ob-pill {
+  transition:
+    width var(--fk-t-size) var(--fk-ease),
+    height var(--fk-t-size) var(--fk-ease),
+    background-color var(--fk-t-base) var(--fk-ease);
+}
+
+.fk .fk-ob-hang {
+  transform-origin: top;
+  animation: fk-ob-hang 1.1s ease-in-out infinite alternate;
+}
+@keyframes fk-ob-hang {
+  from {
+    transform: scaleY(0.25);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.fk .fk-ob-live {
+  animation: fk-ob-live 1.2s ease-in-out infinite alternate;
+}
+@keyframes fk-ob-live {
+  to {
+    opacity: 0.4;
+  }
+}
+
+.fk .fk-ob-caret {
+  animation: fk-ob-caret 1.1s steps(1) infinite;
+}
+@keyframes fk-ob-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.fk .fk-ob-key-hot {
+  animation: fk-ob-press 2.4s var(--fk-ease) infinite;
+}
+@keyframes fk-ob-press {
+  0%,
+  20%,
+  80%,
+  100% {
+    transform: none;
+    border-bottom-width: 2px;
+  }
+  30%,
+  70% {
+    transform: translateY(1px);
+    border-bottom-width: 1px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fk .fk-ob-enter,
+  .fk .fk-ob-enter-late,
+  .fk .fk-ob-hang,
+  .fk .fk-ob-live,
+  .fk .fk-ob-caret,
+  .fk .fk-ob-key-hot {
+    animation: none;
+  }
+  .fk .fk-ob-pill {
+    transition: none;
+  }
+}

@@ -31,7 +31,30 @@ static MIGRATIONS: &[M] = &[
     M::up("ALTER TABLE transcription_history ADD COLUMN post_processed_text TEXT;"),
     M::up("ALTER TABLE transcription_history ADD COLUMN post_process_prompt TEXT;"),
     M::up("ALTER TABLE transcription_history ADD COLUMN post_process_requested BOOLEAN NOT NULL DEFAULT 0;"),
+    M::up(
+        "ALTER TABLE transcription_history ADD COLUMN app_bundle_id TEXT;
+         ALTER TABLE transcription_history ADD COLUMN category TEXT;
+         ALTER TABLE transcription_history ADD COLUMN app_type TEXT;
+         ALTER TABLE transcription_history ADD COLUMN words INTEGER;
+         ALTER TABLE transcription_history ADD COLUMN duration_ms INTEGER;
+         ALTER TABLE transcription_history ADD COLUMN fixes INTEGER;
+         ALTER TABLE transcription_history ADD COLUMN dictionary_fixes INTEGER;",
+    ),
+    M::up("ALTER TABLE transcription_history ADD COLUMN corrected_text TEXT;"),
 ];
+
+/// One dictation's numbers for Insights.
+pub struct DictationStatRow {
+    pub timestamp: i64,
+    /// Final text (post-processed when present); empty when `words` is set.
+    pub text: String,
+    pub words: Option<i64>,
+    pub duration_ms: Option<i64>,
+    pub fixes: Option<i64>,
+    pub dictionary_fixes: Option<i64>,
+    pub app_bundle_id: Option<String>,
+    pub app_type: Option<String>,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
 pub struct PaginatedHistory {
@@ -63,6 +86,22 @@ pub struct HistoryEntry {
     pub post_processed_text: Option<String>,
     pub post_process_prompt: Option<String>,
     pub post_process_requested: bool,
+    /// The user's own edit of the final text, made in History.
+    #[serde(default)]
+    pub corrected_text: Option<String>,
+}
+
+impl HistoryEntry {
+    /// The text to show, copy and paste: the user's correction, else the
+    /// post-processed text, else the raw transcript.
+    pub fn final_text(&self) -> &str {
+        [&self.corrected_text, &self.post_processed_text]
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+            .find(|t| !t.trim().is_empty())
+            .unwrap_or(&self.transcription_text)
+    }
 }
 
 pub struct HistoryManager {
@@ -207,6 +246,7 @@ impl HistoryManager {
             post_processed_text: row.get("post_processed_text")?,
             post_process_prompt: row.get("post_process_prompt")?,
             post_process_requested: row.get("post_process_requested")?,
+            corrected_text: row.get("corrected_text")?,
         })
     }
 
@@ -261,6 +301,7 @@ impl HistoryManager {
             post_processed_text,
             post_process_prompt,
             post_process_requested,
+            corrected_text: None,
         };
 
         debug!("Saved history entry with id {}", entry.id);
@@ -279,6 +320,70 @@ impl HistoryManager {
         Ok(entry)
     }
 
+    pub fn set_entry_meta(&self, id: i64, meta: &crate::textflow::DictationMeta) -> Result<()> {
+        self.get_connection()?.execute(
+            "UPDATE transcription_history
+             SET app_bundle_id = ?1, category = ?2, app_type = ?3, words = ?4,
+                 duration_ms = ?5, fixes = ?6, dictionary_fixes = ?7
+             WHERE id = ?8",
+            params![
+                meta.app_bundle_id,
+                meta.category,
+                meta.app_type,
+                meta.words,
+                meta.duration_ms,
+                meta.fixes,
+                meta.dictionary_fixes,
+                id
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// The app a dictation went into, as stored with it ("other" when unknown).
+    pub fn dictation_target(&self, id: i64) -> Result<crate::textflow::Target> {
+        let (bundle_id, app_type): (Option<String>, Option<String>) = self
+            .get_connection()?
+            .query_row(
+                "SELECT app_bundle_id, app_type FROM transcription_history WHERE id = ?1",
+                params![id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+        Ok(crate::textflow::Target {
+            bundle_id,
+            app_type: app_type.unwrap_or_else(|| "other".to_string()),
+            app_name: None,
+        })
+    }
+
+    pub fn dictation_stats(&self) -> Result<Vec<DictationStatRow>> {
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT timestamp,
+                    CASE WHEN words IS NULL
+                         THEN COALESCE(post_processed_text, transcription_text) ELSE '' END,
+                    words,
+                    duration_ms, fixes, dictionary_fixes, app_bundle_id, app_type
+             FROM transcription_history
+             WHERE transcription_text != ''",
+        )?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(DictationStatRow {
+                    timestamp: row.get(0)?,
+                    text: row.get(1)?,
+                    words: row.get(2)?,
+                    duration_ms: row.get(3)?,
+                    fixes: row.get(4)?,
+                    dictionary_fixes: row.get(5)?,
+                    app_bundle_id: row.get(6)?,
+                    app_type: row.get(7)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     /// Update an existing history entry with new transcription results (used by retry).
     pub fn update_transcription(
         &self,
@@ -292,7 +397,8 @@ impl HistoryManager {
             "UPDATE transcription_history
              SET transcription_text = ?1,
                  post_processed_text = ?2,
-                 post_process_prompt = ?3
+                 post_process_prompt = ?3,
+                 corrected_text = NULL
              WHERE id = ?4",
             params![
                 transcription_text,
@@ -308,7 +414,7 @@ impl HistoryManager {
 
         let entry = conn
             .query_row(
-                "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
+                "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested, corrected_text
                  FROM transcription_history WHERE id = ?1",
                 params![id],
                 Self::map_history_entry,
@@ -327,11 +433,45 @@ impl HistoryManager {
         Ok(entry)
     }
 
+    /// Saves the user's edit of an entry's text; none clears it.
+    pub fn set_corrected_text(
+        &self,
+        id: i64,
+        corrected_text: Option<String>,
+    ) -> Result<HistoryEntry> {
+        let conn = self.get_connection()?;
+        let updated = conn.execute(
+            "UPDATE transcription_history SET corrected_text = ?1 WHERE id = ?2",
+            params![corrected_text, id],
+        )?;
+        if updated == 0 {
+            return Err(anyhow!("History entry {} not found", id));
+        }
+
+        let entry = conn.query_row(
+            "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested, corrected_text
+             FROM transcription_history WHERE id = ?1",
+            params![id],
+            Self::map_history_entry,
+        )?;
+
+        if let Err(e) = (HistoryUpdatePayload::Updated {
+            entry: entry.clone(),
+        })
+        .emit(&self.app_handle)
+        {
+            error!("Failed to emit history-updated event: {}", e);
+        }
+
+        Ok(entry)
+    }
+
     pub fn cleanup_old_entries(&self) -> Result<()> {
         let retention_period = crate::settings::get_recording_retention_period(&self.app_handle);
 
         match retention_period {
-            crate::settings::RecordingRetentionPeriod::Never => {
+            crate::settings::RecordingRetentionPeriod::Never
+            | crate::settings::RecordingRetentionPeriod::Forever => {
                 // Don't delete anything
                 Ok(())
             }
@@ -459,7 +599,7 @@ impl HistoryManager {
             (Some(cursor_id), Some(lim)) => {
                 let fetch_count = (lim + 1) as i64;
                 let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
+                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested, corrected_text
                      FROM transcription_history
                      WHERE id < ?1
                      ORDER BY id DESC
@@ -473,7 +613,7 @@ impl HistoryManager {
             (None, Some(lim)) => {
                 let fetch_count = (lim + 1) as i64;
                 let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
+                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested, corrected_text
                      FROM transcription_history
                      ORDER BY id DESC
                      LIMIT ?1",
@@ -485,7 +625,7 @@ impl HistoryManager {
             }
             (_, None) => {
                 let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
+                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested, corrected_text
                      FROM transcription_history
                      ORDER BY id DESC",
                 )?;
@@ -516,7 +656,8 @@ impl HistoryManager {
                 transcription_text,
                 post_processed_text,
                 post_process_prompt,
-                post_process_requested
+                post_process_requested,
+                corrected_text
              FROM transcription_history
              ORDER BY timestamp DESC
              LIMIT 1",
@@ -543,7 +684,8 @@ impl HistoryManager {
                 transcription_text,
                 post_processed_text,
                 post_process_prompt,
-                post_process_requested
+                post_process_requested,
+                corrected_text
              FROM transcription_history
              WHERE transcription_text != ''
              ORDER BY timestamp DESC
@@ -597,7 +739,8 @@ impl HistoryManager {
                 transcription_text,
                 post_processed_text,
                 post_process_prompt,
-                post_process_requested
+                post_process_requested,
+                corrected_text
              FROM transcription_history
              WHERE id = ?1",
         )?;
@@ -666,7 +809,8 @@ mod tests {
                 transcription_text TEXT NOT NULL,
                 post_processed_text TEXT,
                 post_process_prompt TEXT,
-                post_process_requested BOOLEAN NOT NULL DEFAULT 0
+                post_process_requested BOOLEAN NOT NULL DEFAULT 0,
+                corrected_text TEXT
             );",
         )
         .expect("create transcription_history table");
@@ -733,5 +877,17 @@ mod tests {
 
         assert_eq!(entry.timestamp, 100);
         assert_eq!(entry.transcription_text, "completed");
+    }
+
+    #[test]
+    fn final_text_prefers_the_correction() {
+        let conn = setup_conn();
+        insert_entry(&conn, 100, "raw", Some("processed"));
+        let mut entry = HistoryManager::get_latest_entry_with_conn(&conn)
+            .expect("fetch latest entry")
+            .expect("entry exists");
+        assert_eq!(entry.final_text(), "processed");
+        entry.corrected_text = Some("fixed".to_string());
+        assert_eq!(entry.final_text(), "fixed");
     }
 }

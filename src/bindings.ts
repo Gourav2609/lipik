@@ -5,6 +5,57 @@
 
 
 export const commands = {
+async setPillHitRect(x: number, y: number, width: number, height: number) : Promise<void> {
+    await TAURI_INVOKE("set_pill_hit_rect", { x, y, width, height });
+},
+/**
+ * Mic button on the pill: same as a toggle press of the transcribe shortcut.
+ */
+async pillToggleDictation() : Promise<void> {
+    await TAURI_INVOKE("pill_toggle_dictation");
+},
+/**
+ * ✓ button: stop the current recording and transcribe it.
+ */
+async pillFinish() : Promise<void> {
+    await TAURI_INVOKE("pill_finish");
+},
+/**
+ * X button: cancel the dictation, keeping its audio for Undo.
+ */
+async pillCancel() : Promise<void> {
+    await TAURI_INVOKE("pill_cancel");
+},
+/**
+ * Undo: transcribe the kept audio. False when the audio is gone or another
+ * dictation is running.
+ */
+async pillUndoCancel() : Promise<boolean> {
+    return await TAURI_INVOKE("pill_undo_cancel");
+},
+/**
+ * The pill's Undo offer ended.
+ */
+async pillUndoExpired() : Promise<void> {
+    await TAURI_INVOKE("pill_undo_expired");
+},
+async pillCopyText(text: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("pill_copy_text", { text }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setPillSide(side: PillSide) : Promise<void> {
+    await TAURI_INVOKE("set_pill_side", { side });
+},
+/**
+ * While dragging, the panel covers the whole primary display.
+ */
+async setPillDragging(dragging: boolean) : Promise<void> {
+    await TAURI_INVOKE("set_pill_dragging", { dragging });
+},
 async changeBinding(id: string, binding: string) : Promise<Result<BindingResponse, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_binding", { id, binding }) };
@@ -918,6 +969,18 @@ async retryHistoryEntryTranscription(id: number) : Promise<Result<null, string>>
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Saves the user's edit of an entry's text and learns new spellings from it.
+ * Saving the original text again clears the correction.
+ */
+async updateHistoryText(id: number, text: string) : Promise<Result<HistoryCorrection, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_history_text", { id, text }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async updateHistoryLimit(limit: number) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("update_history_limit", { limit }) };
@@ -947,6 +1010,403 @@ async isLaptop() : Promise<Result<boolean, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async getDictionary() : Promise<Dictionary> {
+    return await TAURI_INVOKE("get_dictionary");
+},
+async addDictionaryWord(word: string) : Promise<Result<Dictionary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_dictionary_word", { word }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateDictionaryWord(id: string, word: string, starred: boolean) : Promise<Result<Dictionary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_dictionary_word", { id, word, starred }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteDictionaryWord(id: string) : Promise<Result<Dictionary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_dictionary_word", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async addReplacement(from: string, to: string) : Promise<Result<Dictionary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_replacement", { from, to }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateReplacement(id: string, from: string, to: string) : Promise<Result<Dictionary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_replacement", { id, from, to }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteReplacement(id: string) : Promise<Result<Dictionary, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_replacement", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getSnippets() : Promise<Snippet[]> {
+    return await TAURI_INVOKE("get_snippets");
+},
+async addSnippet(trigger: string, expansion: string) : Promise<Result<Snippet[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_snippet", { trigger, expansion }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateSnippet(id: string, trigger: string, expansion: string) : Promise<Result<Snippet[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_snippet", { id, trigger, expansion }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteSnippet(id: string) : Promise<Result<Snippet[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_snippet", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getStyleSettings() : Promise<StyleSettings> {
+    return await TAURI_INVOKE("get_style_settings");
+},
+async setStyle(category: StyleCategory, style: StyleKind) : Promise<Result<StyleSettings, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_style", { category, style }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setAutoCleanup(enabled: boolean) : Promise<Result<StyleSettings, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_auto_cleanup", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getTransforms() : Promise<TransformSettings> {
+    return await TAURI_INVOKE("get_transforms");
+},
+/**
+ * Creates a transform when `id` is none, otherwise updates it. A new
+ * transform without a shortcut gets the first free ⌥ number; a shortcut
+ * taken by another transform moves to this one.
+ */
+async saveTransform(id: string | null, name: string, description: string, prompt: string, shortcutIndex: number | null) : Promise<Result<TransformSettings, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_transform", { id, name, description, prompt, shortcutIndex }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteTransform(id: string) : Promise<Result<TransformSettings, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_transform", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async resetTransforms() : Promise<Result<TransformSettings, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("reset_transforms") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setTransformsOptIn(enabled: boolean) : Promise<Result<TransformSettings, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_transforms_opt_in", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setAutoApply(enabled: boolean, transformId: string | null) : Promise<Result<TransformSettings, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_auto_apply", { enabled, transformId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async listNotes() : Promise<Result<Note[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("list_notes") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getNote(id: string) : Promise<Result<Note | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_note", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveNote(id: string | null, title: string, body: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_note", { id, title, body }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteNote(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_note", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getInsights() : Promise<Result<Insights, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_insights") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Hides the pill for `minutes`; 0 shows it again now. Emits `pill-hidden`.
+ */
+async pillHideFor(minutes: number) : Promise<void> {
+    await TAURI_INVOKE("pill_hide_for", { minutes });
+},
+/**
+ * Unix ms until which the pill is hidden, or none.
+ */
+async pillHiddenUntil() : Promise<number | null> {
+    return await TAURI_INVOKE("pill_hidden_until");
+},
+async pasteLastTranscript() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("paste_last_transcript") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async openMainPage(page: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("open_main_page", { page }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerStart(title: string | null) : Promise<Result<Meeting, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_start", { title }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerStop() : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_stop") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerStatus() : Promise<Result<NotetakerStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_status") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerList(filter: NotetakerFilter | null) : Promise<Result<Meeting[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_list", { filter }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerGet(id: string) : Promise<Result<MeetingDetail | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_get", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerSaveThoughts(id: string, markdown: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_save_thoughts", { id, markdown }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerDelete(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_delete", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerRename(id: string, title: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_rename", { id, title }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerMoveToFolder(id: string, folder: string | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_move_to_folder", { id, folder }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerFolders() : Promise<Result<FolderInfo[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_folders") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerRegenerate(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_regenerate", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Today's and tomorrow's calendar events. Asks for calendar access the first
+ * time.
+ */
+async notetakerUpcoming() : Promise<Result<CalendarEvent[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_upcoming") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerCalendarAccess() : Promise<CalendarAccess> {
+    return await TAURI_INVOKE("notetaker_calendar_access");
+},
+async notetakerRequestCalendarAccess() : Promise<Result<CalendarAccess, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_request_calendar_access") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The Calendar app's accounts and their calendars; empty without full access.
+ */
+async notetakerCalendarSources() : Promise<Result<CalendarSource[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_calendar_sources") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Answers a question from one meeting (`meeting_id`) or all of them
+ * (`None`). Pass the `thread_id` of an earlier answer to continue that chat.
+ */
+async notetakerAsk(question: string, meetingId: string | null, threadId: string | null) : Promise<Result<AskAnswer, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_ask", { question, meetingId, threadId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerChats(meetingId: string | null) : Promise<Result<ChatThread[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_chats", { meetingId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerChat(threadId: string) : Promise<Result<ChatMessage[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_chat", { threadId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notetakerGetSettings() : Promise<NotetakerSettings> {
+    return await TAURI_INVOKE("notetaker_get_settings");
+},
+async notetakerSetSettings(settings: NotetakerSettings) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_set_settings", { settings }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notepadOpen(meetingId: string | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notepad_open", { meetingId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async notepadClose() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notepad_close") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The meeting the notepad shows; the page reads it once on load, then follows
+ * `notepad-meeting`.
+ */
+async notepadMeeting() : Promise<string | null> {
+    return await TAURI_INVOKE("notepad_meeting");
 }
 }
 
@@ -955,10 +1415,28 @@ async isLaptop() : Promise<Result<boolean, string>> {
 
 export const events = __makeEvents__<{
 historyUpdatePayload: HistoryUpdatePayload,
+notepadMeeting: NotepadMeeting,
+notetakerCallDetected: NotetakerCallDetected,
+notetakerCallEnded: NotetakerCallEnded,
+notetakerMeetingSoon: NotetakerMeetingSoon,
+notetakerNoteReady: NotetakerNoteReady,
+notetakerProcessing: NotetakerProcessing,
+notetakerState: NotetakerState,
+notetakerStreamChanged: NotetakerStreamChanged,
+notetakerTranscript: NotetakerTranscript,
 streamPhaseEvent: StreamPhaseEvent,
 streamTextEvent: StreamTextEvent
 }>({
 historyUpdatePayload: "history-update-payload",
+notepadMeeting: "notepad-meeting",
+notetakerCallDetected: "notetaker-call-detected",
+notetakerCallEnded: "notetaker-call-ended",
+notetakerMeetingSoon: "notetaker-meeting-soon",
+notetakerNoteReady: "notetaker-note-ready",
+notetakerProcessing: "notetaker-processing",
+notetakerState: "notetaker-state",
+notetakerStreamChanged: "notetaker-stream-changed",
+notetakerTranscript: "notetaker-transcript",
 streamPhaseEvent: "stream-phase-event",
 streamTextEvent: "stream-text-event"
 })
@@ -969,6 +1447,7 @@ streamTextEvent: "stream-text-event"
 
 /** user-defined types **/
 
+export type ActionItem = { text: string; owner: string | null; due: string | null }
 /**
  * The container-level `serde(default)` (backed by the `Default` impl below)
  * guarantees every field — including ones added in the future — falls back to
@@ -1042,11 +1521,35 @@ long_form_chunking?: boolean;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle }
+overlay_style?: OverlayStyle; pill_side?: PillSide; notetaker?: NotetakerSettings }
+export type AskAnswer = { thread_id: string; question: ChatMessage; answer: ChatMessage }
+export type Attendee = { name: string | null; email: string | null; is_me: boolean }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
+export type AutoApply = { enabled: boolean; transform_id: string | null }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; gpu_devices: GpuDeviceOption[] }
 export type BindingResponse = { success: boolean; binding: ShortcutBinding | null; error: string | null }
+export type CalendarAccess = "not_determined" | "denied" | "restricted" | "write_only" | "full_access" | "unsupported"
+export type CalendarEvent = { 
+/**
+ * Unique per occurrence: the EventKit event id plus the start time.
+ */
+id: string; title: string; start_ms: number; end_ms: number; all_day: boolean; attendees: Attendee[]; organizer: Attendee | null; meeting_url: string | null; location: string | null; calendar: string | null }
+/**
+ * An account in the Calendar app (EventKit source) and its event calendars.
+ */
+export type CalendarSource = { id: string; title: string; kind: CalendarSourceKind; calendars: string[] }
+export type CalendarSourceKind = "google" | "exchange" | "icloud" | "caldav" | "local" | "subscribed" | "birthdays"
+export type ChatMessage = { id: number; thread_id: string; 
+/**
+ * `None` for questions asked across all meetings.
+ */
+meeting_id: string | null; 
+/**
+ * "user" or "assistant".
+ */
+role: string; content: string; citations: Citation[]; created_ms: number }
+export type ChatThread = { thread_id: string; meeting_id: string | null; started_ms: number; updated_ms: number; first_question: string }
 /**
  * Script applied to Mandarin and Cantonese output. Other languages are never
  * converted.
@@ -1056,10 +1559,37 @@ export type ChineseScript =
  * Keep whatever script the model produced.
  */
 "as_transcribed" | "simplified" | "traditional"
+export type Citation = { 
+/**
+ * The [n] marker used in the answer text.
+ */
+marker: number; meeting_id: string; meeting_title: string; start_ms: number; quote: string }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
+export type DailyWords = { 
+/**
+ * Local calendar day, `YYYY-MM-DD`.
+ */
+date: string; words: number }
+export type DetectedCall = { app: string; bundle_id: string }
+export type Dictionary = { words: DictionaryWord[]; replacements: Replacement[] }
+export type DictionaryWord = { id: string; word: string; starred: boolean; auto_learned: boolean; shared: boolean }
+export type FolderInfo = { name: string; count: number }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
-export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean }
+export type HistoryCorrection = { entry: HistoryEntry; 
+/**
+ * Dictionary words learned from this edit.
+ */
+learned_words: string[]; 
+/**
+ * Replacements learned from this edit, as "from → to".
+ */
+learned_replacements: string[] }
+export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; 
+/**
+ * The user's own edit of the final text, made in History.
+ */
+corrected_text?: string | null }
 export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
 /**
  * Result of changing keyboard implementation
@@ -1069,6 +1599,32 @@ export type ImplementationChangeResult = { success: boolean;
  * List of binding IDs that were reset to defaults due to incompatibility
  */
 reset_bindings: string[] }
+export type Insights = { 
+/**
+ * Words per minute of recorded audio; none until a dictation with a
+ * recorded duration exists.
+ */
+wpm: number | null; total_words: number; 
+/**
+ * `words_corrected + dictionary_fixes`.
+ */
+fixes_total: number; 
+/**
+ * Words changed by clean-up and transforms.
+ */
+words_corrected: number; 
+/**
+ * Replacements applied plus dictionary words in the final text.
+ */
+dictionary_fixes: number; 
+/**
+ * Dictations per app type: ai, email, work, personal, document, other.
+ */
+by_category: Partial<{ [key in string]: number }>; 
+/**
+ * Distinct apps dictated into.
+ */
+apps_used: number; streak_days: number; longest_streak: number; daily_words: DailyWords[] }
 export type KeyboardDiagnosticReport = { secure_input_enabled: boolean; culprit_pid: number | null; culprit_name: string | null; 
 /**
  * Counts only — key identity is deliberately never captured.
@@ -1077,6 +1633,18 @@ key_down: number; key_up: number; flags_changed: number; mouse: number; duration
 export type KeyboardImplementation = "tauri" | "handy_keys"
 export type LLMPrompt = { id: string; name: string; prompt: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
+export type Meeting = { id: string; title: string; 
+/**
+ * The title was made up (app name or AI) rather than given by the user or
+ * the calendar; notes may replace it.
+ */
+title_auto: boolean; start_ms: number; end_ms: number | null; app: string | null; bundle_id: string | null; calendar_event_id: string | null; attendees: Attendee[]; folder: string | null; status: MeetingStatus; summary_status: SummaryStatus; summary_error: string | null; mic_offset_ms: number | null; system_offset_ms: number | null }
+export type MeetingDetail = { meeting: Meeting; segments: Segment[]; 
+/**
+ * The user's own notes ("My notes"), markdown.
+ */
+thoughts: string; summary: NoteSummary | null }
+export type MeetingStatus = "recording" | "processing" | "ready" | "failed"
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
 /**
@@ -1104,6 +1672,63 @@ sha256: string | null } } |
  */
 "Local"
 export type ModelUnloadTimeout = "never" | "immediately" | "min_2" | "min_5" | "min_10" | "min_15" | "hour_1" | "sec_15"
+export type Note = { id: string; title: string; body: string; 
+/**
+ * Unix milliseconds.
+ */
+updated_at: number }
+export type NoteSection = { heading?: string; bullets?: string[] }
+export type NoteSummary = { title: string | null; overview: string; sections: NoteSection[]; key_points: string[]; decisions: string[]; action_items: ActionItem[] }
+export type NotepadMeeting = { meeting_id: string }
+export type NotetakerCallDetected = { app: string; bundle_id: string }
+export type NotetakerCallEnded = { app: string; bundle_id: string }
+export type NotetakerFilter = { 
+/**
+ * Matches title, transcript, notes and the user's thoughts.
+ */
+query: string | null; folder: string | null; after_ms: number | null; before_ms: number | null; limit: number | null; offset: number | null }
+export type NotetakerMeetingSoon = { event: CalendarEvent; starts_in_seconds: number }
+export type NotetakerNoteReady = { meeting_id: string; summary_status: SummaryStatus; summary_error: string | null }
+export type NotetakerProcessing = { meeting_id: string; stage: ProcessingStage; 
+/**
+ * 0..1 for transcribing; summarizing has no progress and sends 0.
+ */
+progress: number }
+export type NotetakerSettings = { 
+/**
+ * Watch which apps use the microphone and announce calls.
+ */
+detect_calls: boolean; 
+/**
+ * Start recording by itself when a call is detected.
+ */
+auto_start: boolean; 
+/**
+ * Heads-up before a calendar meeting starts; 0 turns it off.
+ */
+notify_before_seconds: number; 
+/**
+ * Recording stops by itself after this long.
+ */
+max_recording_minutes: number; ollama_url: string; ollama_model: string }
+export type NotetakerState = { recording: boolean; meeting_id: string | null }
+export type NotetakerStatus = { recording: boolean; 
+/**
+ * A start is still opening the devices (macOS may be showing the System
+ * Audio Recording prompt). `recording` is false until it finishes.
+ */
+starting: boolean; meeting_id: string | null; title: string | null; started_ms: number | null; elapsed_ms: number; mic: StreamStatus; system: StreamStatus; active_calls: DetectedCall[]; 
+/**
+ * Meetings whose final transcript or notes are being made.
+ */
+processing: string[]; calendar_access: CalendarAccess }
+export type NotetakerStreamChanged = { meeting_id: string; mic: StreamStatus; system: StreamStatus }
+export type NotetakerTranscript = { meeting_id: string; segments: Segment[]; 
+/**
+ * `false`: new live segments to append. `true`: the whole final
+ * transcript, replacing everything shown so far.
+ */
+replace: boolean }
 export type OverlayPosition = "top" | "bottom"
 /**
  * Which recording overlay to display. `Minimal` and `Live` share one base
@@ -1115,6 +1740,10 @@ export type OverlayStyle = "none" | "minimal" | "live"
 export type PaginatedHistory = { entries: HistoryEntry[]; has_more: boolean }
 export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v" | "external_script"
 export type PermissionAccess = "allowed" | "denied" | "unknown"
+/**
+ * Screen edge the macOS side pill docks to (bottom = bottom centre).
+ */
+export type PillSide = "left" | "right" | "bottom"
 /**
  * Request format a post-processing endpoint speaks. Built-in providers have a
  * fixed format; only the custom provider lets the user change it.
@@ -1129,7 +1758,13 @@ export type PostProcessApiFormat =
  */
 "anthropic"
 export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean; api_format?: PostProcessApiFormat }
-export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
+export type ProcessingStage = "transcribing" | "summarizing"
+export type RecordingRetentionPeriod = "never" | 
+/**
+ * Keep every recording and transcript; same as `Never` (never delete).
+ */
+"forever" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
+export type Replacement = { id: string; from: string; to: string; auto_learned?: boolean }
 /**
  * A retired ONNX model found on disk.
  */
@@ -1167,6 +1802,19 @@ uncovered_bindings: string[];
  * warning banner appears and explains why recording refused.
  */
 recorder_blocked: boolean }
+export type Segment = { 
+/**
+ * "mic" or "system".
+ */
+source: string; 
+/**
+ * "Me", "Them", or a name found for a "Them" segment.
+ */
+speaker: string; 
+/**
+ * From the start of the meeting.
+ */
+start_ms: number; end_ms: number; text: string }
 /**
  * How the transcribe shortcut's key events drive a recording.
  */
@@ -1186,6 +1834,7 @@ export type ShortcutActivation =
  */
 "hold_or_toggle"
 export type ShortcutBinding = { id: string; name: string; description: string; default_binding: string; current_binding: string }
+export type Snippet = { id: string; trigger: string; expansion: string }
 export type SoundTheme = "marimba" | "pop" | "custom"
 /**
  * Phase of the streaming overlay card, emitted to drive its UI state.
@@ -1209,6 +1858,13 @@ export type StreamPhaseEvent = { phase: StreamPhase;
  * Present only when `phase` is `Working`.
  */
 kind?: StreamWorkKind | null }
+export type StreamState = "off" | "starting" | "capturing" | 
+/**
+ * Running but only digital silence so far: for system audio this usually
+ * means the "System Audio Recording" permission was denied.
+ */
+"silent" | "unavailable"
+export type StreamStatus = { state: StreamState; detail: string | null }
 /**
  * Live transcription snapshot emitted to the overlay during a streaming run.
  * `committed` is the append-only, flicker-free prefix; `tentative` is the
@@ -1219,12 +1875,22 @@ export type StreamTextEvent = { committed: string; tentative: string }
  * Semantic kind of "working" phase, used to localize the spinner label.
  */
 export type StreamWorkKind = "transcribing" | "polishing"
+export type StyleCategory = "personal" | "work" | "email" | "other"
+export type StyleKind = "formal" | "casual" | "very_casual"
+export type StyleSettings = { personal: StyleKind; work: StyleKind; email: StyleKind; other: StyleKind; auto_cleanup: boolean }
+export type SummaryStatus = "pending" | "ready" | "unavailable" | "failed"
 /**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
  * and `Dark` force one of the two palettes Handy already ships.
  */
 export type Theme = "system" | "light" | "dark"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
+export type Transform = { id: string; name: string; description: string; prompt: string; 
+/**
+ * 1..=9 for ⌥1..⌥9, or none.
+ */
+shortcut_index: number | null }
+export type TransformSettings = { opt_in: boolean; auto_apply: AutoApply; items: Transform[] }
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }

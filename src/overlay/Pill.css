@@ -1,0 +1,1226 @@
+/* Colours, sizes and timings measured from screen recordings (reference notes,
+   kept outside the repo). Curves come from pill/curves.ts as --ease-*. */
+.strip {
+  position: fixed;
+  inset: 0;
+  font-family:
+    "Figtree Variable",
+    -apple-system,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+:where(.strip button) {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  cursor: default;
+}
+
+.pill-body,
+.pill-rec,
+.pill-label {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+/* One element for every pill shape; size changes are real width/height
+   transitions, never a scale. */
+.pill-body {
+  border-radius: 999px;
+  border: 1px solid #2c2a26;
+  background: #12110f;
+  background-clip: padding-box;
+  color: #fffefb;
+  overflow: hidden;
+}
+.pill-body.idle {
+  background-color: rgba(0, 0, 0, 0.5);
+  border-color: rgba(171, 164, 149, 0.75);
+  cursor: ns-resize;
+}
+/* Black with a dark rim while the panel is open; lifts to #32302c with a lighter
+   rim under the cursor (frames 069/071 vs 002/070). */
+.pill-body.hover {
+  border-color: #32302c;
+}
+.pill-body.hover.hot {
+  background-color: #32302c;
+  border-color: #5d5a52;
+}
+/* Hover out: black with a dark rim for two frames before the idle look (S1 112.217). */
+.pill-body.idle.leaving {
+  background-color: #12110f;
+  border-color: #2c2a26;
+}
+.pill-body.gone,
+.pill-body.drag {
+  pointer-events: none;
+}
+
+.pill-body .mic {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+.pill-body.hover .mic {
+  opacity: 1;
+  transition: opacity 100ms var(--ease-pill);
+}
+
+/* 10 bars, 2 pt tall on a 4 pt pitch; width is the level (set per frame). */
+.pill-body .bars {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% - 19px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+}
+.pill-body.rec .bars,
+.pill-body.recClick .bars,
+.pill-body.proc .bars {
+  opacity: 1;
+}
+.pill-body.proc .bars {
+  top: 16px;
+  transition: top 100ms var(--ease-proc);
+}
+.pill-body .bars i {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  border-radius: 0.5px;
+  background: #5d5a53;
+}
+.pill-body .bars i.on {
+  border-radius: 1px;
+  background: #fffefb;
+  transition: background-color 100ms linear;
+}
+
+.pill-body .spin {
+  position: absolute;
+  left: 50%;
+  bottom: 13.5px;
+  width: 15px;
+  height: 15px;
+  margin-left: -7.5px;
+  opacity: 0;
+}
+.pill-body.proc .spin {
+  opacity: 1;
+}
+.pill-body .spinner {
+  display: block;
+}
+.pill-body.proc .spinner {
+  animation: pill-spin 1067ms steps(8, end) infinite;
+}
+@keyframes pill-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pill-body .pill-x,
+.pill-body .pill-ok {
+  position: absolute;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+}
+.pill-body .pill-x {
+  top: 4px;
+  background: #413e39;
+  color: #fffefb;
+}
+.pill-body .pill-ok {
+  bottom: 4px;
+  background: #fffefb;
+  color: #12110f;
+}
+.pill-body.recClick .pill-x,
+.pill-body.recClick .pill-ok {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition:
+    opacity 83ms var(--ease-rec),
+    transform 83ms var(--ease-rec);
+}
+
+.pill-rec {
+  border-radius: 50%;
+  background: #12110f;
+  border: 1.5px solid #32302c;
+  background-clip: padding-box;
+  color: #fffefb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.55);
+  pointer-events: none;
+}
+.pill-rec.in {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition:
+    opacity 100ms var(--ease-pill),
+    transform 100ms var(--ease-pill),
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+.strip[data-hot="rec"] .pill-rec.in {
+  background-color: #32302c;
+  border-color: #5d5a52;
+}
+
+.pill-label {
+  height: 34px;
+  padding: 0 14.5px;
+  border-radius: 17px;
+  background: #12110f;
+  border: 1px solid #32302c;
+  color: #fffefb;
+  font-size: 15px;
+  line-height: 32.5px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+.pill-label b {
+  font-weight: 700;
+}
+.pill-label.in {
+  opacity: 1;
+  transition: opacity 120ms ease;
+}
+.pill-label.tip.in {
+  transition:
+    opacity 120ms ease 150ms,
+    transform 165ms var(--ease-tip);
+}
+.pill-label.cancel.in {
+  transition: opacity 90ms ease;
+}
+
+/* "Transcript cancelled": grows out of the pill black, holds, then turns to dark
+   glass while its content fades and un-blurs. */
+.pill-toast {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #12110f;
+  color: #fffefb;
+  overflow: hidden;
+}
+.pill-toast.shown {
+  background-color: rgba(27, 26, 23, 0.85);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+.pill-toast.exit {
+  background-color: #12110f;
+  opacity: 0;
+}
+.toast-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 0 18.5px;
+  opacity: 0;
+  filter: blur(1px);
+}
+.shown .toast-content {
+  opacity: 1;
+  filter: none;
+  transition:
+    opacity 230ms linear,
+    filter 230ms linear;
+}
+.exit .toast-content {
+  opacity: 0;
+  filter: none;
+  transition: opacity 140ms ease 13ms;
+}
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  font-weight: 500;
+}
+.toast-undo {
+  flex: none;
+  width: 56px;
+  height: 30.5px;
+  border-radius: 8px;
+  background: transparent;
+  color: #e8e3d9;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 300ms linear;
+}
+.shown .toast-undo,
+.exit .toast-undo {
+  background-color: #2e2c28;
+}
+.strip[data-hot="undo"] .shown .toast-undo {
+  background-color: #3c3a35;
+}
+.toast-undo span {
+  display: flex;
+  opacity: 0;
+  filter: blur(1px);
+}
+.shown .toast-undo span {
+  opacity: 1;
+  filter: none;
+  transition:
+    opacity 220ms linear 250ms,
+    filter 220ms linear 250ms;
+}
+.exit .toast-undo span {
+  opacity: 1;
+  filter: none;
+}
+.toast-track {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+}
+.toast-track path {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+@keyframes pill-track {
+  from {
+    stroke-dashoffset: var(--track);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* "Select a textbox first" popup. Positions are from the inner (padding) edge. */
+.pill-popup {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #282623;
+  border-radius: 22px;
+  background: #12110f;
+  color: #fffefb;
+  overflow: hidden;
+}
+.pill-popup.exit {
+  opacity: 0;
+}
+.popup-content {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  filter: blur(1px);
+}
+.shown .popup-content {
+  opacity: 1;
+  filter: none;
+  transition:
+    opacity 297ms cubic-bezier(0.7, 0.8, 0.4, 1),
+    filter 297ms cubic-bezier(0.7, 0.8, 0.4, 1);
+}
+.exit .popup-content {
+  opacity: 0;
+  filter: none;
+  transition: opacity 117ms ease;
+}
+.popup-logo {
+  position: absolute;
+  left: 16px;
+  top: 18.5px;
+  color: #fffefb;
+}
+.popup-hint {
+  position: absolute;
+  right: 52.5px;
+  top: 17.5px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #5c5952;
+  white-space: nowrap;
+}
+.popup-close {
+  position: absolute;
+  right: 13.25px;
+  top: 11px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: transparent;
+  color: #fffefb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.popup-close .ring {
+  position: absolute;
+  inset: 0;
+}
+.popup-close circle {
+  fill: none;
+  stroke-width: 1.5;
+}
+.popup-close .ring-track {
+  stroke: #1b1a17;
+}
+.popup-close .ring-left {
+  stroke: #6c6860;
+}
+@keyframes pill-ring {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: var(--ring);
+  }
+}
+.popup-text {
+  position: absolute;
+  left: 16.5px;
+  right: 24px;
+  top: 55.5px;
+  font-size: 15px;
+  line-height: 20px;
+  color: #aba495;
+  overflow-wrap: break-word;
+  overflow-y: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.popup-measure {
+  right: auto;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.popup-copy {
+  position: absolute;
+  right: 19px;
+  bottom: 20.5px;
+  width: 60px;
+  height: 31px;
+  border-radius: 8px;
+  background: #66625a;
+  color: #fffefb;
+  font-size: 14.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.popup-copy.copied {
+  width: 98px;
+}
+
+/* Bottom slot: the same pill laid along the bottom edge. */
+.side-bottom .pill-body .bars {
+  left: calc(50% - 19px);
+  right: auto;
+  top: 0;
+  bottom: 0;
+  flex-direction: row;
+}
+.side-bottom .pill-body.proc .bars {
+  top: 0;
+  left: 16px;
+  transition: left 100ms var(--ease-proc);
+}
+.side-bottom .pill-body .spin {
+  left: auto;
+  right: 13.5px;
+  bottom: auto;
+  top: 50%;
+  margin: -7.5px 0 0;
+}
+.side-bottom .pill-body .pill-x,
+.side-bottom .pill-body .pill-ok {
+  left: auto;
+  top: 50%;
+  bottom: auto;
+  margin: -9px 0 0;
+}
+.side-bottom .pill-body .pill-x {
+  left: 4px;
+}
+.side-bottom .pill-body .pill-ok {
+  right: 4px;
+}
+
+/* Drag (S3 297.117): the pill becomes a black circle with the logo under the
+   cursor, the display dims and the three slots show as drop targets; the
+   nearest one is lit. */
+.pill-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 26, 23, 0.65);
+  pointer-events: none;
+  animation: pill-dim-in 115ms cubic-bezier(0.3, 0, 0.8, 0.8);
+}
+.pill-dim.out {
+  opacity: 0;
+  transition: opacity 190ms ease-out;
+}
+@keyframes pill-dim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.pill-drag {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  background: #12110f;
+  color: #fffefb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.pill-target {
+  position: absolute;
+  border-radius: 999px;
+  background: #6a665e;
+  pointer-events: none;
+  transition: background-color 100ms linear;
+}
+.pill-target.bottom {
+  border-radius: 24px;
+}
+.pill-target.active {
+  background: #cdc7ba;
+}
+.pill-target.out {
+  opacity: 0;
+  transition: opacity 190ms ease-out;
+}
+
+/* Chevron tab beside the record button (S1 61.6): dark glass, grey "<" that turns
+   white under the cursor. */
+.pill-tab {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 11.25px;
+  border-radius: 999px;
+  border: 1px solid #2c2a26;
+  background: rgba(27, 26, 23, 0.9);
+  color: #7e7a72;
+  animation: pill-fade-in 100ms var(--ease-pill);
+}
+.pill-tab.hot {
+  color: #fffefb;
+}
+.side-left .pill-tab {
+  justify-content: flex-end;
+  padding: 0 11.25px 0 0;
+}
+.side-bottom .pill-tab {
+  flex-direction: column;
+  padding: 9.25px 0 0;
+}
+.chev {
+  display: block;
+}
+.side-left .chev {
+  transform: rotate(180deg);
+}
+.side-bottom .chev {
+  transform: rotate(90deg);
+}
+@keyframes pill-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* "Upcoming meetings" (notetaker1 49.47-56.40): glass capsule, white 3% over the
+   backdrop; fades in ≈170 ms ease-out, out ≈100 ms. Without a calendar it is the
+   solid "No upcoming meetings" panel, swapped in one frame. */
+.pill-meetings {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #2c2a26;
+  background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  color: #fffefb;
+  font-size: 15px;
+  animation: pill-fade-in 170ms ease-out;
+}
+.pill-meetings.out {
+  opacity: 0;
+  transition: opacity 100ms linear;
+}
+.pill-meetings.none {
+  justify-content: flex-start;
+  padding-top: 25.5px;
+  border-radius: 24px;
+  background: #1b1a17;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  animation: none;
+}
+.meetings-close {
+  position: absolute;
+  top: -11px;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1px solid #282623;
+  background: #1d1b18;
+  color: #bdb7aa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.side-left .meetings-close,
+.side-bottom .meetings-close {
+  left: -9px;
+}
+.side-right .meetings-close {
+  right: -9px;
+}
+.meetings-cal {
+  flex: none;
+  color: #bab4a6;
+}
+.meetings-none {
+  margin-top: 17px;
+  font-size: 16px;
+  line-height: 20px;
+  color: #f0ebe2;
+}
+.meetings-connect {
+  margin-top: 13.5px;
+  width: 131px;
+  height: 36px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid #ede8de;
+  background: #f6f2ea;
+  color: #12110f;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background-color 130ms ease-out;
+}
+.meetings-connect:hover {
+  background: #e5ece4;
+}
+.meetings-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 28px;
+  padding: 0 24px;
+  white-space: nowrap;
+}
+.meetings-time {
+  flex: none;
+  color: #aba495;
+}
+.meetings-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Notetaker running (notetaker1 80.0-118.5, NOTETAKER_UI.md §2): 2 pt green ring,
+   5-bar level meter on top, stop circle below. Under the cursor the fill lifts in
+   one frame and the ring turns grey over 100 ms; hover-out is instant. On the
+   notepad's Space it is drawn at half opacity with a grey ring. */
+.pill-body.note {
+  border: 2px solid #5f9e7d;
+  background-color: #12110f;
+}
+.pill-body.note.note-hover {
+  background-color: #2c2a26;
+  border-color: #524f48;
+}
+.note-wave {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 11.5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+}
+.pill-body.note .note-wave {
+  opacity: 1;
+}
+.note-wave i {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: #fffefb;
+}
+.pill-body.stopping .note-wave i {
+  background: #5c5952;
+  transition: background-color 100ms linear;
+}
+.pill-body.note.dim {
+  border-color: #5d5a53;
+}
+.pill-body .note-stop {
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 19px;
+  height: 19px;
+  margin-left: -9.5px;
+  border-radius: 50%;
+  background: #44413b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+}
+.pill-body.note .note-stop {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pill-body.note.stop-hot .note-stop {
+  box-shadow: 0 0 0 1.5px rgba(237, 231, 214, 0.18);
+}
+.pill-body.note.stopping .note-stop {
+  opacity: 0;
+  pointer-events: none;
+}
+.note-stop i {
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 1.5px;
+  background: #fffefb;
+}
+.note-spin {
+  position: absolute;
+  left: 50%;
+  bottom: 8.5px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  opacity: 0;
+  pointer-events: none;
+}
+.pill-body.note.stopping .note-spin {
+  opacity: 1;
+}
+.pill-body.note.stopping .note-spin .spinner {
+  animation: pill-spin 1067ms steps(8, end) infinite;
+}
+.side-bottom .note-wave {
+  top: 0;
+  bottom: 0;
+  left: 11.5px;
+  right: auto;
+  flex-direction: row;
+}
+.side-bottom .pill-body .note-stop {
+  left: auto;
+  right: 5.5px;
+  top: 50%;
+  bottom: auto;
+  margin: -9.5px 0 0;
+}
+.side-bottom .note-spin {
+  left: auto;
+  right: 8.5px;
+  bottom: auto;
+  top: 50%;
+  margin: -6px 0 0;
+}
+
+/* Round ">" under the notetaker pill: scales in ≈0.4 -> 1 over ≈33 ms, gone in one
+   frame; under the cursor it takes the pill's hover colours. */
+.pill-more {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.5px solid #2c2a26;
+  background: #12110f;
+  background-clip: padding-box;
+  color: #fffefb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+}
+.pill-more.in {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition:
+    opacity 33ms linear,
+    transform 33ms linear;
+}
+.pill-more.hot {
+  background-color: #2c2a26;
+  border-color: #524f48;
+}
+.pill-label.note-tip {
+  padding: 0 16px;
+  border-color: #2c2a26;
+}
+.pill-label.note-tip.in {
+  transition: opacity 70ms linear 33ms;
+}
+
+/* "Using <mic> (recommended)" (S3 310.88): ~100 ms after fn down it fades and
+   un-blurs in over ~180 ms; it goes in one frame on release. */
+.pill-mic {
+  position: absolute;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 17px;
+  border-radius: 22px;
+  background: #12110f;
+  color: #fffefb;
+  font-size: 15px;
+  line-height: 44px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: pill-blur-in 180ms cubic-bezier(0.3, 0.3, 0.6, 0.9) both;
+}
+@keyframes pill-blur-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+/* Right-click menu (S3 319.28): a light surface even in dark mode; fades in
+   ~150 ms, closes in one frame. */
+.pill-menu {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid #ede8de;
+  background: #fffefb;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  color: #1b1a17;
+  animation: pill-fade-in 150ms linear;
+}
+.menu-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 7.75px 0 8.25px;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.menu-row.hot {
+  background: #f5f2eb;
+}
+.menu-icon,
+.menu-check {
+  flex: none;
+  display: flex;
+  width: 15px;
+  justify-content: center;
+}
+.menu-label {
+  flex: 1;
+  min-width: 0;
+  margin-left: 8.75px;
+  font-size: 15px;
+  line-height: 32px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.menu-more {
+  flex: none;
+}
+.menu-sep {
+  flex: none;
+  height: 1px;
+  margin: 4px 6px;
+  background: #ede8de;
+}
+
+/* Meeting detected / meeting reminder cards (NoteCard.tsx). */
+.note-card {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 22px;
+  border: 1px solid #2c2a26;
+  background: #1f1d1a;
+  color: #e6e0d5;
+  animation: pill-blur-in 300ms cubic-bezier(0.3, 0.3, 0.6, 0.9) both;
+}
+.card-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  margin-top: -7.5px;
+  color: #f5b43c;
+}
+.note-card.call .card-icon {
+  color: #8fc2a4;
+}
+.card-text {
+  position: absolute;
+  left: 38px;
+  right: 194px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  white-space: nowrap;
+}
+.card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.card-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 18px;
+  color: #959086;
+}
+.card-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8fc2a4;
+}
+.card-act {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  height: 48px;
+  margin-top: -24px;
+  box-sizing: border-box;
+  display: flex;
+  border-radius: 8px;
+  border: 1px solid #ede8de;
+  background: #f6f2ea;
+  color: #12110f;
+  overflow: hidden;
+}
+.card-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 141px;
+  padding: 0 0 0 7px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  transition: background-color 130ms ease-out;
+}
+.note-card.call .card-main,
+.card-act > .card-main:only-child {
+  width: 168px;
+}
+.card-logo {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #1b1a17;
+  color: #fffefb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card-main b {
+  font-size: 14.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.card-two {
+  display: flex;
+  flex-direction: column;
+  line-height: 18px;
+}
+.card-two small {
+  font-size: 12.5px;
+  color: #3e3b36;
+  white-space: nowrap;
+}
+.card-more {
+  width: 28px;
+  border-left: 1px solid #dcd5c4;
+  background: transparent;
+  color: #12110f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 130ms ease-out;
+}
+.card-main:hover,
+.card-more:hover {
+  background: #e5ece4;
+}
+.card-close {
+  position: absolute;
+  top: -10px;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1px solid #282623;
+  background: #1d1b18;
+  color: #bdb7aa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.side-left .card-close,
+.side-bottom .card-close {
+  left: -8px;
+}
+.side-right .card-close {
+  right: -8px;
+}
+.card-close .ring {
+  position: absolute;
+  inset: -1px;
+}
+.card-close circle {
+  fill: none;
+  stroke: #6c6860;
+  stroke-width: 1.5;
+}
+.card-menu {
+  position: absolute;
+  right: 11px;
+  top: calc(100% + 6px);
+  width: 180px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid #ede8de;
+  background: #fffefb;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  animation: pill-fade-in 150ms linear;
+}
+.card-menu button {
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: transparent;
+  color: #1b1a17;
+  font-size: 15px;
+  text-align: left;
+}
+.card-menu button:hover {
+  background: #f5f2eb;
+}
+
+/* "Started by mistake?" (S1 78.5): popup surface, amber warning, Discard / Keep. */
+.mistake-head {
+  position: absolute;
+  left: 16px;
+  top: 17px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  line-height: 20px;
+}
+.mistake-head svg {
+  color: #f5a524;
+}
+.mistake-head b {
+  font-weight: 600;
+}
+.mistake-body {
+  position: absolute;
+  left: 16.5px;
+  right: 60px;
+  top: 55.5px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+  color: #aba495;
+}
+.mistake-buttons {
+  position: absolute;
+  right: 19px;
+  bottom: 20.5px;
+  display: flex;
+  gap: 8px;
+}
+.mistake-buttons button {
+  min-width: 52px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mistake-discard {
+  background: #2e2c28;
+  color: #fffefb;
+}
+.mistake-keep {
+  background: #ede8de;
+  color: #1b1a17;
+}
+.exit .mistake-content {
+  transition: opacity 70ms ease;
+}
+
+/* Permission card (PERMISSIONS_UI.md §2): 340x148, flush to the pill's outer edge. */
+.pill-perm {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 24px;
+  background: #12110f;
+  color: #fffefb;
+  overflow: hidden;
+}
+.pill-perm.shrink {
+  opacity: 0;
+}
+.perm-content {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+.perm-icon {
+  position: absolute;
+  left: 20.5px;
+  top: 25.75px;
+  color: #d9574b;
+}
+.perm-title {
+  position: absolute;
+  left: 47.5px;
+  top: 24px;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: #fffefb;
+  white-space: nowrap;
+}
+.perm-body {
+  position: absolute;
+  left: 21.5px;
+  right: 20px;
+  top: 59.5px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+  color: #aea89c;
+}
+.perm-close {
+  position: absolute;
+  right: 19px;
+  top: 19px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: transparent;
+  color: #fbf9f4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.perm-close .ring {
+  position: absolute;
+  inset: 0;
+}
+.perm-close circle {
+  fill: none;
+  stroke: #6a665e;
+  stroke-width: 1.5;
+}
+.perm-action {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  height: 32px;
+  padding: 0 17px;
+  border-radius: 8px;
+  background: #ede8de;
+  color: #181714;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+.perm-action:hover {
+  background: #e0d9cc;
+}
+.perm-action.done,
+.perm-action.done:hover {
+  background: #666460;
+  color: #fffefb;
+}

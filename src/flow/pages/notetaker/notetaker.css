@@ -1,0 +1,182 @@
+.nt-skeleton {
+  background: var(--fk-surface-2);
+  animation: nt-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes nt-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.nt-sheen {
+  color: var(--fk-text-muted);
+  animation: nt-pulse 1.4s ease-in-out infinite;
+}
+
+.nt-fade {
+  animation: nt-enter var(--fk-t-size) var(--fk-ease) both;
+}
+
+@keyframes nt-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.nt-appear {
+  animation: nt-show var(--fk-t-size) var(--fk-ease) both;
+}
+
+@keyframes nt-show {
+  from {
+    opacity: 0;
+  }
+}
+
+.nt-ph-in {
+  animation: nt-enter var(--fk-t-size) var(--fk-ease) both;
+}
+
+.nt-ph-out {
+  animation: nt-leave var(--fk-t-quick) linear forwards;
+}
+
+@keyframes nt-leave {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* Ruled list row: a hairline under each row, a 2px ink line in the margin when picked. */
+.nt-line {
+  --nt-ring: var(--fk-panel);
+  position: relative;
+  border-bottom: 1px solid var(--fk-border);
+  transition: background-color var(--fk-t-quick) var(--fk-ease);
+}
+
+.nt-line:hover,
+.nt-line[data-open],
+.nt-line[data-selected] {
+  --nt-ring: var(--fk-surface);
+  background: var(--fk-surface);
+}
+
+.nt-line::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--fk-accent);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--fk-t-base) var(--fk-ease);
+}
+
+.nt-line[data-selected]::before {
+  transform: scaleY(1);
+}
+
+.nt-ruled-top {
+  border-top: 1px solid var(--fk-border);
+}
+
+/* The writing area is ruled like an exercise book: one hairline per 26px line. */
+.nt-ruled-paper {
+  line-height: 26px;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 25px,
+    var(--fk-border) 25px
+  );
+  background-size: 100% 26px;
+  background-attachment: local;
+}
+
+.nt-live-dot,
+.nt-ink-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fk-live);
+  animation: nt-live 1.2s ease-in-out infinite;
+}
+
+.nt-ink-dot {
+  background: var(--fk-accent);
+}
+
+@keyframes nt-live {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.nt-progress {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--fk-accent-soft);
+  overflow: hidden;
+}
+
+.nt-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--fk-accent);
+  transition: width var(--fk-t-ink) var(--fk-ease);
+}
+
+.nt-progress[data-busy] > i {
+  width: 24%;
+  animation: nt-stroke 1.4s ease-in-out infinite;
+}
+
+@keyframes nt-stroke {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(420%);
+  }
+}
+
+.nt-flash {
+  animation: nt-flash 1.8s var(--fk-ease);
+}
+
+@keyframes nt-flash {
+  0%,
+  40% {
+    background: var(--fk-accent-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nt-fade,
+  .nt-appear,
+  .nt-skeleton,
+  .nt-sheen,
+  .nt-ph-in,
+  .nt-live-dot,
+  .nt-ink-dot,
+  .nt-progress > i,
+  .nt-flash {
+    animation: none;
+    transition: none;
+  }
+  .nt-line,
+  .nt-line::before {
+    transition: none;
+  }
+  .nt-ph-out {
+    display: none;
+  }
+}

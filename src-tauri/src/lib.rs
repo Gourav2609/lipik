@@ -1,9 +1,11 @@
 mod actions;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod apple_intelligence;
+mod apple_speech;
 mod audio_feedback;
 pub mod audio_toolkit;
 mod autostart;
+mod brand;
 mod catalog;
 mod chinese_script;
 pub mod cli;
@@ -15,14 +17,20 @@ mod input;
 mod llm_client;
 mod managers;
 mod memory;
+mod notepad;
+mod notetaker;
 mod overlay;
 mod paste_tx;
+mod pill;
 pub mod portable;
 mod secure_input;
 mod settings;
 mod shortcut;
 mod signal_handle;
+mod textflow;
 mod transcription_coordinator;
+#[cfg(target_os = "macos")]
+mod traffic_lights;
 mod tray;
 mod tray_i18n;
 mod utils;
@@ -185,6 +193,26 @@ fn should_force_show_permissions_window(app: &AppHandle) -> bool {
     false
 }
 
+/// Moves the data folder of builds made before the rename to Lipik (bundle id
+/// com.gourav.flowkit) to this build's folder, once: history, settings,
+/// dictionary and downloaded models. macOS permissions and the window's
+/// saved web storage follow the bundle id and are not carried over.
+fn migrate_pre_rename_data(app: &AppHandle) {
+    let Ok(new_dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let Some(old_dir) = new_dir.parent().map(|p| p.join("com.gourav.flowkit")) else {
+        return;
+    };
+    if new_dir.exists() || !old_dir.is_dir() {
+        return;
+    }
+    match std::fs::rename(&old_dir, &new_dir) {
+        Ok(()) => log::info!("Moved app data from {}", old_dir.display()),
+        Err(e) => log::warn!("Could not move app data from {}: {e}", old_dir.display()),
+    }
+}
+
 fn initialize_core_logic(app_handle: &AppHandle) {
     // Note: Enigo (keyboard/mouse simulation) is NOT initialized here.
     // The frontend is responsible for calling the `initialize_enigo` command
@@ -213,6 +241,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
     app_handle.manage(tray::TrayState::new());
+    notetaker::init(app_handle);
 
     // Note: Shortcuts are NOT initialized here.
     // The frontend is responsible for calling the `initialize_shortcuts` command
@@ -286,13 +315,6 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             "secure_input_warning" => {
                 // Full explanation lives in the settings-window banner
                 show_main_window(app);
-            }
-            "check_updates" => {
-                let settings = settings::get_settings(app);
-                if settings::update_checks_effectively_enabled(&settings) {
-                    show_main_window(app);
-                    let _ = app.emit("check-for-updates", ());
-                }
             }
             "copy_last_transcript" => {
                 tray::copy_last_transcript(app);
@@ -648,6 +670,15 @@ pub fn run(cli_args: CliArgs) {
 
     let specta_builder = Builder::<tauri::Wry>::new()
         .commands(collect_commands![
+            pill::set_pill_hit_rect,
+            pill::pill_toggle_dictation,
+            pill::pill_finish,
+            pill::pill_cancel,
+            pill::pill_undo_cancel,
+            pill::pill_undo_expired,
+            pill::pill_copy_text,
+            pill::set_pill_side,
+            pill::set_pill_dragging,
             shortcut::change_binding,
             shortcut::reset_binding,
             shortcut::change_shortcut_activation_setting,
@@ -726,6 +757,9 @@ pub fn run(cli_args: CliArgs) {
             commands::open_log_dir,
             commands::open_app_data_dir,
             commands::check_apple_intelligence_available,
+            apple_speech::commands::change_speech_engine_setting,
+            apple_speech::commands::change_apple_locale_setting,
+            apple_speech::commands::get_apple_speech_status,
             commands::initialize_enigo,
             commands::initialize_shortcuts,
             commands::models::get_available_models,
@@ -765,30 +799,95 @@ pub fn run(cli_args: CliArgs) {
             commands::history::get_audio_file_path,
             commands::history::delete_history_entry,
             commands::history::retry_history_entry_transcription,
+            commands::history::update_history_text,
             commands::history::update_history_limit,
             commands::history::update_recording_retention_period,
             helpers::clamshell::is_laptop,
+            textflow::commands::get_dictionary,
+            textflow::commands::add_dictionary_word,
+            textflow::commands::update_dictionary_word,
+            textflow::commands::delete_dictionary_word,
+            textflow::commands::add_replacement,
+            textflow::commands::update_replacement,
+            textflow::commands::delete_replacement,
+            textflow::commands::get_snippets,
+            textflow::commands::add_snippet,
+            textflow::commands::update_snippet,
+            textflow::commands::delete_snippet,
+            textflow::commands::get_style_settings,
+            textflow::commands::set_style,
+            textflow::commands::set_auto_cleanup,
+            textflow::commands::get_transforms,
+            textflow::commands::save_transform,
+            textflow::commands::delete_transform,
+            textflow::commands::reset_transforms,
+            textflow::commands::set_transforms_opt_in,
+            textflow::commands::set_auto_apply,
+            textflow::commands::list_notes,
+            textflow::commands::get_note,
+            textflow::commands::save_note,
+            textflow::commands::delete_note,
+            textflow::commands::get_insights,
+            textflow::commands::pill_hide_for,
+            textflow::commands::pill_hidden_until,
+            textflow::commands::paste_last_transcript,
+            textflow::commands::open_main_page,
+            notetaker::commands::notetaker_start,
+            notetaker::commands::notetaker_stop,
+            notetaker::commands::notetaker_status,
+            notetaker::commands::notetaker_list,
+            notetaker::commands::notetaker_get,
+            notetaker::commands::notetaker_save_thoughts,
+            notetaker::commands::notetaker_delete,
+            notetaker::commands::notetaker_rename,
+            notetaker::commands::notetaker_move_to_folder,
+            notetaker::commands::notetaker_folders,
+            notetaker::commands::notetaker_regenerate,
+            notetaker::commands::notetaker_upcoming,
+            notetaker::commands::notetaker_calendar_access,
+            notetaker::commands::notetaker_request_calendar_access,
+            notetaker::commands::notetaker_calendar_sources,
+            notetaker::commands::notetaker_ask,
+            notetaker::commands::notetaker_chats,
+            notetaker::commands::notetaker_chat,
+            notetaker::commands::notetaker_get_settings,
+            notetaker::commands::notetaker_set_settings,
+            notepad::notepad_open,
+            notepad::notepad_close,
+            notepad::notepad_meeting,
         ])
         .events(collect_events![
             managers::history::HistoryUpdatePayload,
             managers::transcription::StreamTextEvent,
             managers::transcription::StreamPhaseEvent,
+            notetaker::NotetakerCallDetected,
+            notetaker::NotetakerCallEnded,
+            notetaker::NotetakerMeetingSoon,
+            notetaker::NotetakerTranscript,
+            notetaker::NotetakerProcessing,
+            notetaker::NotetakerNoteReady,
+            notetaker::NotetakerState,
+            notetaker::NotetakerStreamChanged,
+            notepad::NotepadMeeting,
         ]);
-
-    #[cfg(debug_assertions)] // <- Only export on non-release builds
-    specta_builder
-        .export(
-            Typescript::default().bigint(BigIntExportBehavior::Number),
-            "../src/bindings.ts",
-        )
-        .expect("Failed to export typescript bindings");
-
-    let invoke_handler = specta_builder.invoke_handler();
 
     // The headless path must run as its own instance (see the single-instance
     // note below), not forward to an already-running app.
     let headless_mode =
         cli_args.transcribe_file.is_some() || cli_args.list_devices || cli_args.list_models;
+
+    // Headless runs may start from any folder, where "../src" is not the app.
+    #[cfg(debug_assertions)] // <- Only export on non-release builds
+    if !headless_mode {
+        specta_builder
+            .export(
+                Typescript::default().bigint(BigIntExportBehavior::Number),
+                "../src/bindings.ts",
+            )
+            .expect("Failed to export typescript bindings");
+    }
+
+    let invoke_handler = specta_builder.invoke_handler();
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -797,8 +896,8 @@ pub fn run(cli_args: CliArgs) {
         .plugin(
             LogBuilder::new()
                 .level(log::LevelFilter::Trace) // Set to most verbose level globally
-                .max_file_size(500_000)
-                .rotation_strategy(RotationStrategy::KeepOne)
+                .max_file_size(10_000_000)
+                .rotation_strategy(RotationStrategy::KeepSome(3))
                 .clear_targets()
                 .targets([
                     // Console output respects RUST_LOG environment variable. In
@@ -818,11 +917,11 @@ pub fn run(cli_args: CliArgs) {
                     Target::new(if let Some(data_dir) = portable::data_dir() {
                         TargetKind::Folder {
                             path: data_dir.join("logs"),
-                            file_name: Some("handy".into()),
+                            file_name: Some("lipik".into()),
                         }
                     } else {
                         TargetKind::LogDir {
-                            file_name: Some("handy".into()),
+                            file_name: Some("lipik".into()),
                         }
                     })
                     .filter(|metadata| {
@@ -900,6 +999,10 @@ pub fn run(cli_args: CliArgs) {
 
             specta_builder.mount_events(app);
 
+            if portable::data_dir().is_none() {
+                migrate_pre_rename_data(app.handle());
+            }
+
             // Headless one-shot path (`--transcribe-file` / `--list-devices` /
             // `--list-models`): initialize only what transcription needs — the
             // store/paths plugins, the model + transcription managers, and the
@@ -944,12 +1047,19 @@ pub fn run(cli_args: CliArgs) {
             // for portable mode (redirects WebView2 cache to portable Data dir)
             let mut win_builder =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
-                    .title("Handy")
-                    .inner_size(680.0, 570.0)
-                    .min_inner_size(680.0, 570.0)
+                    .title(brand::APP_NAME)
+                    .inner_size(1280.0, 800.0)
+                    .min_inner_size(960.0, 640.0)
                     .resizable(true)
                     .maximizable(true)
                     .visible(false);
+
+            #[cfg(target_os = "macos")]
+            {
+                win_builder = win_builder
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true);
+            }
 
             if let Some(data_dir) = portable::data_dir() {
                 win_builder = win_builder.data_directory(data_dir.join("webview"));
@@ -958,6 +1068,8 @@ pub fn run(cli_args: CliArgs) {
             // Only used on Windows, to disable WebView2 browser accelerators.
             #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
             let main_window = win_builder.build()?;
+            #[cfg(target_os = "macos")]
+            traffic_lights::place(&main_window.as_ref().window());
 
             // Disable WebView2 browser accelerators (F5, F6, Ctrl+F, F12, ...).
             // A settings window has no use for them, and pressing F6 while
@@ -1010,6 +1122,8 @@ pub fn run(cli_args: CliArgs) {
             app.manage(TranscriptionCoordinator::new(app_handle.clone()));
 
             initialize_core_logic(&app_handle);
+            textflow::init(&app_handle);
+            notepad::init(&app_handle);
 
             // Secure Input monitor (macOS): detects stuck secure input that
             // silently blocks keyed shortcuts, warns the user, and activates
@@ -1062,6 +1176,22 @@ pub fn run(cli_args: CliArgs) {
             Ok(())
         })
         .on_window_event(|window, event| match event {
+            #[cfg(target_os = "macos")]
+            tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Focused(_)
+                if window.label() == "main" =>
+            {
+                traffic_lights::place(window);
+            }
+            #[cfg(target_os = "macos")]
+            tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Focused(_)
+                if window.label() == "notepad" =>
+            {
+                notepad::place_traffic_lights(window);
+            }
+            tauri::WindowEvent::CloseRequested { api, .. } if window.label() == "notepad" => {
+                api.prevent_close();
+                let _ = window.hide();
+            }
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _res = window.hide();

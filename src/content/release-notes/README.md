@@ -19,5 +19,5 @@ Place image assets in `public/release-notes/{version}/` and reference them from
 Markdown with absolute paths:
 
 ```md
-![Streaming transcription preview](/release-notes/0.9.0/streaming-transcription.webp)
+![Screenshot](/release-notes/0.2.0/screenshot.webp)
 ```

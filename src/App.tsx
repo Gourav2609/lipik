@@ -9,49 +9,35 @@ import { toast, Toaster } from "sonner";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { platform } from "@tauri-apps/plugin-os";
-import {
-  checkAccessibilityPermission,
-  checkMicrophonePermission,
-} from "tauri-plugin-macos-permissions-api";
+import { checkAccessibilityPermission } from "tauri-plugin-macos-permissions-api";
 import { ModelStateEvent, RecordingErrorEvent } from "./lib/types/events";
 import "./App.css";
-import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import SecureInputWarning from "./components/SecureInputWarning";
-import Footer from "./components/footer";
 import Onboarding, {
   AccessibilityOnboarding,
   ModelMigration,
 } from "./components/onboarding";
-import {
-  DebugSettings,
-  type OnboardingPreviewStep,
-} from "./components/settings";
+import { type OnboardingPreviewStep } from "./components/settings";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { WhatsNewGate } from "./components/whats-new";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
 import { deleteRetiredModel } from "@/components/onboarding/retiredModels";
 import { getLanguageDirection, initializeRTL } from "@/lib/utils/rtl";
+import { FlowApp } from "./flow/FlowApp";
+import { onboardingPreviewStep, skipOnboarding } from "./flow/dev/preview";
+import {
+  FlowOnboarding,
+  hasSeenOnboarding,
+  startDefaultModelSetup,
+  type StepId,
+} from "./flow/onboarding";
 
-type OnboardingStep = "accessibility" | "migration" | "model" | "done";
+type OnboardingStep = "accessibility" | "migration" | "model" | "flow" | "done";
 
 // Stable identity so preview effects do not re-run due to callback changes.
 const NOOP = () => {};
-
-const renderSettingsContent = (
-  section: SidebarSection,
-  onPreviewOnboarding: (step: OnboardingPreviewStep) => void,
-) => {
-  if (section === "debug") {
-    return <DebugSettings onPreviewOnboarding={onPreviewOnboarding} />;
-  }
-
-  const ActiveComponent =
-    SECTIONS_CONFIG[section]?.component || SECTIONS_CONFIG.general.component;
-  return <ActiveComponent />;
-};
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -66,8 +52,6 @@ function App() {
   // Set when a returning user's selected model is a retired (ONNX) model that
   // is still on disk: they must update it before the app can transcribe.
   const [migrationModelId, setMigrationModelId] = useState<string | null>(null);
-  const [currentSection, setCurrentSection] =
-    useState<SidebarSection>("general");
   const { settings, updateSetting } = useSettings();
   const direction = getLanguageDirection(i18n.language);
   const refreshAudioDevices = useSettingsStore(
@@ -77,12 +61,12 @@ function App() {
     (state) => state.refreshOutputDevices,
   );
   const hasCompletedPostOnboardingInit = useRef(false);
-  const settingsScrollRef = useRef<HTMLDivElement>(null);
   const isShowingOnboarding =
     onboardingPreview !== null ||
     onboardingStep === "accessibility" ||
     onboardingStep === "migration" ||
-    onboardingStep === "model";
+    onboardingStep === "model" ||
+    onboardingStep === "flow";
 
   // Classic scrollbars consume layout space. Reserve a matching gutter on the
   // opposite edge while onboarding is visible so its content stays centered in
@@ -92,11 +76,6 @@ function App() {
     document.documentElement.toggleAttribute(attribute, isShowingOnboarding);
     return () => document.documentElement.removeAttribute(attribute);
   }, [isShowingOnboarding]);
-
-  // Reset the scroll position whenever the active section changes.
-  useLayoutEffect(() => {
-    settingsScrollRef.current?.scrollTo({ top: 0 });
-  }, [currentSection]);
 
   useEffect(() => {
     checkOnboardingStatus();
@@ -111,12 +90,22 @@ function App() {
   useEffect(() => {
     if (onboardingStep === "done" && !hasCompletedPostOnboardingInit.current) {
       hasCompletedPostOnboardingInit.current = true;
-      Promise.all([
-        commands.initializeEnigo(),
-        commands.initializeShortcuts(),
-      ]).catch((e) => {
-        console.warn("Failed to initialize:", e);
-      });
+      // Shortcuts and paste need accessibility; retry until it is granted.
+      const init = async () => {
+        const [enigo, shortcuts] = await Promise.all([
+          commands.initializeEnigo(),
+          commands.initializeShortcuts(),
+        ]);
+        return enigo.status === "ok" && shortcuts.status === "ok";
+      };
+      const retry = async () => {
+        const trusted =
+          platform() !== "macos" ||
+          (await checkAccessibilityPermission().catch(() => false));
+        if (trusted && (await init().catch(() => false))) return;
+        setTimeout(retry, 2000);
+      };
+      retry();
       refreshAudioDevices();
       refreshOutputDevices();
     }
@@ -175,7 +164,7 @@ function App() {
   }, [t]);
 
   // Listen for paste failures and show a toast.
-  // The technical error detail is logged to handy.log on the Rust side
+  // The technical error detail is logged to lipik.log on the Rust side
   // (see actions.rs `error!("Failed to paste transcription: ...")`),
   // so we show a localized, user-friendly message here instead of the raw error.
   useEffect(() => {
@@ -190,7 +179,7 @@ function App() {
   }, [t]);
 
   // Listen for transcription failures and show a toast.
-  // The payload is the backend error message (also logged to handy.log).
+  // The payload is the backend error message (also logged to lipik.log).
   useEffect(() => {
     const unlisten = listen<string>("transcription-error", (event) => {
       toast.error(t("errors.transcriptionFailedTitle"), {
@@ -249,6 +238,14 @@ function App() {
   };
 
   const checkOnboardingStatus = async () => {
+    if (onboardingPreviewStep) {
+      setOnboardingStep("flow");
+      return;
+    }
+    if (skipOnboarding) {
+      setOnboardingStep("done");
+      return;
+    }
     try {
       const settingsResult = await commands.getAppSettings();
       const hasCompletedOnboarding =
@@ -264,22 +261,8 @@ function App() {
         );
         setMigrationModelId(retiredModelId);
 
-        if (currentPlatform === "macos") {
-          try {
-            const [hasAccessibility, hasMicrophone] = await Promise.all([
-              checkAccessibilityPermission(),
-              checkMicrophonePermission(),
-            ]);
-            if (!hasAccessibility || !hasMicrophone) {
-              await revealMainWindowForPermissions();
-              setOnboardingStep("accessibility");
-              return;
-            }
-          } catch (e) {
-            console.warn("Failed to check macOS permissions:", e);
-            // If we can't check, proceed to main app and let them fix it there
-          }
-        }
+        // macOS: missing permissions are asked for by a card that grows out
+        // of the pill (src/overlay/pill/Permission.tsx), not by a screen here.
 
         if (currentPlatform === "windows") {
           try {
@@ -301,13 +284,19 @@ function App() {
 
         await finishReturningUser(retiredModelId);
       } else {
-        // New user - start full onboarding
+        // New user: the default model downloads in the background, so someone
+        // who already went through the steps goes straight to the app.
         setIsReturningUser(false);
-        setOnboardingStep("accessibility");
+        if (hasSeenOnboarding()) {
+          startDefaultModelSetup();
+          setOnboardingStep("done");
+        } else {
+          setOnboardingStep("flow");
+        }
       }
     } catch (error) {
       console.error("Failed to check onboarding status:", error);
-      setOnboardingStep("accessibility");
+      setOnboardingStep("flow");
     }
   };
 
@@ -317,7 +306,7 @@ function App() {
     if (isReturningUser) {
       finishReturningUser(migrationModelId);
     } else {
-      setOnboardingStep("model");
+      setOnboardingStep("flow");
     }
   };
 
@@ -384,6 +373,13 @@ function App() {
         </button>
       </>
     );
+  } else if (onboardingStep === "flow") {
+    content = (
+      <FlowOnboarding
+        onDone={() => setOnboardingStep("done")}
+        initialStep={(onboardingPreviewStep ?? undefined) as StepId | undefined}
+      />
+    );
   } else if (onboardingStep === "accessibility") {
     content = (
       <AccessibilityOnboarding onComplete={handleAccessibilityComplete} />
@@ -407,32 +403,11 @@ function App() {
     );
   } else {
     content = (
-      <div
-        dir={direction}
-        className="h-screen flex flex-col select-none cursor-default"
-      >
+      <div dir={direction} className="cursor-default">
         <ErrorBoundary context="What's New">
           <WhatsNewGate />
         </ErrorBoundary>
-        {/* Main content area that takes remaining space */}
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar
-            activeSection={currentSection}
-            onSectionChange={setCurrentSection}
-          />
-          {/* Scrollable content area */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div ref={settingsScrollRef} className="flex-1 overflow-y-auto">
-              <div className="flex flex-col items-center p-4 gap-4">
-                <AccessibilityPermissions />
-                <SecureInputWarning />
-                {renderSettingsContent(currentSection, setOnboardingPreview)}
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Fixed footer at bottom */}
-        <Footer />
+        <FlowApp />
       </div>
     );
   }

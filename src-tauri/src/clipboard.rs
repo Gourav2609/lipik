@@ -53,7 +53,7 @@ fn with_enigo<T: Send + 'static>(
         .map_err(|_| "Main thread dropped the input request".to_string())?
 }
 
-fn write_text_to_clipboard(app_handle: &AppHandle, text: &str) -> Result<(), String> {
+pub(crate) fn write_text_to_clipboard(app_handle: &AppHandle, text: &str) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     if is_wayland() && is_wl_copy_available() {
         info!("Using wl-copy for clipboard write on Wayland");

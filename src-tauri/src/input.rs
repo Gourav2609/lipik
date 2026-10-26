@@ -1,5 +1,9 @@
-use enigo::{Enigo, Key, Keyboard, Mouse, Settings};
+use enigo::{Enigo, Key, Keyboard, Settings};
 use std::sync::Mutex;
+
+#[cfg(not(target_os = "macos"))]
+use enigo::Mouse;
+#[cfg(not(target_os = "macos"))]
 use tauri::{AppHandle, Manager};
 
 #[cfg(target_os = "macos")]
@@ -161,6 +165,7 @@ impl EnigoState {
 
 /// Get the current mouse cursor position using the managed Enigo instance.
 /// Returns None if the state is not available or if getting the location fails.
+#[cfg(not(target_os = "macos"))]
 pub fn get_cursor_position(app_handle: &AppHandle) -> Option<(i32, i32)> {
     let enigo_state = app_handle.try_state::<EnigoState>()?;
     let enigo = enigo_state.0.lock().ok()?;

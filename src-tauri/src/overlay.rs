@@ -1,9 +1,17 @@
-use crate::input;
 use crate::settings;
-use crate::settings::{OverlayPosition, OverlayStyle};
+use crate::settings::OverlayStyle;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
+use tauri::{AppHandle, Emitter, Manager};
+
+#[cfg(not(target_os = "macos"))]
+use crate::input;
+
+#[cfg(not(target_os = "macos"))]
+use crate::settings::OverlayPosition;
+
+#[cfg(not(target_os = "macos"))]
+use tauri::{PhysicalPosition, PhysicalSize};
 
 #[cfg(not(target_os = "macos"))]
 use log::debug;
@@ -46,14 +54,19 @@ tauri_panel! {
 // Compact overlay (Minimal / transcribing / processing): the 40h pill animates
 // width from 172 (--ov-rest-w) to 216 (--ov-work-w) and expands from center, so
 // the window must fit the widest state plus a little slack.
+#[cfg(not(target_os = "macos"))]
 const OVERLAY_WIDTH: f64 = 256.0;
+#[cfg(not(target_os = "macos"))]
 const OVERLAY_HEIGHT: f64 = 50.0;
 
 // Actual is 394x118, just a little extra
+#[cfg(not(target_os = "macos"))]
 const OVERLAY_STREAM_WIDTH: f64 = 400.0;
+#[cfg(not(target_os = "macos"))]
 const OVERLAY_STREAM_HEIGHT: f64 = 120.0;
 
 /// Overlay window size (logical) for a given UI state.
+#[cfg(not(target_os = "macos"))]
 fn overlay_dimensions(state: &str) -> (f64, f64) {
     if state == "streaming" {
         (OVERLAY_STREAM_WIDTH, OVERLAY_STREAM_HEIGHT)
@@ -65,13 +78,8 @@ fn overlay_dimensions(state: &str) -> (f64, f64) {
 static LAST_MIC_LEVEL_EMIT: AtomicU64 = AtomicU64::new(0);
 const EMIT_THROTTLE_MS: u64 = 33; // ~30 FPS
 
-#[cfg(target_os = "macos")]
-const OVERLAY_TOP_OFFSET: f64 = 46.0;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 const OVERLAY_TOP_OFFSET: f64 = 4.0;
-
-#[cfg(target_os = "macos")]
-const OVERLAY_BOTTOM_OFFSET: f64 = 15.0;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 const OVERLAY_BOTTOM_OFFSET: f64 = 40.0;
@@ -175,6 +183,7 @@ fn force_overlay_topmost(overlay_window: &tauri::webview::WebviewWindow) {
     });
 }
 
+#[cfg(not(target_os = "macos"))]
 fn get_monitor_with_cursor(app_handle: &AppHandle) -> Option<tauri::Monitor> {
     if let Some(mouse_location) = input::get_cursor_position(app_handle) {
         if let Ok(monitors) = app_handle.available_monitors() {
@@ -186,7 +195,7 @@ fn get_monitor_with_cursor(app_handle: &AppHandle) -> Option<tauri::Monitor> {
                     return Some(monitor);
                 }
 
-                // macOS/Linux: enigo returns logical coords, so scale the bounds down.
+                // Linux: enigo returns logical coords, so scale the bounds down.
                 #[cfg(not(target_os = "windows"))]
                 {
                     let scale = monitor.scale_factor();
@@ -209,6 +218,7 @@ fn get_monitor_with_cursor(app_handle: &AppHandle) -> Option<tauri::Monitor> {
     app_handle.primary_monitor().ok().flatten()
 }
 
+#[cfg(not(target_os = "macos"))]
 fn is_mouse_within_monitor(
     mouse_pos: (i32, i32),
     monitor_pos: &PhysicalPosition<i32>,
@@ -230,19 +240,15 @@ fn is_mouse_within_monitor(
         && mouse_y < (monitor_y + monitor_height as i32)
 }
 
-/// Returns overlay position in logical coordinates (points on macOS).
-///
-/// The Bottom anchor uses the macOS work area (visibleFrame) so the overlay
-/// tracks the Dock — above it when shown, at the screen edge when hidden.
-/// This relies on tauri 2.11's work_area.position.y fix (#14655), the same
-/// bug that led PR #969 to abandon work_area for full monitor bounds. Top and
-/// the other platforms keep full monitor bounds plus the fixed offsets
-/// (work_area is unreliable on Wayland; Windows' offset clears the taskbar).
+/// Returns overlay position in logical coordinates. Uses full monitor bounds
+/// plus the fixed offsets (work_area is unreliable on Wayland; Windows' offset
+/// clears the taskbar).
 ///
 /// We must use LogicalPosition (not PhysicalPosition) because Tauri/tao
 /// converts PhysicalPosition using the scale factor of the monitor the window
 /// is *currently* on, which is wrong when moving cross-monitor. Windows uses
 /// `place_windows_overlay` instead (no single logical space across mixed DPI).
+#[cfg(not(target_os = "macos"))]
 fn calculate_overlay_position(
     app_handle: &AppHandle,
     width: f64,
@@ -260,16 +266,7 @@ fn calculate_overlay_position(
     let y = match settings.overlay_position {
         OverlayPosition::Top => monitor_y + OVERLAY_TOP_OFFSET,
         OverlayPosition::Bottom => {
-            // work_area.position shares monitor.position's global coordinate
-            // space, so no monitor offset is added.
-            #[cfg(target_os = "macos")]
-            let bottom = {
-                let wa = monitor.work_area();
-                (wa.position.y as f64 + wa.size.height as f64) / scale
-            };
-            #[cfg(not(target_os = "macos"))]
             let bottom = monitor_y + monitor.size().height as f64 / scale;
-
             bottom - height - OVERLAY_BOTTOM_OFFSET
         }
     };
@@ -279,7 +276,7 @@ fn calculate_overlay_position(
 
 /// Current overlay window size in logical units (points), for repositioning
 /// without assuming a fixed size (compact vs. streaming).
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn current_overlay_logical_size(window: &tauri::webview::WebviewWindow) -> Option<(f64, f64)> {
     let size = window.inner_size().ok()?;
     let scale = window.scale_factor().ok()?;
@@ -450,7 +447,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
 /// Creates the recording overlay panel and keeps it hidden by default (macOS)
 #[cfg(target_os = "macos")]
 pub fn create_recording_overlay(app_handle: &AppHandle) {
-    if let Some((x, y)) = calculate_overlay_position(app_handle, OVERLAY_WIDTH, OVERLAY_HEIGHT) {
+    if let Some((x, y, width, height)) = crate::pill::strip_frame(app_handle) {
         // PanelBuilder creates a Tauri window then converts it to NSPanel.
         // The window remains registered, so get_webview_window() still works.
         match PanelBuilder::<_, RecordingOverlayPanel>::new(app_handle, "recording_overlay")
@@ -458,10 +455,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
             .title("Recording")
             .position(tauri::Position::Logical(tauri::LogicalPosition { x, y }))
             .level(PanelLevel::Status)
-            .size(tauri::Size::Logical(tauri::LogicalSize {
-                width: OVERLAY_WIDTH,
-                height: OVERLAY_HEIGHT,
-            }))
+            .size(tauri::Size::Logical(tauri::LogicalSize { width, height }))
             .has_shadow(false)
             .transparent(true)
             .no_activate(true)
@@ -476,7 +470,15 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
             .build()
         {
             Ok(panel) => {
-                panel.hide();
+                if settings::get_settings(app_handle).overlay_style == OverlayStyle::None {
+                    panel.hide();
+                } else {
+                    panel.show();
+                }
+                if let Some(window) = app_handle.get_webview_window("recording_overlay") {
+                    let _ = window.set_ignore_cursor_events(true);
+                }
+                crate::pill::start(app_handle);
             }
             Err(e) => {
                 log::error!("Failed to create recording overlay panel: {}", e);
@@ -507,6 +509,16 @@ fn show_overlay_state(app_handle: &AppHandle, state: &str) {
     let _ = app_handle.run_on_main_thread(move || show_overlay_state_on_main(&handle, &state));
 }
 
+/// macOS: the side pill strip stays where it is; the page draws each state.
+#[cfg(target_os = "macos")]
+fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
+    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
+        let _ = overlay_window.show();
+        let _ = overlay_window.emit("show-overlay", state);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
 fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
     // Size the overlay for this state (compact vs. streaming), then position it.
     let (width, height) = overlay_dimensions(state);
@@ -638,6 +650,20 @@ pub fn update_overlay_position(app_handle: &AppHandle) {
     let _ = app_handle.run_on_main_thread(move || update_overlay_position_on_main(&handle));
 }
 
+/// macOS: places the side pill strip, and shows it unless the style is None.
+#[cfg(target_os = "macos")]
+fn update_overlay_position_on_main(app_handle: &AppHandle) {
+    crate::pill::place(app_handle);
+    if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
+        if settings::get_settings(app_handle).overlay_style == OverlayStyle::None {
+            let _ = overlay_window.hide();
+        } else {
+            let _ = overlay_window.show();
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
 fn update_overlay_position_on_main(app_handle: &AppHandle) {
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         #[cfg(target_os = "linux")]
@@ -683,6 +709,7 @@ fn update_overlay_position_on_main(app_handle: &AppHandle) {
 /// take down the overlay of a session that started in the meantime — e.g. a
 /// press the coordinator remembered while the pipeline was busy and started
 /// the instant it drained, well inside the 300 ms hide delay.
+#[cfg(not(target_os = "macos"))]
 static OVERLAY_SHOW_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Hides the recording overlay window with fade-out animation
@@ -692,12 +719,27 @@ pub fn hide_recording_overlay(app_handle: &AppHandle) {
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         // Snapshot before doing anything observable, so any show that lands
         // after this point invalidates the delayed hide below.
+        #[cfg(not(target_os = "macos"))]
         let scheduled_at = OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst);
         // Emit event to trigger fade-out animation
+        #[cfg(not(target_os = "macos"))]
         let _ = overlay_window.emit("hide-overlay", ());
-        // Hide the window after a short delay to allow animation to complete,
-        // unless a newer session has shown the overlay again by then.
+        // show-overlay is emitted from the main-thread queue; emit hide from the
+        // same queue so a fast stop (e.g. an empty recording) cannot overtake it
+        // and leave the pill stuck in processing.
+        #[cfg(target_os = "macos")]
+        {
+            let window = overlay_window.clone();
+            let _ = app_handle.run_on_main_thread(move || {
+                let _ = window.emit("hide-overlay", ());
+            });
+        }
+        // macOS keeps the side pill strip up; the page falls back to the idle pill.
+        // Elsewhere, hide the window after a short delay to allow animation to
+        // complete, unless a newer session has shown the overlay again by then.
+        #[cfg(not(target_os = "macos"))]
         let window_clone = overlay_window.clone();
+        #[cfg(not(target_os = "macos"))]
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(300));
             if OVERLAY_SHOW_GENERATION.load(Ordering::SeqCst) != scheduled_at {
@@ -766,7 +808,7 @@ pub fn emit_levels(app_handle: &AppHandle, levels: &[f32]) {
     let _ = app_handle.emit_to("recording_overlay", "mic-level", levels);
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "macos")))]
 mod tests {
     use super::*;
 
