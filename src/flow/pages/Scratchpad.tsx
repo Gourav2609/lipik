@@ -30,7 +30,7 @@ export default function Scratchpad() {
 
   useEffect(() => {
     if (loaded && openNewestOnLoad) setOpenId(notes[0]?.id ?? null);
-  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loaded]);
 
   useEffect(() => {
     dropBlank();

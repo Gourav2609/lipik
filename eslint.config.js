@@ -35,4 +35,11 @@ export default [
       ],
     },
   },
+  {
+    // Lipik's own windows are written in English with defaults in code.
+    files: ["src/flow/**", "src/notepad/**", "src/overlay/**"],
+    rules: {
+      "i18next/no-literal-string": "off",
+    },
+  },
 ];

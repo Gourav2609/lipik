@@ -56,10 +56,21 @@ Handy's recording and transcription engine and adds:
 
 ## Install
 
-Download the latest `.dmg` from the [Releases](../../releases/latest) page.
-The app is not signed with an Apple Developer ID yet, so macOS asks you to
-confirm the first time you open it. [docs/INSTALL.md](docs/INSTALL.md) covers
-that step, the permissions Lipik needs, and the optional Ollama setup.
+1. Download [Lipik.dmg](https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg)
+   (Apple silicon, M1 and later) and drag **Lipik** into **Applications**.
+2. Open it once. Lipik isn't signed with an Apple Developer ID yet, so macOS
+   blocks the first launch:
+   - macOS 15 and later: double-click Lipik, click **Done**, then go to
+     **System Settings → Privacy & Security** and click **Open Anyway**.
+   - macOS 14 and earlier: right-click Lipik in Applications, choose **Open**,
+     then **Open**.
+3. Allow **Microphone** and **Accessibility** when asked.
+4. Optional, for clean-up: install the free [Ollama](https://ollama.com) app
+   and run `ollama pull qwen3:8b` (about 5 GB). Without it, Lipik still types
+   what you said and fixes "um", spoken punctuation, numbers and emails with
+   its built-in rules.
+
+[docs/INSTALL.md](docs/INSTALL.md) has the details.
 
 ## Build from source
 

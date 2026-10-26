@@ -150,7 +150,7 @@ const Transcript = ({
       ?.scrollIntoView({ block: "center" });
     const id = window.setTimeout(() => setFlash(null), 2000);
     return () => window.clearTimeout(id);
-  }, [focusMs, segments.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focusMs, segments.length > 0]);
 
   return (
     <div>
@@ -453,15 +453,15 @@ const Thoughts = ({
     load();
     window.addEventListener("focus", load);
     return () => window.removeEventListener("focus", load);
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id]);
 
   useEffect(() => {
     if (unsaved.current == null) return;
     const t = window.setTimeout(save, SAVE_DELAY_MS);
     return () => window.clearTimeout(t);
-  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [text]);
 
-  useEffect(() => save, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => save, []);
 
   useLayoutEffect(() => {
     const el = area.current;

@@ -186,14 +186,14 @@ export const AskView = ({
     return () => {
       live = false;
     };
-  }, [threadId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [threadId]);
 
   useEffect(() => {
     if (!request || taken.current === request.n) return;
     taken.current = request.n;
     onRequestTaken();
     void ask(request.question);
-  }, [request?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [request?.n]);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });

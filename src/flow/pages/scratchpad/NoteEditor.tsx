@@ -11,7 +11,7 @@ export const NoteEditor = ({ note, onBack }: { note: Note; onBack: () => void })
 
   useEffect(() => {
     if (!note.title && !note.body) titleRef.current?.focus();
-  }, [note.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [note.id]);
 
   useEffect(() => {
     const el = bodyRef.current;

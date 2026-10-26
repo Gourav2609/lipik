@@ -1,12 +1,14 @@
 # Installing Lipik
 
-Lipik runs on macOS (Apple silicon and Intel). The meeting notetaker needs
-macOS 14.2 or later; dictation works on older versions.
+Lipik runs on Macs with Apple silicon (M1 and later). There is no ready-made
+build for Intel Macs; you can build one from source (see the end of this page).
+The meeting notetaker needs macOS 14.2 or later; dictation works on older
+versions.
 
 ## 1. Download
 
-Get the latest `Lipik_<version>_<arch>.dmg` from the GitHub Releases page.
-Pick `aarch64` for Apple silicon (M1 and later) or `x64` for Intel Macs.
+Download [Lipik.dmg](https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg)
+from the [Releases page](https://github.com/Gourav2609/lipik/releases).
 
 Open the `.dmg` and drag **Lipik** into **Applications**.
 
