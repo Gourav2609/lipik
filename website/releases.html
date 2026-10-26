@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lipik release notes</title>
+    <meta name="description" content="What changed in each version of Lipik." />
+    <meta name="theme-color" content="#fbf9f4" />
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:opsz,wght@14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+  </head>
+  <body class="page-pricing">
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" id="nav">
+      <a class="brand" href="index.html" aria-label="Lipik home">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <g stroke="currentColor" stroke-linecap="round" fill="none">
+            <path d="M3 5.4h18" stroke-width="2.6" />
+            <path
+              d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+              stroke-width="2.3"
+            />
+          </g>
+        </svg>
+        <span>Lipik</span>
+      </a>
+      <nav aria-label="Sections">
+        <a href="index.html#clean">Clean-up</a>
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#open">Open source</a>
+        <a href="index.html#faq">FAQ</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="releases.html" aria-current="page">Release notes</a>
+      </nav>
+      <a class="btn btn-ink btn-sm" href="index.html#download"
+        >Download<span class="hide-sm">&nbsp;for Mac</span></a
+      >
+    </header>
+
+    <main id="main">
+      <section class="rel-hero">
+        <div class="wrap">
+          <h1>Release notes</h1>
+          <p class="rel-sub">
+            What changed in each version of Lipik. The newest is at the top.
+          </p>
+          <p>
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download the latest version</a
+            >
+          </p>
+        </div>
+      </section>
+      <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.1">
+          <header class="rel-head">
+            <h2>Lipik 0.1.1</h2>
+            <p class="rel-meta">
+              <time>26 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.1"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Help setting up clean-up, and better advice when macOS blocks a
+              shortcut.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Clean-up setup in onboarding.</strong> A new step checks
+                for the free Ollama app and the clean-up model. If Ollama is
+                missing, one button takes you to it; if the model is missing,
+                one button downloads it (about 5 GB) with a progress bar and
+                Cancel. You can skip it and set it up later in
+                <strong>Settings → Meetings</strong>, which has the same
+                buttons.
+              </li>
+              <li>
+                <strong>Better advice when macOS blocks a shortcut.</strong>
+                When fn + Space stops working, Lipik now names the real cause,
+                such as Terminal's Secure Keyboard Entry or a password manager
+                in front, instead of always blaming the lock screen.
+              </li>
+              <li>
+                Plain <code>qwen3:4b</code> is flagged as too slow for
+                dictation; use <code>qwen3:4b-instruct</code> or
+                <code>qwen3:8b</code>.
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+
+              <li>
+                Updating from 0.1.0 keeps your settings, history and
+                permissions.
+              </li>
+            </ol>
+            <p>
+              Lipik is built on
+              <a href="https://github.com/cjpais/Handy">Handy</a> by CJ Pais
+              (MIT).
+            </p>
+          </div>
+        </article>
+        <article class="rel" id="v0.1.0">
+          <header class="rel-head">
+            <h2>Lipik 0.1.0</h2>
+            <p class="rel-meta">
+              <time>26 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.0"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              The first build of Lipik: hold <strong>fn</strong>, speak, and
+              clean text is typed wherever your cursor is. Free, open source,
+              and it runs on your Mac.
+            </p>
+            <h3>Install</h3>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>.
+              </li>
+              <li>
+                Open it once. Lipik isn't signed with an Apple Developer ID yet,
+                so macOS blocks the first launch: <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then open
+                <strong>System Settings → Privacy &amp; Security</strong>,
+                scroll down and click <strong>Open Anyway</strong>.
+                <br /><strong>macOS 14 and earlier:</strong> right-click Lipik
+                in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>. <br />If macOS says the app "is damaged",
+                run
+                <code
+                  >xattr -dr com.apple.quarantine /Applications/Lipik.app</code
+                >
+                in Terminal and open it again.
+              </li>
+
+              <li>
+                Allow <strong>Microphone</strong> (so it can hear you) and
+                <strong>Accessibility</strong> (so it can type into other apps
+                and notice the fn key).
+              </li>
+              <li>
+                Optional, for clean-up: install the free
+                <a href="https://ollama.com">Ollama</a> app and run
+                <code>ollama pull qwen3:8b</code> (about 5 GB).
+              </li>
+            </ol>
+            <p>
+              Without it, Lipik still types what you said and fixes "um", spoken
+              punctuation, numbers, times and spoken emails with its built-in
+              rules.
+            </p>
+            <h3>What's in it</h3>
+            <ul>
+              <li>
+                Dictation in any app: hold fn, speak, let go. Hands-free with fn
+                + Space.
+              </li>
+              <li>
+                Clean-up on your Mac: removes fillers, keeps your corrections
+                ("four, no, five" → "5"), fixes punctuation, writes emails and
+                times properly, and never adds words you didn't say.
+              </li>
+              <li>Vocabulary, snippets, and a tone for each kind of app.</li>
+              <li>
+                Meeting notes: record a call, get a transcript and a short
+                summary.
+              </li>
+              <li>
+                English by default; free Whisper models cover 99 languages.
+                Hinglish is in beta.
+              </li>
+              <li>Works with Wi-Fi off. No account, no tracking.</li>
+            </ul>
+            <h3>Known limits</h3>
+            <ul>
+              <li>Apple silicon only. Intel Macs can build from source.</li>
+              <li>
+                Not notarised by Apple yet, hence the first-open step above.
+              </li>
+              <li>
+                Hinglish recognition is still weak; it's the next thing being
+                improved.
+              </li>
+            </ul>
+            <p>
+              Lipik is built on
+              <a href="https://github.com/cjpais/Handy">Handy</a> by CJ Pais
+              (MIT).
+            </p>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <g stroke="currentColor" stroke-linecap="round" fill="none">
+              <path d="M3 5.4h18" stroke-width="2.6" />
+              <path
+                d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+                stroke-width="2.3"
+              />
+            </g>
+          </svg>
+          <span>Lipik</span>
+        </a>
+        <p>
+          Free and open source under the MIT licence. Built on
+          <a href="https://github.com/cjpais/Handy">Handy</a> by CJ Pais.
+          <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      const nav = document.getElementById("nav");
+      const onScroll = () =>
+        nav.classList.toggle("is-scrolled", window.scrollY > 8);
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    </script>
+
+    <script>
+      // Newer releases appear here without a site change; the notes above stay if GitHub can't be reached.
+      (async () => {
+        try {
+          const r = await fetch(
+            "https://api.github.com/repos/Gourav2609/lipik/releases?per_page=20",
+            {
+              headers: { Accept: "application/vnd.github.html+json" },
+            },
+          );
+          if (!r.ok) return;
+          const releases = (await r.json()).filter((x) => !x.draft);
+          if (!releases.length) return;
+          const fmt = new Intl.DateTimeFormat("en-GB", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+          const list = document.getElementById("releases");
+          list.replaceChildren(
+            ...releases.map((x) => {
+              const a = document.createElement("article");
+              a.className = "rel";
+              a.id = x.tag_name;
+              const h = document.createElement("header");
+              h.className = "rel-head";
+              const t = document.createElement("h2");
+              t.textContent = x.name || x.tag_name;
+              const m = document.createElement("p");
+              m.className = "rel-meta";
+              const d = document.createElement("time");
+              d.textContent = fmt.format(new Date(x.published_at));
+              const g = document.createElement("a");
+              g.href = x.html_url;
+              g.textContent = "On GitHub";
+              m.append(d, " ", g);
+              h.append(t, m);
+              const b = document.createElement("div");
+              b.className = "rel-body";
+              b.innerHTML = x.body_html || "";
+              a.append(h, b);
+              return a;
+            }),
+          );
+        } catch {}
+      })();
+    </script>
+  </body>
+</html>
