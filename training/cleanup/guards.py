@@ -311,8 +311,9 @@ def new_script(transcript, reply):
 CORRECTION_CUES = re.compile(r"(?i)\b(no|actually|i mean|scratch that|sorry|wait|nahi|meant)\b")
 
 
-def check(transcript, reply, vocab=()):
-    """None when the reply may be pasted, else the reason (rules::Why)."""
+def check(transcript, reply, vocab=(), whole=None):
+    """None when the reply may be pasted, else the reason (rules::Why). For a part,
+    `whole` is the whole dictation: after a cue the part may drop 40% of its words."""
     if len(reply) > len(transcript) * TOO_LONG_TIMES + TOO_LONG_EXTRA:
         return "TooLong"
     if new_script(transcript, reply):
@@ -324,7 +325,7 @@ def check(transcript, reply, vocab=()):
         return "Added: " + " ".join(added)
     dropped = dropped_words(transcript, reply)
     if CORRECTION_CUES.search(transcript):
-        limit = max(len(words(transcript)) * CUE_MAX_DROPPED_SHARE, CUE_MIN_DROPPED)
+        limit = max(len(words(whole or transcript)) * CUE_MAX_DROPPED_SHARE, CUE_MIN_DROPPED)
     else:
         limit = MAX_DROPPED_WORDS
     if len(dropped) > limit:
@@ -603,12 +604,12 @@ def strip_wrapping(out):
     return out
 
 
-def accept(transcript, reply, rules_text, vocab=()):
+def accept(transcript, reply, rules_text, vocab=(), whole=None):
     """(text to paste, why) for a model reply."""
     reply = strip_wrapping(reply)
     if not reply:
         return rules_text, "rejected: empty"
-    why = check(transcript, reply, vocab)
+    why = check(transcript, reply, vocab, whole)
     if why:
         return rules_text, "rejected: " + why
     return (reply if reply.endswith((".", "!", "?")) else question_end(reply)), "cleaned"
@@ -654,6 +655,9 @@ GATE_RUN_ON_WORDS = 20
 # (fillers, repeats, numbers, spelled letters, dictionary near misses) sends only the
 # comma-separated pieces around them.
 NARROW_MIN_WORDS = 16
+# A sentence this short that starts with a cue ("Scratch that.", "No wait.") also
+# brings the sentence after it, which says what replaces the wrong part.
+CUE_ALONE_WORDS = 3
 WHOLE_SHARE = 0.7
 
 
@@ -772,6 +776,8 @@ def model_parts(text, vocab=()):
     sents = [(m.start(), m.end()) for m in GATE_SENTENCE.finditer(text) if m[0].strip()]
     parts = []
     for k, (a, b) in enumerate(sents):
+        if parts and b <= parts[-1][1]:
+            continue
         s = text[a:b]
         lead = len(s) - len(s.lstrip())
         a, s = a + lead, s.strip()
@@ -790,8 +796,11 @@ def model_parts(text, vocab=()):
                     y = x + len(piece.strip())
                     parts.append((a + x, a + y, reasons, not (x == 0 and y == len(s))))
                 continue
-        if any(h[2] == "correction" for h in hits) and GATE_OPENING_CUE.match(s) and k:
-            a = sents[k - 1][0] + len(text[sents[k - 1][0]:sents[k - 1][1]]) - len(text[sents[k - 1][0]:sents[k - 1][1]].lstrip())
+        if any(h[2] == "correction" for h in hits) and GATE_OPENING_CUE.match(s):
+            if k:
+                a = sents[k - 1][0] + len(text[sents[k - 1][0]:sents[k - 1][1]]) - len(text[sents[k - 1][0]:sents[k - 1][1]].lstrip())
+            if len(s.split()) <= CUE_ALONE_WORDS and k + 1 < len(sents):
+                b = sents[k + 1][0] + len(text[sents[k + 1][0]:sents[k + 1][1]].rstrip())
         if parts and (a < parts[-1][1] or (not parts[-1][3] and a <= parts[-1][1] + 1
                                              and "\n" not in text[parts[-1][1]:a])):
             pa, _, pr, _ = parts.pop()
@@ -850,10 +859,10 @@ def clean_up_parts(raw, vocab, call, whole_share=WHOLE_SHARE):
             cleaned, why = core, "no reply"
         elif fragment:
             reply = fit_fragment(core, reply)
-            why = check(core, reply, vocab)
+            why = check(core, reply, vocab, transcript)
             cleaned, why = (core, "rejected: " + why) if why else (reply, "cleaned")
         else:
-            cleaned, why = accept(core, reply, core, vocab)
+            cleaned, why = accept(core, reply, core, vocab, transcript)
         verdicts.append(why.split(":")[0] + (" (piece)" if fragment else ""))
         out.append(rules_text[pos:a] + cleaned)
         pos = b
@@ -884,6 +893,8 @@ def _test():
         expect("dropped_words", dropped_words(t, r), want, t)
     for t, r, want in EXAMPLES["check"]:
         expect("check", (check(t, r, vocab) or "ok").split(":")[0], want, (t, r))
+    for t, r, whole, want in EXAMPLES["check_part"]:
+        expect("check part", (check(t, r, vocab, whole) or "ok").split(":")[0], want, (t, r))
     for t, want in EXAMPLES["apply"]:
         expect("apply", apply(t, vocab), want, t)
     for t, want in EXAMPLES["fillers"]:

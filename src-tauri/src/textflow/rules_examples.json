@@ -875,6 +875,38 @@
      false
     ]
    ]
+  ],
+  [
+   "Let's order 20 units. Scratch that. Let's order 50 units. Thanks for the help, I owe you one.",
+   [
+    [
+     "Let's order 20 units. Scratch that. Let's order 50 units.",
+     false
+    ]
+   ]
+  ],
+  [
+   "Add Quorvia to the list. No wait. Add Brightlane to the list. The rest of the plan stays the same for now.",
+   [
+    [
+     "Add Quorvia to the list. No wait. Add Brightlane to the list.",
+     false
+    ]
+   ]
+  ]
+ ],
+ "check_part": [
+  [
+   "Also add Ishita Venkatraman to the preview list. Scratch that. Add Oshin Dastur to it.",
+   "Add Oshin Dastur to it.",
+   "Also add Ishita Venkatraman to the preview list. Scratch that. Add Oshin Dastur to it.",
+   "Dropped"
+  ],
+  [
+   "Also add Ishita Venkatraman to the preview list. Scratch that. Add Oshin Dastur to it.",
+   "Add Oshin Dastur to it.",
+   "Can you move the launch email to Tuesday? The landing page will not be ready on Monday because the copy is still being reviewed. Also add Ishita Venkatraman to the preview list. Scratch that. Add Oshin Dastur to it. Thanks for handling this.",
+   "ok"
   ]
  ]
 }

@@ -365,8 +365,10 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
     for part in &parts {
         let core = &rules_text[part.start..part.end];
         let cleaned = match ask(core.to_string()).await {
-            Ok(reply) if part.fragment => accept_fragment(core, &reply, &relevant),
-            Ok(reply) => accept(core, &reply, core, &relevant),
+            Ok(reply) if part.fragment => {
+                accept_fragment(core, &reply, &prepared.masked, &relevant)
+            }
+            Ok(reply) => accept_part(core, &reply, &prepared.masked, &relevant),
             Err(e) => {
                 log::warn!("Clean-up kept the rules text for a part: {e}");
                 core.to_string()
@@ -405,14 +407,31 @@ fn reply_token_limit(text: &str) -> u32 {
     ((text.chars().count() as f64 * 1.5 + 40.0) / 3.0) as u32 + 16
 }
 
+/// A part's reply when it passes the checks (against the part, with the
+/// correction allowance of the `whole` dictation), otherwise the part.
+fn accept_part(core: &str, reply: &str, whole: &str, vocabulary: &[String]) -> String {
+    let reply = strip_wrapping(reply);
+    if reply.is_empty() {
+        return core.to_string();
+    }
+    match rules::check_part(core, reply, vocabulary, whole) {
+        Ok(()) if reply.ends_with(['.', '!', '?']) => reply.to_string(),
+        Ok(()) => rules::question_end(reply),
+        Err(why) => {
+            log::warn!("Clean-up reply for a part rejected: {why:?}");
+            core.to_string()
+        }
+    }
+}
+
 /// A piece from inside a sentence: the reply fitted back between the words
 /// around it when it passes the checks, otherwise the piece unchanged.
-fn accept_fragment(core: &str, reply: &str, vocabulary: &[String]) -> String {
+fn accept_fragment(core: &str, reply: &str, whole: &str, vocabulary: &[String]) -> String {
     let reply = gate::fit_fragment(core, strip_wrapping(reply));
     if reply.is_empty() {
         return core.to_string();
     }
-    match rules::check(core, &reply, vocabulary) {
+    match rules::check_part(core, &reply, vocabulary, whole) {
         Ok(()) => reply,
         Err(why) => {
             log::warn!("Clean-up reply for a piece rejected: {why:?}");

@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: cloudflare/wrangler-action@v3
         with:
+          wranglerVersion: "4.148.0"
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: a06da786110cccdae4442e552b7b07c7
           workingDirectory: website

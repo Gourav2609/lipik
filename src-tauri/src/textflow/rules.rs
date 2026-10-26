@@ -407,6 +407,14 @@ pub enum Why {
 /// transcript the model was asked to clean (after dictionary replacements
 /// and snippets, before the rules step).
 pub fn check(transcript: &str, reply: &str, vocab: &[String]) -> Result<(), Why> {
+    check_part(transcript, reply, vocab, transcript)
+}
+
+/// `check` for one part of a dictation: after a correction cue the part may
+/// drop up to 40% of the words of the `whole` dictation, as a reply for the
+/// whole text could ("Add Priya. Scratch that. Add Kabir." drops most of
+/// its own words).
+pub fn check_part(transcript: &str, reply: &str, vocab: &[String], whole: &str) -> Result<(), Why> {
     if too_long(reply, transcript) {
         return Err(Why::TooLong);
     }
@@ -422,7 +430,7 @@ pub fn check(transcript: &str, reply: &str, vocab: &[String]) -> Result<(), Why>
     }
     let dropped = dropped_words(transcript, reply).len();
     let limit = if CORRECTION_CUES.is_match(transcript) {
-        (words(transcript).len() as f64 * CUE_MAX_DROPPED_SHARE).max(CUE_MIN_DROPPED as f64)
+        (words(whole).len() as f64 * CUE_MAX_DROPPED_SHARE).max(CUE_MIN_DROPPED as f64)
     } else {
         MAX_DROPPED_WORDS as f64
     };
@@ -914,6 +922,19 @@ pub(super) mod tests {
                 Err(Why::Dropped(_)) => "Dropped",
             };
             assert_eq!(got, text(&e[2]), "{:?} -> {:?}", e[0], e[1]);
+        }
+    }
+
+    #[test]
+    fn check_part_examples() {
+        for e in examples("check_part") {
+            let got = check_part(text(&e[0]), text(&e[1]), &vocab(), text(&e[2]));
+            let got = match got {
+                Ok(()) => "ok",
+                Err(Why::Dropped(_)) => "Dropped",
+                Err(why) => panic!("{why:?}"),
+            };
+            assert_eq!(got, text(&e[3]), "{:?} -> {:?}", e[0], e[1]);
         }
     }
 

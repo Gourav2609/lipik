@@ -17,6 +17,10 @@ const RUN_ON_WORDS: usize = 20;
 /// A longer sentence whose only problems are single words or short phrases
 /// sends just the comma-separated pieces around them.
 const NARROW_MIN_WORDS: usize = 16;
+/// A sentence this short that starts with a cue ("Scratch that.", "No
+/// wait.") also brings the sentence after it, which says what replaces the
+/// wrong part.
+const CUE_ALONE_WORDS: usize = 3;
 /// When the parts make up this share of the words, the whole text goes in one
 /// request, as before the gate.
 pub const WHOLE_SHARE: f64 = 0.7;
@@ -269,7 +273,8 @@ fn trimmed(text: &str, start: usize, end: usize) -> (usize, usize) {
 /// The parts of `text` (rules text) the model should clean, in order; empty
 /// when nothing needs it. A list sends the whole text. A sentence that
 /// starts with a correction ("Actually no, ...") brings the sentence before
-/// it. Neighbouring sentences go together.
+/// it, and when it is only the cue ("Scratch that.") the one after it too.
+/// Neighbouring sentences go together.
 pub fn parts(text: &str, vocab: &[String]) -> Vec<Part> {
     if LIST.is_match(text) {
         return vec![Part {
@@ -286,6 +291,9 @@ pub fn parts(text: &str, vocab: &[String]) -> Vec<Part> {
         .collect();
     let mut parts: Vec<Part> = Vec::new();
     for (k, &(a, b)) in sentences.iter().enumerate() {
+        if parts.last().is_some_and(|p| b <= p.end) {
+            continue;
+        }
         let s = &text[a..b];
         let hits = hits(s, vocab);
         if hits.is_empty() {
@@ -316,9 +324,14 @@ pub fn parts(text: &str, vocab: &[String]) -> Vec<Part> {
                 continue;
             }
         }
-        let mut start = a;
-        if reasons.contains(&Reason::Correction) && OPENING_CUE.is_match(s) && k > 0 {
-            start = sentences[k - 1].0;
+        let (mut start, mut end) = (a, b);
+        if reasons.contains(&Reason::Correction) && OPENING_CUE.is_match(s) {
+            if k > 0 {
+                start = sentences[k - 1].0;
+            }
+            if words <= CUE_ALONE_WORDS && k + 1 < sentences.len() {
+                end = sentences[k + 1].1;
+            }
         }
         let joins = parts.last().is_some_and(|p| {
             start < p.end
@@ -330,14 +343,14 @@ pub fn parts(text: &str, vocab: &[String]) -> Vec<Part> {
             all.extend(reasons.into_iter().filter(|r| !all.contains(r)).collect::<Vec<_>>());
             parts.push(Part {
                 start: prev.start.min(start),
-                end: b,
+                end,
                 fragment: false,
                 reasons: all,
             });
         } else {
             parts.push(Part {
                 start,
-                end: b,
+                end,
                 fragment: false,
                 reasons,
             });
