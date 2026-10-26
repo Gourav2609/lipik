@@ -493,9 +493,11 @@ fn too_long(reply: &str, transcript: &str) -> bool {
         > transcript.chars().count() as f64 * TOO_LONG_TIMES + TOO_LONG_EXTRA as f64
 }
 
-static CORRECTION_CUES: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(no|actually|i mean|scratch that|sorry|wait|nahi|meant)\b").unwrap()
-});
+/// Words a speaker uses to take something back. Shared with the gate.
+pub(super) const CORRECTION_CUE_WORDS: &str =
+    "no|nope|sorry|actually|wait|i mean|i meant|meant|scratch that|nahi|rather|make that";
+static CORRECTION_CUES: Lazy<Regex> =
+    Lazy::new(|| Regex::new(&format!(r"(?i)\b({CORRECTION_CUE_WORDS})\b")).unwrap());
 
 /// Why a model reply was rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

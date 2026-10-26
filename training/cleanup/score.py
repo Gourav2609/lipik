@@ -135,7 +135,7 @@ def tokens(text):
 
 def all_cases():
     cs = {c["id"]: c for c in json.loads((HERE / "cases.json").read_text())}
-    for c in json.loads((HERE / "holdout.json").read_text()):
+    for c in json.loads((HERE / "holdout.json").read_text()) + json.loads((HERE / "long.json").read_text()):
         cs[c["id"]] = c
         CHECKS[c["id"]] = ([("missing " + p, "has", p) for p in c["has"]] +
                            [("left in " + p, "not", p) for p in c["not"]])
@@ -192,9 +192,9 @@ def score(tag, dump=False):
     for r in rows:
         case = cases[r["id"]]
         model_out = r["model_out"] if (r["latency_ms"] or 0) <= 4000 else None
-        best, best_why = clean_up(r["raw"], model_out, vocab)
+        best, best_why = (r["final"], r["final_why"]) if "final" in r else clean_up(r["raw"], model_out, vocab)
         best_all, best_all_why = clean_up(r["raw"], model_out, vocab, min_words=0)
-        outs = {"raw": r["raw"], "app": r["app_final"], "model": r["model_out"] or r["raw"],
+        outs = {"raw": r["raw"], "app": r["app_final"] if r.get("app_final") is not None else r["raw"], "model": r["model_out"] or r["raw"],
                 "rules": apply(fillers(r["raw"]), vocab), "best": best, "best_all": best_all}
         res = {"clip": r["clip"], "id": r["id"], "category": case["category"], "target": case["app"],
                "expected": case["expected"], "path": r["app_path"], "latency_ms": r["latency_ms"],
@@ -231,7 +231,7 @@ def score(tag, dump=False):
 
 def table(tag, cats, outputs=("raw", "app", "model", "rules", "best", "best_all")):
     order = ["filler", "correction", "spoken_punct", "numbers", "email_url", "list", "vocab", "tech",
-             "question", "run_on", "hinglish", "ENGLISH", "ALL"]
+             "question", "run_on", "long", "hinglish", "ENGLISH", "ALL"]
     print(f"\n### {tag}\n")
     print("| Category | Clips | " + " | ".join(f"Pass: {o}" for o in outputs) + " | WER raw | WER best |")
     print("|---|---|" + "---|" * len(outputs) + "---|---|")
@@ -277,7 +277,7 @@ def latency(tag):
 def compare(cur, new):
     """Raw / Lipik today (the app column of `cur`) / the new setup (best column of `new`)."""
     order = ["filler", "correction", "spoken_punct", "numbers", "email_url", "list", "vocab", "tech",
-             "question", "run_on", "hinglish", "ENGLISH", "ALL"]
+             "question", "run_on", "long", "hinglish", "ENGLISH", "ALL"]
     c, _ = score(cur)
     n, _ = score(new)
     pc = lambda t: f"{t[0]}/{t[1]} ({100 * t[0] / t[1]:.0f}%)"  # noqa: E731

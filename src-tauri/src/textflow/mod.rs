@@ -64,11 +64,10 @@ pub fn on_recording_start(app: &AppHandle) {
     let wake = uses_llm(app);
     let app = app.clone();
     std::thread::spawn(move || {
-        // The warm-up names the app, so the app is read first.
-        context::capture_for_recording();
         if wake {
             llm::warm_up(&app);
         }
+        context::capture_for_recording();
         menu::emit_pill_mic(&app);
     });
 }

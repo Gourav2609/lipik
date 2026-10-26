@@ -308,7 +308,8 @@ def new_script(transcript, reply):
     return bool(_scripts(reply) - _scripts(transcript))
 
 
-CORRECTION_CUES = re.compile(r"(?i)\b(no|actually|i mean|scratch that|sorry|wait|nahi|meant)\b")
+CORRECTION_CUE_WORDS = re.search(r'const CORRECTION_CUE_WORDS: &str =\s*"([^"]+)"', RULES_RS)[1]
+CORRECTION_CUES = re.compile(rf"(?i)\b({CORRECTION_CUE_WORDS})\b")
 
 
 def check(transcript, reply, vocab=(), whole=None):
@@ -636,8 +637,8 @@ def model_input(raw, vocab=()):
 
 # ---------- which parts need the model (gate.rs) ----------
 
-GATE_CUE = re.compile(r"(?i)\b(no|nope|sorry|actually|wait|i mean|i meant|meant|scratch that|nahi|rather|make that)\b")
-GATE_OPENING_CUE = re.compile(r"(?i)^\W*(no|nope|sorry|actually|wait|i mean|i meant|scratch that|nahi|rather|make that)\b")
+GATE_CUE = CORRECTION_CUES
+GATE_OPENING_CUE = re.compile(rf"(?i)^\W*((oh|okay|ok|well|hmm+|uh+|um+|and|but|so)\W+)?({CORRECTION_CUE_WORDS})\b")
 GATE_YOU_KNOW = re.compile(r"(?i)(\b(do|did|don't|does|would|if)\s+)?\byou know\b")
 GATE_LIKE = re.compile(r"(?i)(^|[,;]\s*|\b(is|was|were|are|be|been|it's|that's|he's|she's|they're|we're|i'm)\s+)like\b|\blike\s*,|\blike\s+(really|so|super|totally|literally|around|about|maybe|just|kind|honestly)\b")
 GATE_FILLER = re.compile(r"(?i)\b(hum|hmm+|uh+|um+|erm)\b")
@@ -647,7 +648,6 @@ GATE_SPOKEN_MARK = re.compile(r"(?i)\b(comma|period|full stop|question mark|excl
 GATE_UNIT = re.compile(r"(?i)^(percent|per|dollars?|bucks|rupees?|lakhs?|crores?|hundred|thousand|million|billion|pm|am|o'clock)$")
 GATE_TIME_WORD = re.compile(r"(?i)^(at|by|around|till|until|from)$")
 GATE_LATE_QUESTION = re.compile(r"(?i),\s*(can|could|would|will|do|did)\s+(you|we|someone|anyone)\b")
-GATE_SENTENCE = re.compile(r"[^.?!\n]+(?:[.?!]+|$)")
 GATE_TOKEN = re.compile(r"[^\W_]+(?:['’][^\W_]+)*")
 GATE_CHUNK = re.compile(r"[^,;:]+")
 GATE_RUN_ON_WORDS = 20
@@ -659,6 +659,28 @@ NARROW_MIN_WORDS = 16
 # brings the sentence after it, which says what replaces the wrong part.
 CUE_ALONE_WORDS = 3
 WHOLE_SHARE = 0.7
+
+
+def _sentences(text):
+    """(start, end) of each sentence: up to ".", "?" or "!" followed by a space or the end
+    ("2.5" and "docs.google.com" go on), or up to a line break."""
+    out, start, i, n = [], 0, 0, len(text)
+    while i < n:
+        if text[i] == "\n":
+            out.append((start, i))
+            start = i = i + 1
+        elif text[i] in ".?!":
+            j = i
+            while j < n and text[j] in ".?!":
+                j += 1
+            if j == n or text[j].isspace():
+                out.append((start, j))
+                start = j
+            i = j
+        else:
+            i += 1
+    out.append((start, n))
+    return out
 
 
 def _tokens(text):
@@ -754,7 +776,7 @@ def _windows(sentence, hits):
     """(start, end) of the comma-separated pieces around each hit, one piece either side."""
     chunks = [(m.start(), m.end()) for m in GATE_CHUNK.finditer(sentence) if m[0].strip()]
     out = []
-    for a, b, _ in hits:
+    for a, b, _ in sorted(hits):
         i = next(k for k, (s, e) in enumerate(chunks) if a < e)
         j = next((k for k, (s, e) in enumerate(chunks) if b <= e), len(chunks) - 1)
         lo, hi = chunks[max(0, i - 1)][0], chunks[min(len(chunks) - 1, j + 1)][1]
@@ -773,7 +795,7 @@ def model_parts(text, vocab=()):
     end mark."""
     if GATE_LIST.search(text) or GATE_FIRST_SECOND.search(text):
         return [(0, len(text), "list", False)]
-    sents = [(m.start(), m.end()) for m in GATE_SENTENCE.finditer(text) if m[0].strip()]
+    sents = [(a, b) for a, b in _sentences(text) if text[a:b].strip()]
     parts = []
     for k, (a, b) in enumerate(sents):
         if parts and b <= parts[-1][1]:
@@ -801,12 +823,12 @@ def model_parts(text, vocab=()):
                 a = sents[k - 1][0] + len(text[sents[k - 1][0]:sents[k - 1][1]]) - len(text[sents[k - 1][0]:sents[k - 1][1]].lstrip())
             if len(s.split()) <= CUE_ALONE_WORDS and k + 1 < len(sents):
                 b = sents[k + 1][0] + len(text[sents[k + 1][0]:sents[k + 1][1]].rstrip())
-        if parts and (a < parts[-1][1] or (not parts[-1][3] and a <= parts[-1][1] + 1
-                                             and "\n" not in text[parts[-1][1]:a])):
+        while parts and (a < parts[-1][1] or (not parts[-1][3] and a <= parts[-1][1] + 1
+                                                and "\n" not in text[parts[-1][1]:a])):
             pa, _, pr, _ = parts.pop()
-            parts.append((min(pa, a), b, "+".join(dict.fromkeys(pr.split("+") + reasons.split("+"))), False))
-        else:
-            parts.append((a, b, reasons, False))
+            a = min(pa, a)
+            reasons = "+".join(dict.fromkeys(pr.split("+") + reasons.split("+")))
+        parts.append((a, b, reasons, False))
     return parts
 
 
@@ -821,11 +843,14 @@ def end_mark(text):
 
 
 def fit_fragment(core, reply):
-    """A piece from inside a sentence keeps its first letter's case and gets no end mark."""
-    if core[:1].islower() and reply[:1] == core[:1].upper():
-        reply = reply[:1].lower() + reply[1:]
+    """A piece from inside a sentence starts in lowercase when the piece did (unless the
+    reply starts with a name or "I") and gets no end mark or trailing comma when the piece
+    had no end mark (gate.rs)."""
+    first = re.sub(r"^[^\w']+|[^\w']+$", "", (reply.split() or [""])[0]).lower()
+    if core[:1].islower() and first != "i" and first in COMMON_WORDS and reply:
+        reply = reply[0].lower() + reply[1:]
     if not core.endswith((".", "!", "?")):
-        reply = reply.rstrip(".!?")
+        reply = reply.rstrip(".!?,;")
     return reply
 
 
@@ -863,6 +888,8 @@ def clean_up_parts(raw, vocab, call, whole_share=WHOLE_SHARE):
             cleaned, why = (core, "rejected: " + why) if why else (reply, "cleaned")
         else:
             cleaned, why = accept(core, reply, core, vocab, transcript)
+            if not cleaned.endswith((".", "!", "?")):
+                cleaned += core[len(core.rstrip(".!?")):]
         verdicts.append(why.split(":")[0] + (" (piece)" if fragment else ""))
         out.append(rules_text[pos:a] + cleaned)
         pos = b
@@ -901,6 +928,8 @@ def _test():
         expect("fillers + apply", apply(fillers(t), vocab), want, t)
     for t, want in EXAMPLES["parts"]:
         expect("model_parts", [[t[a:b], f] for a, b, _, f in model_parts(t, vocab)], want, t)
+    for core, r, want in EXAMPLES["fit_fragment"]:
+        expect("fit_fragment", fit_fragment(core, r), want, (core, r))
     for t, r, want in EXAMPLES["paste"]:
         expect("accept", accept(t, r, apply(t, vocab), vocab)[0], want, (t, r))
     print(f"{n - bad}/{n} examples pass")

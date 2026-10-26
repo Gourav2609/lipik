@@ -140,14 +140,23 @@ pub async fn chat_messages(
             .json()
             .await
             .map_err(|e| format!("Bad Ollama response: {e}"))?;
-        value["message"]["content"]
-            .as_str()
-            .map(|s| strip_think(s).trim().to_string())
-            .ok_or_else(|| "Ollama response had no message".to_string())
+        reply_text(&value, max_tokens.is_some())
     };
     tokio::time::timeout(timeout, request)
         .await
         .map_err(|_| format!("Ollama took longer than {timeout:?}"))?
+}
+
+/// The reply in an Ollama chat response. With a length cap, a reply that
+/// stopped at the cap is cut off and is an error.
+fn reply_text(value: &serde_json::Value, capped: bool) -> Result<String, String> {
+    if capped && value["done_reason"] == "length" {
+        return Err("Ollama reply stopped at the length cap".to_string());
+    }
+    value["message"]["content"]
+        .as_str()
+        .map(|s| strip_think(s).trim().to_string())
+        .ok_or_else(|| "Ollama response had no message".to_string())
 }
 
 /// The context size the model is loaded with, or `None` when it is not
@@ -198,4 +207,18 @@ pub fn warm_up(app: &AppHandle) {
             .send()
             .await;
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A reply cut off at the length cap is unfinished text, not a reply.
+    #[test]
+    fn reply_cut_at_the_cap_is_an_error() {
+        let done = json!({ "message": { "content": "Hi there." }, "done_reason": "stop" });
+        assert_eq!(reply_text(&done, true), Ok("Hi there.".to_string()));
+        let cut = json!({ "message": { "content": "Hi th" }, "done_reason": "length" });
+        assert!(reply_text(&cut, true).is_err());
+    }
 }

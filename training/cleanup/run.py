@@ -28,7 +28,8 @@ import time
 import urllib.request
 from pathlib import Path
 
-from guards import PIPELINE_RS, PROMPT_FILE, _strings, fillers, model_input, relevant_vocabulary, strip_wrapping
+from guards import (PIPELINE_RS, PROMPT_FILE, _strings, clean_up_parts, fillers, model_input, relevant_vocabulary,
+                    strip_wrapping)
 
 HERE = Path(__file__).parent
 REPO = HERE.parent.parent
@@ -53,8 +54,13 @@ def cases():
     return {c["id"]: c for c in json.loads((HERE / CASES_FILE).read_text())}
 
 
+def suffix():
+    """"" for cases.json, "-long" for long.json: other case files get their own clip and ASR lists."""
+    return "" if CASES_FILE == "cases.json" else "-" + Path(CASES_FILE).stem
+
+
 def clips():
-    return json.loads((AUDIO / "clips.json").read_text())
+    return json.loads((AUDIO / f"clips{suffix()}.json").read_text())
 
 
 # ---------- audio ----------
@@ -73,7 +79,7 @@ def make_audio(_args):
                                 "-c:a", "pcm_s16le", str(wav)], check=True)
                 aiff.unlink()
             out.append({"clip": wav.name, "id": c["id"], "voice": voice})
-    (AUDIO / "clips.json").write_text(json.dumps(out, indent=1) + "\n")
+    (AUDIO / f"clips{suffix()}.json").write_text(json.dumps(out, indent=1) + "\n")
     print(len(out), "clips")
 
 
@@ -87,7 +93,7 @@ def run_asr(args):
     store["settings"]["custom_words"] = json.loads((HERE / "vocab.json").read_text())
     settings_path.write_text(json.dumps(store, indent=2))
     RUNS.mkdir(exist_ok=True)
-    out = RUNS / f"asr-{args.asr}.jsonl"
+    out = RUNS / f"asr-{args.asr}{suffix()}.jsonl"
     done = {json.loads(l)["clip"] for l in out.read_text().splitlines()} if out.exists() else set()
     todo = [c for c in clips() if c["clip"] not in done][: args.limit or None]
     with out.open("a") as f:
@@ -170,16 +176,25 @@ def too_long(output, inp, times=1.5, extra=40):
     return len(output) > len(inp) * times + extra
 
 
-def chat(url, model, messages, context, think):
+def chat(url, model, messages, context, think, num_predict=None):
+    options = {"temperature": 0.2, "num_ctx": context}
+    if num_predict:
+        options["num_predict"] = num_predict
     body = {"model": model, "stream": False, "keep_alive": KEEP_ALIVE,
-            "options": {"temperature": 0.2, "num_ctx": context},
-            "messages": messages}
+            "options": options, "messages": messages}
     if think is not None:
         body["think"] = think
     t = time.perf_counter()
     r = post(f"{url}/api/chat", body)
     ms = (time.perf_counter() - t) * 1000
     return strip_think(r["message"]["content"]).strip(), ms, r
+
+
+def num_predict(text):
+    """Room for a reply up to the longest the checks accept (1.5x + 40 characters): about
+    3 characters per token for English, a token per byte for other scripts (pipeline.rs)."""
+    size = len(text.encode())
+    return int((size * 1.5 + 40) / (3 if text.isascii() else 1)) + 16
 
 
 def warm_up(url, model, messages, think, context):
@@ -197,7 +212,7 @@ def run_cleanup(args):
         asr = {f"{c['id']}_text": {"text": c["spoken"]} for c in cs.values()}
         clip_list = [{"clip": k, "id": k[:-5], "voice": "text"} for k in asr]
     else:
-        asr = {json.loads(l)["clip"]: json.loads(l) for l in (RUNS / f"asr-{args.asr}.jsonl").read_text().splitlines()}
+        asr = {json.loads(l)["clip"]: json.loads(l) for l in (RUNS / f"asr-{args.asr}{suffix()}.jsonl").read_text().splitlines()}
         clip_list = clips()
     full_vocab = json.loads((HERE / VOCAB_FILE).read_text())
     out = RUNS / f"cleanup-{args.tag}.jsonl"
@@ -217,6 +232,7 @@ def run_cleanup(args):
     first = asr[todo[0]["clip"]]["text"]
     chat(args.url, args.model, build_messages(cs[todo[0]["id"]]["app"], first, args.prompt_file, no_vocab),
          context, think)
+    whole_f = (RUNS / f"cleanup-{args.tag}-whole.jsonl").open("a") if args.pair else None
     with out.open("a") as f:
         for c in todo:
             case = cs[c["id"]]
@@ -227,11 +243,45 @@ def run_cleanup(args):
             row = {"clip": c["clip"], "id": c["id"], "voice": c["voice"], "raw": raw,
                    "model": args.model, "prompt": args.prompt_file or "app", "num_ctx": context,
                    "model_in": model_in, "vocab_sent": vocab}
-            try:
+            if args.pair:
+                # Today's app: its warm-up (app "Notes", no dictionary), then the whole text.
+                warm_up(args.url, args.model, build_messages("Notes", "ok", args.prompt_file, no_vocab), think, context)
                 content, ms, r = chat(args.url, args.model, messages, context, think)
+                whole_f.write(json.dumps(dict(row, model_out=strip_wrapping(content), latency_ms=round(ms),
+                                              out_tokens=r.get("eval_count"), app_final=None, app_path="whole"),
+                                         ensure_ascii=False) + "\n")
+                whole_f.flush()
+                # The gated app: its warm-up names the app and sends the dictionary.
+                warm_up(args.url, args.model, build_messages(case["app"], "ok", args.prompt_file, vocab), think, context)
+            if args.parts:
+                calls = []
+
+                def call(text):
+                    content, ms, r = chat(args.url, args.model, build_messages(case["app"], text, args.prompt_file, vocab),
+                                          context, think, num_predict(text) if args.num_predict else None)
+                    calls.append({"in": text, "out": strip_wrapping(content), "ms": round(ms),
+                                  "out_tokens": r.get("eval_count"), "prompt_ms": round(r.get("prompt_eval_duration", 0) / 1e6)})
+                    if ms > CLEANUP_TIMEOUT_S * 1000 or r.get("done_reason") == "length":
+                        return None
+                    return strip_wrapping(content)
+
+                final, why, _ = clean_up_parts(raw, full_vocab, call, args.whole_share)
+                row.update(final=final, final_why=why, calls=calls, model_out=None,
+                           latency_ms=sum(x["ms"] for x in calls), app_final=final, app_path=why)
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                f.flush()
+                print(f"{c['clip']:<16} {row['latency_ms']} ms {len(calls)} calls | {why} | {final!r}")
+                continue
+            try:
+                content, ms, r = chat(args.url, args.model, messages, context, think,
+                                      num_predict(model_in) if args.num_predict else None)
                 model_out = strip_wrapping(content)
+                ns = lambda k: round(r.get(k, 0) / 1e6)  # noqa: E731
                 row.update(model_out=model_out, latency_ms=round(ms),
-                           prompt_tokens=r.get("prompt_eval_count"), out_tokens=r.get("eval_count"))
+                           prompt_tokens=r.get("prompt_eval_count"), out_tokens=r.get("eval_count"),
+                           load_ms=ns("load_duration"), prompt_ms=ns("prompt_eval_duration"),
+                           eval_ms=ns("eval_duration"), think_seen="<think>" in r["message"]["content"]
+                           or bool(r["message"].get("thinking")))
             except Exception as e:  # noqa: BLE001
                 model_out, ms = None, None
                 row.update(model_out=None, latency_ms=None, error=str(e))
@@ -277,6 +327,12 @@ def main():
     p.add_argument("--prepass", action="store_true",
                    help="give the model the transcript after the filler and rules steps, as the app does")
     p.add_argument("--think", action="store_true")
+    p.add_argument("--parts", action="store_true", help="the gated path: model only on the sentences that need it")
+    p.add_argument("--whole-share", type=float, default=0.7, help="--parts: send the whole text when this share needs the model")
+    p.add_argument("--num-predict", action="store_true", help="cap the reply length to what the checks accept")
+    p.add_argument("--pair", action="store_true",
+                   help="with --parts: before each gated clip, run it the old way too (old warm-up, whole text, "
+                        "no cap) into runs/cleanup-<tag>-whole.jsonl, so both see the same machine load")
     p.add_argument("--num-ctx", type=int, default=4096, help="context size for few-shot prompts")
     p.add_argument("--tag", default="qwen3-8b-app")
     p.add_argument("--limit", type=int, default=0)

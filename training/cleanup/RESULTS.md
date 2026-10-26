@@ -585,3 +585,134 @@ python3 run.py cleanup --model qwen3:8b --vocab-in-prompt --prepass --input spok
 python3 run.py cleanup --model qwen3:8b --vocab-in-prompt --prepass --input spoken --cases holdout.json --vocab holdout_vocab.json --tag holdout-qwen3-8b-r3
 python3 score.py qwen3-8b-r3 text-qwen3-8b-r3 holdout-qwen3-8b-r3
 ```
+
+# Round 4: speed (call the model only where it is needed)
+
+Date: 2026-10-26. Lipik felt slow with clean-up on: speech to text takes
+about 0.1 s, but the app log showed the clean-up taking 0.9 s for 22 words,
+2.1 s for 64 words and 3.4 s for 91 words before the paste. Goal: paste
+within about 0.4 s for most dictations and keep a 90-word dictation near
+1.2 s, losing as little clean-up quality as possible. qwen3:8b, same prompt.
+
+## Where the time goes
+
+- The model writes the whole text back. On a quiet machine one call takes
+  about **157 ms + 30 ms per reply token** (fitted on 258 calls, median
+  error 112 ms), and a reply has about 1.2 tokens per word. So 90 words cost
+  about 3 s whatever the prompt.
+- The 1,580-token prompt is cached: a repeated request reads its prompt in
+  28 ms. A new dictation reads only the last message (app, dictionary,
+  words): about 200 ms when the warm-up before it named the same app and
+  sent the dictionary, about 420 ms after the app's old warm-up (app
+  "Notes", no dictionary). Trimming the examples would save nothing.
+- `think: false` works: no call had thinking text, and reply tokens match
+  the words. `keep_alive` works: the model stayed loaded (load time 0-3 ms
+  on every call), at the warm-up's context size.
+- A reply-length cap (`num_predict` = the longest reply the checks accept)
+  never cut a real reply (the longest used 50% of it). It only stops a
+  reply that runs on.
+
+## New: long dictations
+
+`long.json`: 15 dictations of 53-99 words (status updates, emails, a
+Claude Code request, a list, corrections, fillers, a run-on, spoken
+punctuation), read by Rishi and Aman (`run.py audio/asr --cases long.json`)
+and as perfect text. Parakeet garbled 4 of the Aman clips with invented
+words ("Pier Chlois Thermal ...") and repeated half of 2 others; those
+clips are kept as they are.
+
+## Options measured
+
+English pass = what is pasted passes the checks. Wait = the model's time
+before the paste, on a quiet machine (measured in the morning, or the
+quiet-machine estimate above for runs made later while other programs used
+the GPU; both are given where they differ). Clips under 8 words never wait.
+
+| Setup                                                      | Real clips       | Perfect text | Held-out  | Long, real | Long, perfect | Wait, 8+ words: median / p90 | Over 50 words: median / p90 |
+| ---------------------------------------------------------- | ---------------- | ------------ | --------- | ---------- | ------------- | ---------------------------- | --------------------------- |
+| Before (whole text, qwen3:8b)                              | 88/106 (83%)     | 51/53        | 20/21     | 21/30      | 12/15         | 577 / 1027 ms                | 2422 / 3607 ms              |
+| 1. Skip the model when nothing needs it                    | 86/106           | 51/53        | 21/21     | 21/30      | 12/15         | 354 / 1000 ms                | 2142 / 3544 ms              |
+| 2. Reply cap                                               | no change        |              |           |            |               | no change                    | no change                   |
+| 3. qwen3:4b-instruct, whole text                           | 83/106 (78%)     | 49/53        | 20/21     | 18/30      | 10/15         | 398 / 795 ms                 | 1748 / 2557 ms              |
+| 3b. qwen3:4b-instruct + sentences only                     | 79/106           | 49/53        | 20/21     | 19/30      | 9/15          | 270 / 769 ms                 | 1159 / 1932 ms              |
+| **4. Chosen: skip, sentences/pieces only, cap (qwen3:8b)** | **86/106 (81%)** | **51/53**    | **21/21** | **22/30**  | **12/15**     | **427 / 997 ms**             | **1207 / 2407 ms**          |
+
+Option 1 alone helps short dictations but not long ones: 80-93% of long
+dictations have something somewhere for the model. Option 4 sends only the
+sentences that need it (and, in a long sentence whose only problem is a
+filler, repeat, number or dictionary word, only the comma pieces around
+it): on long dictations it sends 47% of the words. qwen3:4b-instruct is
+about 1.4x faster but loses 3-4 points on English and keeps more mistakes
+on long dictations (60% vs 70% whole text), so qwen3:8b stays the default.
+
+With the chosen setup, 58% of all clips paste within 0.4 s (19% before),
+and 41% of the clips of 8+ words skip the model entirely. On top of the table, the
+new warm-up (it names the app and sends the dictionary) saves about 0.2 s
+per dictation in the app; the benchmark sends its calls back to back, so
+the table does not show it.
+
+Measured side by side under load (each clip run the old way, with the old
+warm-up, then the new way, while other programs slowed the GPU 1.4-2x):
+8+ words median 762 -> 338 ms; long dictations went from 4 s (the time
+limit, so the old app would have pasted the rules text) to 2.0 s.
+
+## What it costs
+
+- 2 real clips: "Hey Rivaan you am just checking..." and "A hey Rivaan,
+  ..." (transcriber noise the model happened to remove; nothing in the text
+  says it needs the model).
+- A sentence the gate passes keeps the rules' punctuation: "Hey so
+  basically the trip is on" gets no comma after "Hey" when the sentence has
+  nothing else for the model.
+- Lists, run-on sentences (more than 20 words with no comma) and spoken
+  punctuation the rules leave ("period" in the middle) still need the whole
+  text: that is the p90 of 2.4 s for long dictations.
+- A correction sent as a part sees less of the text. A cue-only sentence
+  ("Scratch that.") brings the sentences before and after it, and the
+  dropped-words check allows 40% of the whole dictation, as before.
+
+What the gate looks for is in CONTRACT.md (Style, "Which parts need the
+model"); the Rust code is `src-tauri/src/textflow/gate.rs`, mirrored in
+`guards.py` (`model_parts`, `clean_up_parts`); both run the `parts` and
+`check_part` examples in `rules_examples.json`, and agree on all 251
+benchmark texts.
+
+```
+python3 run.py cleanup --vocab-in-prompt --prepass --parts --num-predict --pair --tag final8b
+python3 run.py cleanup --vocab-in-prompt --prepass --parts --num-predict --pair --cases long.json --tag long-final8c
+python3 gate_eval.py --estimate final8b-whole final8b long-final8c-whole long-final8c
+python3 gate_eval.py --summary final8b-whole-est final8b-est long-final8c-whole-est long-final8c-est
+```
+
+## Round 4b: review fixes
+
+An independent review found bugs in the gate, all fixed with a failing test
+first (commits 7c4f3af0..4ad81905): overlapping parts could panic the paste
+(a correction reaching back over a sentence split into pieces); a line
+ending at a line break without a mark was never checked; a dot inside a
+word ("docs.google.com", "2.5") split a sentence; the reply cap was too
+small for Devanagari and emoji, and a reply cut at the cap was pasted;
+"Oh wait, ...", "Okay, scratch that, ..." didn't bring the sentence they
+correct; hits were not sorted, so some pieces were dropped; a sentence's
+reply without an end mark ran into the next one; pieces put back
+mid-sentence kept a capital or doubled a comma; trailing spaces were
+trimmed from snippet text; the near-miss check took 0.6 s with a
+1,500-word dictionary (now about 12 ms); the warm-up waited for the window
+title; the gate and the checks had different correction words.
+
+Re-run (`--tag fix8`, paired with the old way; quiet-machine estimates,
+since other programs slowed the GPU 2-3x during the run):
+
+| Set                 | Before (whole text) | Round 4 | After the fixes | Wait, 8+ words median / p90: before / Round 4 / now |
+| ------------------- | ------------------- | ------- | --------------- | --------------------------------------------------- |
+| Real clips, English | 87/106              | 86/106  | 86/106          | 577 / 1027, 427 / 997, 442 / 1027 ms                |
+| Perfect text        | 51/53               | 51/53   | 51/53           | 577 / 907, 457 / 907, 457 / 907 ms                  |
+| Held-out            | 20/21               | 21/21   | 21/21           | 517 / 667, 0 / 667, 0 / 667 ms                      |
+| Long, real          | 22/30               | 22/30   | 22/30           | 2407 / 3607, 1270 / 2407, 1270 / 2407 ms            |
+| Long, perfect       | 12/15               | 12/15   | 12/15           | 2347 / 3217, 967 / 1987, 967 / 1987 ms              |
+
+("Before" is the paired old-way run of the same session.) The one real
+clip the gate still loses is the "you am" transcriber noise; the one long
+clip lost ("You know, without any delay, ...": the model kept "You know")
+is offset by one won. The model is now skipped on 41 of 102 real clips of
+8+ words (was 42): the line-break fix sends one more.

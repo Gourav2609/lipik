@@ -258,6 +258,21 @@
       "mujhe kal subah wali meeting ka agenda bhej do please",
       "मुझे कल सुबह वाली मीटिंग का एजेंडा भेज दो प्लीज़।",
       "NewScript"
+    ],
+    [
+      "Invite Rivaan and Meher to the launch review. Make that the whole product team.",
+      "Invite the whole product team to the launch review.",
+      "ok"
+    ],
+    [
+      "Send the deck to Rivaan and Meher today. Nope, send it to the whole product team.",
+      "Send the deck to the whole product team today.",
+      "ok"
+    ],
+    [
+      "Book the big room for Monday, or rather the small one.",
+      "Book the small room for Monday.",
+      "ok"
     ]
   ],
   "apply": [
@@ -533,6 +548,69 @@
     [
       "Add Quorvia to the list. No wait. Add Brightlane to the list. The rest of the plan stays the same for now.",
       [["Add Quorvia to the list. No wait. Add Brightlane to the list.", false]]
+    ],
+    [
+      "We went to the market, and, you know, it was busy, the stalls were all full, we bought some fresh bread, then we walked to the park, the kids played on the swings, we had lunch by the lake, and the weather was like really nice, so we stayed late, until the sun went down. Actually no, we left at five. The drive home took about an hour because the roads were quiet. The kids slept in the back the whole way. We got home and unpacked the car before dinner. Everyone went to bed early that night after a long and happy day out together.",
+      [
+        [
+          "We went to the market, and, you know, it was busy, the stalls were all full, we bought some fresh bread, then we walked to the park, the kids played on the swings, we had lunch by the lake, and the weather was like really nice, so we stayed late, until the sun went down. Actually no, we left at five.",
+          false
+        ]
+      ]
+    ],
+    [
+      "Send it to Priya on Monday\nActually no, send it to Kabir on Tuesday\nThanks a lot for the help",
+      [
+        [
+          "Send it to Priya on Monday\nActually no, send it to Kabir on Tuesday",
+          false
+        ]
+      ]
+    ],
+    [
+      "Hi Rivaan,\n\nThe deck is like ready, can you check it\n\nThanks",
+      [["The deck is like ready, can you check it", false]]
+    ],
+    [
+      "Check docs.google.com for the report, it is like really long.",
+      [["Check docs.google.com for the report, it is like really long.", false]]
+    ],
+    [
+      "The budget is 2.5 million dollars for the whole project.",
+      [["The budget is 2.5 million dollars for the whole project.", false]]
+    ],
+    [
+      "Send it to Priya by tomorrow please. Oh wait, send it to Kabir instead.",
+      [
+        [
+          "Send it to Priya by tomorrow please. Oh wait, send it to Kabir instead.",
+          false
+        ]
+      ]
+    ],
+    [
+      "Move the call to Monday. Okay, scratch that, move it to Tuesday at noon. Thanks.",
+      [
+        [
+          "Move the call to Monday. Okay, scratch that, move it to Tuesday at noon.",
+          false
+        ]
+      ]
+    ],
+    [
+      "Let's meet on Thursday. Well, actually, make it Friday.",
+      [["Let's meet on Thursday. Well, actually, make it Friday.", false]]
+    ],
+    [
+      "The demo is on Monday. Hmm actually it is on Tuesday. See you then.",
+      [["The demo is on Monday. Hmm actually it is on Tuesday.", false]]
+    ],
+    [
+      "We use superbase for the app, and the team, the whole team of ours, said it was fine, and the launch went well, and the users were happy, the main thing, you know, is the speed of it.",
+      [
+        ["We use superbase for the app, and the team", true],
+        ["the main thing, you know, is the speed of it.", true]
+      ]
     ]
   ],
   "check_part": [
@@ -547,6 +625,27 @@
       "Add Oshin Dastur to it.",
       "Can you move the launch email to Tuesday? The landing page will not be ready on Monday because the copy is still being reviewed. Also add Ishita Venkatraman to the preview list. Scratch that. Add Oshin Dastur to it. Thanks for handling this.",
       "ok"
+    ]
+  ],
+  "fit_fragment": [
+    [
+      "the main thing is, you know, a way to export",
+      "The main thing is a way to export.",
+      "the main thing is a way to export"
+    ],
+    ["a way to export it.", "A way to export it.", "a way to export it."],
+    ["Zubin said, like, hi", "Zubin said hi.", "Zubin said hi"],
+    ["you know, the speed of it", "The speed of it.", "the speed of it"],
+    [
+      "we use superbase for the app",
+      "We use Supabase for the app.",
+      "we use Supabase for the app"
+    ],
+    ["superbase for the app", "Supabase for the app.", "Supabase for the app"],
+    [
+      "and the team, the whole team",
+      "and the whole team,",
+      "and the whole team"
     ]
   ]
 }

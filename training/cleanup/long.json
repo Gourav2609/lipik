@@ -1,0 +1,141 @@
+[
+  {
+    "id": "lng01",
+    "category": "long",
+    "app": "Slack",
+    "spoken": "Quick update on the migration. We moved about half of the tables last night and the rest should be done by Thursday. The reporting jobs will be a bit slow until then, so if anyone sees timeouts on the dashboard, please let me know in this channel. I will also post a short summary once everything is finished and the old database has been switched off.",
+    "expected": "Quick update on the migration. We moved about half of the tables last night and the rest should be done by Thursday. The reporting jobs will be a bit slow until then, so if anyone sees timeouts on the dashboard, please let me know in this channel. I will also post a short summary once everything is finished and the old database has been switched off.",
+    "has": ["^Quick update", "switched off\\.$"],
+    "not": []
+  },
+  {
+    "id": "lng02",
+    "category": "long",
+    "app": "Slack",
+    "spoken": "Hey team, the client call went well today. They liked the new onboarding flow and the pricing page. The main thing they asked for is, you know, a way to export reports as a spreadsheet. I told them we would look at it next sprint. Can someone check how much work that would be and add a ticket before Friday?",
+    "expected": "Hey team, the client call went well today. They liked the new onboarding flow and the pricing page. The main thing they asked for is a way to export reports as a spreadsheet. I told them we would look at it next sprint. Can someone check how much work that would be and add a ticket before Friday?",
+    "has": ["^Hey team", "Friday\\?$"],
+    "not": ["(?i)you know"]
+  },
+  {
+    "id": "lng03",
+    "category": "long",
+    "app": "Mail",
+    "spoken": "Hi Tavish, thanks for the notes on the contract. I went through all of them and I agree with most of the changes. Let's do the review call on Thursday, actually no, Friday afternoon works better for me. Before the call, could you send me the latest draft with the payment terms updated? I would also like Oshin Dastur from legal to join if she is free.",
+    "expected": "Hi Tavish, thanks for the notes on the contract. I went through all of them and I agree with most of the changes. Let's do the review call on Friday afternoon, it works better for me. Before the call, could you send me the latest draft with the payment terms updated? I would also like Oshin Dastur from legal to join if she is free.",
+    "has": ["^Hi Tavish", "Friday", "Oshin Dastur"],
+    "not": ["(?i)thursday", "(?i)actually"]
+  },
+  {
+    "id": "lng04",
+    "category": "long",
+    "app": "Notes",
+    "spoken": "so the plan for the weekend is to finish the garden on Saturday morning and then go to the market in the afternoon to pick up the vegetables for the dinner and on Sunday we can clean the garage and sort the old boxes because most of them are full of things we have not used in years",
+    "expected": "So the plan for the weekend is to finish the garden on Saturday morning and then go to the market in the afternoon to pick up the vegetables for the dinner. On Sunday we can clean the garage and sort the old boxes, because most of them are full of things we have not used in years.",
+    "has": ["^So the plan", "[.,;][\\s\\S]*\\.$"],
+    "not": []
+  },
+  {
+    "id": "lng05",
+    "category": "long",
+    "app": "Notes",
+    "spoken": "Notes from the planning meeting. We agreed on three things for this quarter. Number one, ship the new search page. Number two, cut the page load time in half. Number three, hire two more engineers for the mobile team. Zubin will own the search page and Rivaan will own the hiring. We meet again in two weeks to check progress.",
+    "expected": "Notes from the planning meeting. We agreed on three things for this quarter:\n1. Ship the new search page.\n2. Cut the page load time in half.\n3. Hire two more engineers for the mobile team.\nZubin will own the search page and Rivaan will own the hiring. We meet again in two weeks to check progress.",
+    "has": [
+      "\\n\\s*1[.)][\\s\\S]*\\n\\s*2[.)][\\s\\S]*\\n\\s*3[.)]",
+      "Zubin",
+      "Rivaan"
+    ],
+    "not": ["(?i)number (one|two|three)"]
+  },
+  {
+    "id": "lng06",
+    "category": "long",
+    "app": "Claude Code",
+    "spoken": "I want you to add a retry to the upload function in the storage module. When the request fails with a network error, wait one second and try again, up to three times. Log each retry with the file name and the error. Do not retry when the server says the file is too large. Then add tests for the retry and for the too large case, and run the whole test suite.",
+    "expected": "I want you to add a retry to the upload function in the storage module. When the request fails with a network error, wait one second and try again, up to three times. Log each retry with the file name and the error. Do not retry when the server says the file is too large. Then add tests for the retry and for the too large case, and run the whole test suite.",
+    "has": ["^I want you", "test suite\\.$"],
+    "not": []
+  },
+  {
+    "id": "lng07",
+    "category": "long",
+    "app": "Mail",
+    "spoken": "Hi Meher, following up on our call about the Velocore renewal. The new price for next year is twenty five thousand dollars, which is about eight percent more than this year. That includes the extra seats for the support team. If you are happy with it, I can send the order form today and we can have it signed by the end of the month. Let me know if you have any questions.",
+    "expected": "Hi Meher, following up on our call about the Velocore renewal. The new price for next year is $25,000, which is about 8% more than this year. That includes the extra seats for the support team. If you are happy with it, I can send the order form today and we can have it signed by the end of the month. Let me know if you have any questions.",
+    "has": ["Velocore", "\\$25,?000", "8%"],
+    "not": ["(?i)twenty five", "(?i)percent"]
+  },
+  {
+    "id": "lng08",
+    "category": "long",
+    "app": "Messages",
+    "spoken": "So we went to that new cafe near the station and it was like really nice. The coffee was good and the cake was like amazing. We sat there for almost two hours just talking. You should totally come with us next time, maybe on Sunday if you are free. I think they also have live music on weekends, so it could be fun.",
+    "expected": "So we went to that new cafe near the station and it was really nice. The coffee was good and the cake was amazing. We sat there for almost two hours just talking. You should totally come with us next time, maybe on Sunday if you are free. I think they also have live music on weekends, so it could be fun.",
+    "has": ["^So we went", "Sunday"],
+    "not": ["(?i)\\blike (really|amazing)"]
+  },
+  {
+    "id": "lng09",
+    "category": "long",
+    "app": "Slack",
+    "spoken": "I I looked at the error logs from last night. The the problem is that the cache keeps old prices after an update, so some customers saw the wrong total at checkout. I cleared the cache this morning and the totals are correct now. For a proper fix we should clear the cache whenever a price changes. I can pick that up tomorrow if nobody else has started on it.",
+    "expected": "I looked at the error logs from last night. The problem is that the cache keeps old prices after an update, so some customers saw the wrong total at checkout. I cleared the cache this morning and the totals are correct now. For a proper fix we should clear the cache whenever a price changes. I can pick that up tomorrow if nobody else has started on it.",
+    "has": ["^I looked", "tomorrow"],
+    "not": ["(?i)\\bi,? i\\b", "(?i)\\bthe,? the\\b"]
+  },
+  {
+    "id": "lng10",
+    "category": "long",
+    "app": "Slack",
+    "spoken": "Hi everyone, the design review for the new settings page is tomorrow at eleven. Please look at the mockups before the meeting and leave your comments in the file, especially on the notification section and the account deletion flow. We want to agree on the final layout tomorrow so the engineers can start next week. Does anyone need more time to go through it?",
+    "expected": "Hi everyone, the design review for the new settings page is tomorrow at 11. Please look at the mockups before the meeting and leave your comments in the file, especially on the notification section and the account deletion flow. We want to agree on the final layout tomorrow so the engineers can start next week. Does anyone need more time to go through it?",
+    "has": ["^Hi everyone", "through it\\?$"],
+    "not": []
+  },
+  {
+    "id": "lng11",
+    "category": "long",
+    "app": "Slack",
+    "spoken": "Can you move the launch email to Tuesday? The landing page will not be ready on Monday because the copy is still being reviewed. Send it at nine, I mean ten in the morning, so it lands after the team standup. Also add Ishita Venkatraman to the preview list. Scratch that. Add Oshin Dastur to the preview list. Thanks for handling this.",
+    "expected": "Can you move the launch email to Tuesday? The landing page will not be ready on Monday because the copy is still being reviewed. Send it at 10 in the morning, so it lands after the team standup. Add Oshin Dastur to the preview list. Thanks for handling this.",
+    "has": ["Tuesday", "\\b(10|ten)\\b", "Oshin Dastur"],
+    "not": ["(?i)\\b(9|nine)\\b", "(?i)i mean", "(?i)scratch", "Ishita"]
+  },
+  {
+    "id": "lng12",
+    "category": "long",
+    "app": "Mail",
+    "spoken": "Hi Rivaan comma new line thanks for sending the report period it looks good and the numbers match what we saw last month period new paragraph I have one question about the costs on page four period why did the hosting bill go up so much in October question mark new line thanks",
+    "expected": "Hi Rivaan,\nThanks for sending the report. It looks good and the numbers match what we saw last month.\n\nI have one question about the costs on page 4. Why did the hosting bill go up so much in October?\nThanks",
+    "has": ["^Hi Rivaan,\\n", "\\n\\n", "October\\?"],
+    "not": ["(?i)comma|period|new line|new paragraph|question mark"]
+  },
+  {
+    "id": "lng13",
+    "category": "long",
+    "app": "Slack",
+    "spoken": "Morning everyone. Here is where we are with the release. The payment changes are merged and tested on staging, and the support team has the new help articles. The only open item is the email template for failed payments, which Zubin is finishing today. If that is merged by four, we ship tomorrow morning as planned. If it slips, we ship on Thursday instead, and I will tell the customers who asked about it. Please keep the main branch frozen until the release is out, and post in this channel if you find anything that looks wrong on staging.",
+    "expected": "Morning everyone. Here is where we are with the release. The payment changes are merged and tested on staging, and the support team has the new help articles. The only open item is the email template for failed payments, which Zubin is finishing today. If that is merged by 4, we ship tomorrow morning as planned. If it slips, we ship on Thursday instead, and I will tell the customers who asked about it. Please keep the main branch frozen until the release is out, and post in this channel if you find anything that looks wrong on staging.",
+    "has": ["^Morning everyone", "Zubin", "staging\\.$"],
+    "not": []
+  },
+  {
+    "id": "lng14",
+    "category": "long",
+    "app": "Messages",
+    "spoken": "Hey so basically the trip is on for next weekend. We are leaving on Friday night, like around eight, and driving straight to the hills. The cottage has three rooms so everyone gets a proper bed this time. I booked it for two nights, no wait, three nights, so we come back on Monday afternoon. Food is on us for the first night and we can split the rest. Can you bring your speaker and the board games? Also tell your brother he is welcome too if he wants to come along with us.",
+    "expected": "Hey, so basically the trip is on for next weekend. We are leaving on Friday night, around 8, and driving straight to the hills. The cottage has three rooms so everyone gets a proper bed this time. I booked it for three nights, so we come back on Monday afternoon. Food is on us for the first night and we can split the rest. Can you bring your speaker and the board games? Also tell your brother he is welcome too if he wants to come along with us.",
+    "has": ["^Hey, so basically", "\\b(3|three) nights", "speaker"],
+    "not": ["(?i)\\btwo nights", "(?i)no wait", "(?i)\\blike around"]
+  },
+  {
+    "id": "lng15",
+    "category": "long",
+    "app": "Claude Code",
+    "spoken": "Okay so the search page is slow when the list has more than a thousand items. I think the problem is that we filter the whole list on every key press, you know, without any delay. Can you add a short delay of about two hundred milliseconds before the filter runs, and move the filtering into a separate function so it is easier to test? Please keep the current behaviour for the empty search box, which shows everything. After that, add a test with five thousand items and check that typing a word only runs the filter once.",
+    "expected": "Okay, so the search page is slow when the list has more than 1,000 items. I think the problem is that we filter the whole list on every key press, without any delay. Can you add a short delay of about 200 milliseconds before the filter runs, and move the filtering into a separate function so it is easier to test? Please keep the current behaviour for the empty search box, which shows everything. After that, add a test with 5,000 items and check that typing a word only runs the filter once.",
+    "has": ["^Okay,? so", "\\b200\\b"],
+    "not": ["(?i)you know"]
+  }
+]

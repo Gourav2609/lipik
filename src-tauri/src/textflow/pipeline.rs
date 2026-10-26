@@ -29,7 +29,15 @@ pub struct Target {
 impl Target {
     /// The app captured when the current recording started.
     pub fn live() -> Self {
-        let context = context::current();
+        Self::from_context(context::current())
+    }
+
+    /// The app in front, read without its window title.
+    fn front() -> Self {
+        Self::from_context(context::front_app())
+    }
+
+    fn from_context(context: context::AppContext) -> Self {
         Self {
             app_type: context::app_type(&context).to_string(),
             bundle_id: context.bundle_id,
@@ -243,7 +251,9 @@ pub(super) fn warm_up_messages(app: &AppHandle) -> Vec<llm::Message> {
     let Some(tf) = app.try_state::<TextFlow>() else {
         return cleanup_messages("Notes", StyleKind::Formal, &[], false, "ok");
     };
-    let target = Target::live();
+    // Read without the window title, so a slow app can't hold up the warm-up;
+    // a browser tab is then named without its kind of site.
+    let target = Target::front();
     let (kind, vocabulary) = tf.read(|d| {
         let words: Vec<String> = d.dictionary.words.iter().map(|w| w.word.clone()).collect();
         (d.style.for_category(target.category()), words)
@@ -279,6 +289,20 @@ fn auto_apply_transform(tf: &TextFlow) -> Option<Transform> {
         let id = t.auto_apply.transform_id.as_deref()?;
         t.items.iter().find(|i| i.id == id).cloned()
     })
+}
+
+/// The model's reply without wrapping tags or quotes. The model sometimes
+/// ends a line with two spaces (a Markdown line break); those go too.
+/// Snippets are put back after this, so their text stays exact.
+fn reply_body(reply: &str) -> String {
+    trim_line_ends(strip_wrapping(reply))
+}
+
+fn trim_line_ends(text: &str) -> String {
+    text.lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Clean-up: the rules step, then for dictations of 8 or more words the
@@ -322,6 +346,14 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
         let marked = gate::end_mark(&rules_text);
         return Some(prepared.unmask(&marked).unwrap_or_else(fallback));
     }
+    // `parts` returns ordered parts that don't overlap; if that ever fails,
+    // send the whole text rather than guess.
+    let parts = if gate::in_order(&rules_text, &parts) {
+        parts
+    } else {
+        log::warn!("Clean-up parts overlap; sending the whole text");
+        vec![whole_part(&rules_text)]
+    };
     let sent: usize = parts
         .iter()
         .map(|p| text::count_words(&rules_text[p.start..p.end]))
@@ -383,11 +415,10 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
         let text = accept(&prepared.masked, &reply, &rules_text, &relevant);
         return Some(prepared.unmask(&text).unwrap_or_else(fallback));
     }
-    let mut out = String::new();
-    let mut pos = 0;
+    let mut cleaned = Vec::new();
     for part in &parts {
         let core = &rules_text[part.start..part.end];
-        let cleaned = match ask(core.to_string()).await {
+        cleaned.push(match ask(core.to_string()).await {
             Ok(reply) if part.fragment => {
                 accept_fragment(core, &reply, &prepared.masked, &relevant)
             }
@@ -396,12 +427,9 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
                 log::warn!("Clean-up kept the rules text for a part: {e}");
                 core.to_string()
             }
-        };
-        out.push_str(&rules_text[pos..part.start]);
-        out.push_str(&cleaned);
-        pos = part.end;
+        });
     }
-    out.push_str(&rules_text[pos..]);
+    let out = assemble(&rules_text, &parts, &cleaned);
     log::debug!(
         "Clean-up took {:?} ({} parts, {} of {} words; {:?})",
         started.elapsed(),
@@ -417,6 +445,23 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
     Some(prepared.unmask(&text).unwrap_or_else(fallback))
 }
 
+/// The rules text with each part replaced by its cleaned text. A part out of
+/// order, overlapping an earlier one or off the text keeps its rules text.
+fn assemble(rules_text: &str, parts: &[gate::Part], cleaned: &[String]) -> String {
+    let mut out = String::new();
+    let mut pos = 0;
+    for (part, text) in parts.iter().zip(cleaned) {
+        if !gate::fits(rules_text, pos, part) {
+            continue;
+        }
+        out.push_str(&rules_text[pos..part.start]);
+        out.push_str(text);
+        pos = part.end;
+    }
+    out.push_str(&rules_text[pos..]);
+    out
+}
+
 fn whole_part(text: &str) -> gate::Part {
     gate::Part {
         start: 0,
@@ -427,22 +472,37 @@ fn whole_part(text: &str) -> gate::Part {
 }
 
 /// Room for a reply up to the longest the checks accept (1.5 times the text
-/// plus 40 characters) at about 3 characters per token, so a reply that runs
-/// on stops early instead of waiting for the time limit.
+/// plus 40 characters), so a reply that runs on stops early instead of
+/// waiting for the time limit. English takes about 3 characters per token;
+/// other scripts and emoji can take a token per byte, so for them the room
+/// is counted in bytes.
 fn reply_token_limit(text: &str) -> u32 {
-    ((text.chars().count() as f64 * 1.5 + 40.0) / 3.0) as u32 + 16
+    let longest = text.len() as f64 * 1.5 + 40.0;
+    let per_token = if text.is_ascii() { 3.0 } else { 1.0 };
+    (longest / per_token) as u32 + 16
 }
 
 /// A part's reply when it passes the checks (against the part, with the
-/// correction allowance of the `whole` dictation), otherwise the part.
+/// correction allowance of the `whole` dictation), otherwise the part. A
+/// reply without an end mark gets the question-mark rule, else the part's
+/// own end mark, so it doesn't run into the next sentence.
 fn accept_part(core: &str, reply: &str, whole: &str, vocabulary: &[String]) -> String {
-    let reply = strip_wrapping(reply);
+    let reply = &reply_body(reply);
     if reply.is_empty() {
         return core.to_string();
     }
+    let marks = ['.', '!', '?'];
     match rules::check_part(core, reply, vocabulary, whole) {
-        Ok(()) if reply.ends_with(['.', '!', '?']) => reply.to_string(),
-        Ok(()) => rules::question_end(reply),
+        Ok(()) if reply.ends_with(marks) => reply.to_string(),
+        Ok(()) => {
+            let reply = rules::question_end(reply);
+            let core_mark = &core[core.trim_end_matches(marks).len()..];
+            if reply.ends_with(marks) {
+                reply
+            } else {
+                format!("{reply}{core_mark}")
+            }
+        }
         Err(why) => {
             log::warn!("Clean-up reply for a part rejected: {why:?}");
             core.to_string()
@@ -453,7 +513,7 @@ fn accept_part(core: &str, reply: &str, whole: &str, vocabulary: &[String]) -> S
 /// A piece from inside a sentence: the reply fitted back between the words
 /// around it when it passes the checks, otherwise the piece unchanged.
 fn accept_fragment(core: &str, reply: &str, whole: &str, vocabulary: &[String]) -> String {
-    let reply = gate::fit_fragment(core, strip_wrapping(reply));
+    let reply = gate::fit_fragment(core, &reply_body(reply));
     if reply.is_empty() {
         return core.to_string();
     }
@@ -470,7 +530,7 @@ fn accept_fragment(core: &str, reply: &str, whole: &str, vocabulary: &[String]) 
 /// reply that ends with a mark keeps it; one with no end mark gets the
 /// question-mark rule.
 fn accept(transcript: &str, reply: &str, rules_text: &str, vocabulary: &[String]) -> String {
-    let reply = strip_wrapping(reply);
+    let reply = &reply_body(reply);
     if reply.is_empty() {
         log::warn!("Clean-up reply rejected: empty");
         return rules_text.to_string();
@@ -631,6 +691,65 @@ fn dictation_meta(
 
 #[cfg(test)]
 mod tests {
+    /// Devanagari and emoji take far more tokens per character than English:
+    /// the cap must leave room for a reply as long as the checks accept.
+    #[test]
+    fn reply_cap_leaves_room_for_other_scripts() {
+        let hindi = "ठीक है, मैं कल शाम तक रिपोर्ट भेज दूँगा";
+        assert!(reply_token_limit(hindi) as usize >= hindi.len() * 3 / 2);
+        assert!(reply_token_limit("Send it by Friday.") < 40);
+    }
+
+    /// A sentence in the middle of the text keeps its end mark when the
+    /// model's reply leaves it out, so it doesn't run into the next one.
+    #[test]
+    fn part_reply_keeps_the_end_mark() {
+        let core = "We moved about half the tables, you know, last night.";
+        let reply = "We moved about half the tables last night";
+        assert_eq!(
+            accept_part(core, reply, core, &[]),
+            "We moved about half the tables last night."
+        );
+        let question = "Can you check the logs, you know.";
+        assert_eq!(
+            accept_part(question, "Can you check the logs", question, &[]),
+            "Can you check the logs?"
+        );
+    }
+
+    /// Parts that overlap (a gate bug) must never panic the paste.
+    #[test]
+    fn overlapping_parts_never_panic() {
+        let text = "One two, three four. Five six seven.";
+        let part = |start, end| gate::Part {
+            start,
+            end,
+            fragment: false,
+            reasons: Vec::new(),
+        };
+        let parts = [part(4, 19), part(0, 36), part(30, 20)];
+        let cleaned = ["A".to_string(), "B".to_string(), "C".to_string()];
+        assert_eq!(assemble(text, &parts, &cleaned), "One A. Five six seven.");
+    }
+
+    /// Only the model's reply loses trailing spaces; a snippet's own text is
+    /// pasted exactly.
+    #[test]
+    fn reply_line_ends_are_trimmed_but_not_snippets() {
+        let p = prepared("hi [[S0]] thanks", &[("[[S0]]", "Best,  \nDana")]);
+        let reply = "Hi [[S0]]  \nThanks.";
+        let text = accept(&p.masked, reply, "Hi [[S0]] thanks", &[]);
+        assert_eq!(p.unmask(&text).unwrap(), "Hi Best,  \nDana\nThanks.");
+    }
+
+    #[test]
+    fn line_ends_lose_trailing_spaces() {
+        assert_eq!(
+            super::trim_line_ends("Hi Rivaan,  \n\nThe deck is ready. \nThanks"),
+            "Hi Rivaan,\n\nThe deck is ready.\nThanks"
+        );
+    }
+
     use super::*;
 
     fn prepared(masked: &str, snippets: &[(&str, &str)]) -> Prepared {

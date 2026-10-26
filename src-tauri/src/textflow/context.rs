@@ -22,6 +22,12 @@ pub fn capture_for_recording() {
     *CURRENT.lock().unwrap_or_else(|e| e.into_inner()) = Some(context);
 }
 
+/// The app in front right now, without the window title (which can be slow
+/// to read).
+pub fn front_app() -> AppContext {
+    capture(false)
+}
+
 /// The context captured at recording start, or a quick bundle-id-only read
 /// when that capture has not finished.
 pub fn current() -> AppContext {

@@ -141,10 +141,66 @@ stay). The research behind the steps is in `training/cleanup/`
    trims leading and trailing line breaks; and ends a one-sentence question
    with "?" (not "When you have time, ..." or "What we do is ...").
    For dictations under 8 words this is the whole clean-up.
-2. **Model**, for 8 words or more. Ollama (the Notetaker's `ollama_url` /
+2. **Which parts need the model** (`gate.rs`, under 1 ms), for 8 words or
+   more in the formal style. The rules text is read sentence by sentence;
+   a sentence ends at a line break, or at ".", "?" or "!" followed by a
+   space or the end of the text (so "2.5" and "docs.google.com" don't end
+   one). A sentence needs the model when it has:
+   - a correction cue ("no", "nope", "sorry", "actually", "wait", "I mean",
+     "I meant", "meant", "scratch that", "nahi", "rather", "make that";
+     the checks below use the same list). When the sentence starts with
+     one, maybe after one lead-in word ("Actually no, Friday works
+     better.", "Oh wait, ...", "Okay, scratch that, ...", "Well,
+     actually, ..."), the sentence before it goes too, and when it is only
+     the cue ("Scratch that.", "No wait.") the sentence after it as well;
+   - "you know" (not "do you know"), "like" used as a filler ("it was like
+     really nice", ", like,"), "hum"/"hmm", or words said twice ("I I",
+     "we should, we should");
+   - spoken punctuation or address words the rules left ("period" in the
+     middle, "dot", "slash");
+   - a number to write as digits: a number word above ten, before a unit
+     ("eight percent", "two hundred") or after "at"/"by" ("at eleven"),
+     or a time said as one number ("by 815");
+   - spelled-out letters ("a p i", "n variable");
+   - a word that looks like a dictionary word but is spelled differently
+     ("superbase" for Supabase, "graph ql" for GraphQL);
+   - Hindi words (Hinglish);
+   - more than 20 words with no comma (a run-on to split);
+   - a question without "?" ("Can you check the logs.", "..., can you
+     check.").
+     A list ("number one", "bullet", "first ... second,", "1. ... 2.") sends
+     the whole text. Neighbouring sentences go together. In a sentence of
+     more than 16 words whose only problems are fillers, repeats, numbers,
+     letters or dictionary words, only the comma-separated pieces around them
+     go (one piece either side), as long as that is under 70% of the
+     sentence. When a piece is put back, a reply whose first word is a
+     common English word starts in lowercase if the piece did, and a piece
+     without an end mark gets none (and no trailing comma).
+
+   - Nothing needs the model: the rules text is pasted with a final period
+     (when it ends in a word) and the model is not called.
+   - The parts are 70% or more of the words: the whole rules text goes in
+     one request, as before.
+   - Otherwise each part goes in its own request, one after the other, and
+     each reply is checked against its part (below); a rejected or failed
+     part keeps its rules text. A sentence's reply without an end mark gets
+     the question-mark rule, else the sentence's own end mark. All requests
+     share one time limit (4 s, or 8 s when the dictation waits for the
+     model, below). Parts that merge (a correction reaching back over
+     pieces of the sentence before) become one part; if parts ever came
+     out overlapping or out of order, the whole text is sent instead.
+
+   Other styles (casual, very casual) change punctuation and capitals
+   everywhere, so the whole text always goes to the model.
+
+3. **Model**. Ollama (the Notetaker's `ollama_url` /
    `ollama_model` settings, default `qwen3:8b` at `127.0.0.1:11434`,
-   `think: false`, `temperature` 0.2, `keep_alive` 1 h) gets the rules
-   text, not the raw transcript. The request is the instructions and the
+   `think: false`, `temperature` 0.2, `keep_alive` 1 h, `num_predict`
+   capped at the longest reply the checks accept: 1.5x the text + 40
+   characters, at 3 characters per token for plain ASCII text and one
+   token per byte otherwise (Devanagari, emoji), + 16; a reply Ollama
+   stopped at the cap counts as a failed call) gets the rules text (or a
+   part of it), not the raw transcript. The request is the instructions and the
    worked examples from `cleanup_prompt.txt` (the benchmark in
    `training/cleanup/` reads the same file), sent as a system message plus
    example user/assistant turns that are the same on every call, so Ollama
@@ -173,12 +229,19 @@ stay). The research behind the steps is in `training/cleanup/`
    a dictation too long for that; a request uses the size the model is
    already loaded with when that is large enough, since a different size
    makes Ollama reload the model (about 3 s). The warm-up at recording
-   start loads the model at the same size and sends the same instructions
-   and examples.
+   start loads the model at the same size and sends the same request up to
+   the words: instructions, examples, and the last message with the app
+   that was in front when recording started, the dictionary (when it has 40
+   words or fewer) and the style line, with "ok" as the transcript. Ollama
+   then has all of it cached and the clean-up only reads the dictation
+   (about 0.2 s less than a warm-up with another app name). The warm-up
+   reads the front app without its window title, which can be slow, so a
+   browser tab is named without its kind of site there and that part is
+   read again at clean-up.
 
 The checks run after dictionary replacements and snippets: the reply is
-compared with that text (before the rules step). The rules text is pasted
-instead when the reply:
+compared with that text (before the rules step), or for a part with the
+part's rules text. The rules text is pasted instead when the reply:
 
 - is empty, or much longer than that text (1.5x + 40 characters);
 - uses a script the text does not (a Devanagari "ठीक है" for a spoken "ok");
@@ -190,23 +253,32 @@ instead when the reply:
   "API", email and web address pieces, the dictionary words sent, "PM"/"AM");
 - drops 3 or more of the speaker's words. Fillers, spoken punctuation and
   number words don't count. When the speaker corrected themselves (the
-  text has "no", "actually", "I mean", "scratch that", "sorry", "wait",
-  "nahi" or "meant"), dropping words is expected, so the limit is 40% of
-  the words (at least 3) instead.
+  text has one of the correction cues above), dropping words is expected,
+  so the limit is 40% of
+  the words (at least 3) instead; for a part, 40% of the words of the
+  whole dictation, as a reply for the whole text would have.
 
 Words are compared in any script (Devanagari words with their vowel signs
 count as whole words). An accepted reply is pasted as written when it ends
-with ".", "!" or "?"; one with no end mark gets the question-mark rule. The
+with ".", "!" or "?"; one with no end mark gets the question-mark rule (a
+piece from inside a sentence gets neither). When parts were sent, the
+joined text gets a final period when it ends in a word. The
 rules text is also pasted when the model is not loaded yet (a dictation
 never waits for the first load; with an auto-apply transform on, or for
 text that needs the larger size while the model is loaded smaller, it
 waits, with the 8 s limit), or when Ollama errors or takes more than 4 s.
-Logs give the reason for a rejection, never the words.
+Trailing spaces at line ends of the model's reply (a Markdown line break)
+are removed before snippets are put back, so snippet text is pasted
+exactly.
+Logs give the reason for a rejection, never the words; the clean-up time
+is logged with the number of parts, the words sent and the reasons the
+parts were sent.
 
 The Summary model setting is a free text field. Don't use the plain
 `qwen3:4b` tag: on Ollama it is now a thinking model that ignores
 `think: false` and takes 40-110 s. `qwen3:4b-instruct` works and is about
-40% faster than `qwen3:8b`, with slightly more misses.
+1.4 times as fast as `qwen3:8b`, with more misses (78% against 83% of the
+benchmark's English clips, 60% against 70% of its long dictations).
 
 With auto-apply on too, the transform runs after clean-up as a separate
 call (below), so a dictation can wait for two model calls: up to 8 s for
