@@ -832,6 +832,9 @@ pub fn run(cli_args: CliArgs) {
             textflow::commands::pill_hidden_until,
             textflow::commands::paste_last_transcript,
             textflow::commands::open_main_page,
+            textflow::cleanup_model::cleanup_model_status,
+            textflow::cleanup_model::pull_cleanup_model,
+            textflow::cleanup_model::cancel_cleanup_model_pull,
             notetaker::commands::notetaker_start,
             notetaker::commands::notetaker_stop,
             notetaker::commands::notetaker_status,
@@ -869,6 +872,7 @@ pub fn run(cli_args: CliArgs) {
             notetaker::NotetakerState,
             notetaker::NotetakerStreamChanged,
             notepad::NotepadMeeting,
+            textflow::cleanup_model::CleanupModelPull,
         ]);
 
     // The headless path must run as its own instance (see the single-instance

@@ -258,3 +258,20 @@ export const MarkVisual = () => (
     </div>
   </Preview>
 );
+
+export const CleanupVisual = () => (
+  <Preview className="flex-col !items-stretch !justify-center gap-[16px] px-[32px]">
+    <div>
+      <div className="fk-eyebrow mb-[4px]">You say</div>
+      <p className="text-[15px] leading-[22px] text-[var(--fk-text-muted)]">
+        Um, so the call is at four, no, wait, five tomorrow
+      </p>
+    </div>
+    <div>
+      <div className="fk-eyebrow mb-[4px]">{APP_NAME} types</div>
+      <p className="text-[15px] leading-[22px] text-[var(--fk-text)]">
+        The call is at 5 tomorrow.
+      </p>
+    </div>
+  </Preview>
+);

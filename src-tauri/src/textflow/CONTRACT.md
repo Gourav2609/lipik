@@ -274,11 +274,36 @@ Logs give the reason for a rejection, never the words; the clean-up time
 is logged with the number of parts, the words sent and the reasons the
 parts were sent.
 
-The Summary model setting is a free text field. Don't use the plain
-`qwen3:4b` tag: on Ollama it is now a thinking model that ignores
+The AI model setting (Settings → Meetings) is a free text field. Don't use
+the plain `qwen3:4b` tag: on Ollama it is now a thinking model that ignores
 `think: false` and takes 40-110 s. `qwen3:4b-instruct` works and is about
 1.4 times as fast as `qwen3:8b`, with more misses (78% against 83% of the
 benchmark's English clips, 60% against 70% of its long dictations).
+
+### Setting up the model (`cleanup_model.rs`)
+
+Onboarding (the Clean-up step) and Settings → Meetings use these:
+
+| Command                       | Returns              |
+| ----------------------------- | -------------------- |
+| `cleanup_model_status()`      | `CleanupModelStatus` |
+| `pull_cleanup_model()`        | `Result<boolean>`    |
+| `cancel_cleanup_model_pull()` | nothing              |
+
+- Status: `downloading` while a download runs (with its progress and the
+  model being downloaded); otherwise `GET {ollama_url}/api/tags` with a
+  1.5 s limit: no answer = `no_ollama`, plain `qwen3:4b` = `slow_model`,
+  the model listed = `ready` (a name without a tag means `:latest`), else
+  `no_model`. The UI checks again every 3 s, and every 30 s once `ready`.
+- Download: `POST {ollama_url}/api/pull {model, name, stream: true}` (older
+  Ollama reads `name`) for the configured model. Progress is summed over
+  the model's files and sent as `cleanup-model-pull` events
+  (`{completed, total}` bytes) when it moves by 0.1%. It refuses plain
+  `qwen3:4b`. An `error` line, a broken connection or 60 s without a line
+  is an error; on `success` the model is warmed up when clean-up or
+  auto-apply is on. `Ok(false)` means cancelled; cancelling closes the
+  connection to Ollama. Saving a different model in Settings cancels the
+  download. The download keeps going if the user leaves the screen.
 
 With auto-apply on too, the transform runs after clean-up as a separate
 call (below), so a dictation can wait for two model calls: up to 8 s for

@@ -81,6 +81,10 @@ dictation still works and Lipik applies only its built-in rules: it removes
 marks, keeps only the corrected word in "four, no, five", and writes spoken
 emails, web addresses and times the usual way.
 
+Lipik's first-run setup checks for Ollama and can download the model for
+you (about 5 GB). If you skip it, the same check and download button are in
+**Settings → Meetings**. To set it up by hand instead:
+
 ```bash
 brew install ollama        # or download the app from ollama.com
 ollama serve               # skip if the Ollama app is already running

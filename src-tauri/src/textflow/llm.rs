@@ -15,7 +15,7 @@ const SMALL_CONTEXT: u32 = 4_096;
 const LARGE_CONTEXT: u32 = 16_384;
 const KEEP_ALIVE: &str = "1h";
 
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
+pub(super) static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_millis(500))
         .build()
@@ -24,8 +24,8 @@ static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
 
 /// Ollama URL and model, shared with the Notetaker settings.
 pub struct Endpoint {
-    url: String,
-    model: String,
+    pub(super) url: String,
+    pub(super) model: String,
 }
 
 #[cfg(test)]

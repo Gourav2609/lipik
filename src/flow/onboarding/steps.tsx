@@ -26,12 +26,20 @@ import { APP_NAME } from "../brand";
 import { isFlowPreview } from "../dev/preview";
 import { Select } from "../settings/parts";
 import { entryText } from "../pages/dictation/useHistory";
+import {
+  downloadLabel,
+  openOllamaDownload,
+  PullProgress,
+  SLOW_MODEL_TEXT,
+  useCleanupModel,
+} from "../cleanupModel";
 import { Button, Card, Kbd } from "../ui";
 import { retryDefaultModelSetup, useModelSetup } from "./defaultModel";
 import { StepLayout, type StepProps } from "./StepLayout";
 import { useMicLevel } from "./useMicLevel";
 import { usePermissions, type PermissionKind } from "./usePermissions";
 import {
+  CleanupVisual,
   KeyboardVisual,
   MarkVisual,
   MeterVisual,
@@ -365,6 +373,96 @@ const Shortcut = ({ next, back }: StepProps) => {
   );
 };
 
+/* ---------- clean-up model ---------- */
+
+const CLEANUP_SKIP_NOTE = `${APP_NAME} still types what you say and fixes “um”, spoken punctuation, numbers and emails without it. You can set this up later in Settings.`;
+
+const Cleanup = ({ next, back }: StepProps) => {
+  const { view, model, progress, error, download, cancel } = useCleanupModel();
+  const ready = view === "ready";
+  return (
+    <StepLayout
+      eyebrow="Clean-up"
+      title="Clean text, not a transcript"
+      body="Clean-up removes “um”, applies “no, wait” corrections and fixes punctuation, on this Mac."
+      back={back}
+      actions={
+        ready ? (
+          <Continue next={next} />
+        ) : (
+          <>
+            <LinkButton onClick={next}>Skip for now</LinkButton>
+            <Continue next={next} disabled />
+          </>
+        )
+      }
+      visual={<CleanupVisual />}
+    >
+      {view === "checking" && (
+        <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+          <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+          Checking for Ollama…
+        </p>
+      )}
+      {ready && <OkNote>Clean-up is ready. It uses {model} in Ollama.</OkNote>}
+      {view === "no_ollama" && (
+        <div className="flex items-center gap-[16px]">
+          <p className="flex-1 text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+            It needs Ollama, a free app that runs the model. If you have it
+            already, open it. This step moves on by itself once Ollama runs.
+          </p>
+          <Button onClick={openOllamaDownload} className="shrink-0">
+            Get Ollama (free)
+          </Button>
+        </div>
+      )}
+      {view === "no_model" && (
+        <div className="flex items-center gap-[16px]">
+          <p className="flex-1 text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+            Ollama is running. Now get the model it uses for clean-up.
+          </p>
+          <Button onClick={download} className="shrink-0">
+            {downloadLabel(model)}
+          </Button>
+        </div>
+      )}
+      {view === "slow_model" && (
+        <p className="flex items-start gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+          <CircleAlert
+            size={16}
+            strokeWidth={1.75}
+            className="mt-[2px] shrink-0 text-[var(--fk-live)]"
+          />
+          <span>{SLOW_MODEL_TEXT}</span>
+        </p>
+      )}
+      {view === "downloading" && (
+        <PullProgress progress={progress} onCancel={cancel} />
+      )}
+      {view === "failed" && (
+        <div className="flex items-center gap-[16px]">
+          <p className="flex flex-1 items-start gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+            <CircleAlert
+              size={16}
+              strokeWidth={1.75}
+              className="mt-[2px] shrink-0 text-[var(--fk-live)]"
+            />
+            <span>The download didn't finish. {error}</span>
+          </p>
+          <Button onClick={download} className="shrink-0">
+            Try again
+          </Button>
+        </div>
+      )}
+      {!ready && view !== "checking" && (
+        <p className="mt-[16px] text-[13px] leading-[18px] text-[var(--fk-text-faint)]">
+          {CLEANUP_SKIP_NOTE}
+        </p>
+      )}
+    </StepLayout>
+  );
+};
+
 /* ---------- practice ---------- */
 
 const PROMPTS: Record<
@@ -573,7 +671,7 @@ const Privacy = ({ next, back }: StepProps) => (
         {[
           "Speech is turned into text on this Mac. Your audio is never uploaded.",
           `Recordings and their text stay in ${APP_NAME}'s data folder so it can learn your voice. You can change this in Settings.`,
-          "Clean-up runs on a model on this Mac, and only when you turn it on.",
+          "Clean-up runs on a model on this Mac through the free Ollama app, not in the cloud.",
         ].map((line) => (
           <div
             key={line}
@@ -620,6 +718,7 @@ export type StepId =
   | "permissions"
   | "mic"
   | "shortcut"
+  | "cleanup"
   | "practice"
   | "bar"
   | "privacy"
@@ -634,6 +733,7 @@ export const STEPS: {
   { id: "permissions", Component: Permissions },
   { id: "mic", Component: MicTest, skippable: true },
   { id: "shortcut", Component: Shortcut },
+  { id: "cleanup", Component: Cleanup },
   { id: "practice", Component: Practice },
   { id: "bar", Component: PillStep, skippable: true },
   { id: "privacy", Component: Privacy },

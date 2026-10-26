@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Check, CircleAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   commands,
@@ -18,6 +18,13 @@ import {
   type SelectOption,
 } from "./parts";
 import { APP_NAME } from "@/flow/brand";
+import {
+  downloadLabel,
+  openOllamaDownload,
+  PullProgress,
+  SLOW_MODEL_TEXT,
+  useCleanupModel,
+} from "../cleanupModel";
 import { CALENDAR_CHANGED } from "../overlays/ConnectCalendar";
 import { useFlowStore } from "../state";
 
@@ -117,7 +124,7 @@ const ModelField = ({
 
   return (
     <input
-      aria-label="Summary model"
+      aria-label="AI model"
       value={draft}
       disabled={disabled}
       spellCheck={false}
@@ -161,6 +168,90 @@ const CalendarControl = ({ access }: { access: CalendarAccess | null }) => {
   );
 };
 
+const CleanupModelRow = ({
+  view,
+  model,
+  progress,
+  error,
+  download,
+  cancel,
+}: ReturnType<typeof useCleanupModel>) => {
+  const row = (description: ReactNode, control?: ReactNode) => (
+    <SettingRow
+      title="Clean-up model"
+      description={description}
+      control={control}
+    />
+  );
+  switch (view) {
+    case "checking":
+      return row(
+        "Checking for Ollama…",
+        <Loader2
+          size={16}
+          strokeWidth={1.75}
+          className="animate-spin text-[var(--fk-text-muted)]"
+        />,
+      );
+    case "ready":
+      return row(
+        `${model} is ready in Ollama.`,
+        <span className="flex items-center gap-[6px] text-[14.5px] font-medium text-[var(--fk-ok)]">
+          <Check size={16} strokeWidth={1.75} />
+          Ready
+        </span>,
+      );
+    case "no_ollama":
+      return row(
+        "Ollama isn't running. Clean-up and notes need this free app. If you have it already, open it.",
+        <Button variant="secondary" onClick={openOllamaDownload}>
+          Get Ollama (free)
+        </Button>,
+      );
+    case "no_model":
+      return row(
+        `Ollama is running but doesn't have ${model} yet.`,
+        <Button variant="secondary" onClick={download}>
+          {downloadLabel(model)}
+        </Button>,
+      );
+    case "slow_model":
+      return row(
+        <span className="flex items-start gap-[6px]">
+          <CircleAlert
+            size={14}
+            strokeWidth={1.75}
+            className="mt-[2px] shrink-0 text-[var(--fk-live)]"
+          />
+          {SLOW_MODEL_TEXT}
+        </span>,
+      );
+    case "downloading":
+      return (
+        <div className="border-b border-[var(--fk-border)] py-[16px] last:border-b-0">
+          <div className="mb-[8px] text-[15px] font-medium leading-[22px]">
+            Downloading {model}
+          </div>
+          <PullProgress progress={progress} onCancel={cancel} />
+        </div>
+      );
+    case "failed":
+      return row(
+        <span className="flex items-start gap-[6px]">
+          <CircleAlert
+            size={14}
+            strokeWidth={1.75}
+            className="mt-[2px] shrink-0 text-[var(--fk-live)]"
+          />
+          The download didn't finish. {error}
+        </span>,
+        <Button variant="secondary" onClick={download}>
+          Try again
+        </Button>,
+      );
+  }
+};
+
 export default function NotetakerSettings() {
   const [settings, update] = useNotetakerSettings();
   const [calendar, setCalendar] = useState<CalendarAccess | null>(null);
@@ -177,6 +268,7 @@ export default function NotetakerSettings() {
     return () => window.removeEventListener(CALENDAR_CHANGED, read);
   }, []);
 
+  const cleanup = useCleanupModel();
   const s = settings ?? DEFAULTS;
   const loading = settings === null;
 
@@ -274,24 +366,19 @@ export default function NotetakerSettings() {
       <Section title="Notes">
         <SettingsCard>
           <SettingRow
-            title="Summary model"
-            description={
-              <>
-                The Ollama model that writes your notes. Install it with{" "}
-                <code className="rounded-[var(--fk-r-xs)] bg-[var(--fk-surface-2)] px-[4px] font-mono text-[12px]">
-                  ollama pull {s.ollama_model}
-                </code>
-                .
-              </>
-            }
+            title="AI model"
+            description="The Ollama model that cleans up your dictation and writes your notes."
             control={
               <ModelField
                 value={s.ollama_model}
                 disabled={loading}
-                onSave={(model) => update({ ollama_model: model })}
+                onSave={(model) =>
+                  update({ ollama_model: model }).then(cleanup.recheck)
+                }
               />
             }
           />
+          <CleanupModelRow {...cleanup} />
           <SettingRow
             title="Meeting audio"
             description="Recordings stay on this Mac until you delete the meeting."

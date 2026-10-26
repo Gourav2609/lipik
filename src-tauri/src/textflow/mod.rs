@@ -1,6 +1,7 @@
 //! Lipik's text features: dictionary, snippets, style clean-up, transforms,
 //! scratchpad notes, insights and the pill menu. See CONTRACT.md.
 
+pub mod cleanup_model;
 pub mod commands;
 mod context;
 mod gate;

@@ -205,6 +205,7 @@ pub fn notetaker_set_settings(app: AppHandle, settings: NotetakerSettings) -> Re
     if settings.notify_before_seconds > 3600 {
         return Err("The meeting reminder can be at most 60 minutes ahead".to_string());
     }
+    crate::textflow::cleanup_model::cancel_pull_unless(&settings.ollama_model);
     let mut all = crate::settings::get_settings(&app);
     all.notetaker = settings;
     crate::settings::write_settings(&app, all);

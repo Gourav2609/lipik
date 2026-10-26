@@ -9,7 +9,9 @@
 //! This module:
 //! - polls `IsSecureEventInputEnabled()` and tracks state transitions
 //! - looks up the holding process (best effort — Apple documents no reliable
-//!   API; the IORegistry PID is frequently wrong or absent)
+//!   API; the IORegistry PID is frequently wrong or absent). When it names
+//!   `loginwindow` or nothing, a running Terminal with Secure Keyboard Entry
+//!   on, or the active iTerm2 or password manager, is reported instead
 //! - while secure input is sustained, shadow-registers vulnerable *keyed*
 //!   bindings through the Carbon-backed Tauri global-shortcut path, which is
 //!   not affected by secure input (modifier-only bindings need no fallback)
@@ -231,7 +233,8 @@ mod imp {
             .ok()?;
 
         // `ps -o comm=` returns the full executable path; show just the
-        // binary name ("Terminal", not ".../Terminal.app/Contents/MacOS/Terminal")
+        // binary name ("Terminal", not ".../Terminal.app/Contents/MacOS/Terminal").
+        // A holder that has quit names nothing, so `pick_culprit` can guess.
         let name = Command::new("ps")
             .args(["-o", "comm=", "-p", &pid.to_string()])
             .output()
@@ -241,10 +244,118 @@ mod imp {
                 let trimmed = raw.trim();
                 (!trimmed.is_empty())
                     .then(|| trimmed.rsplit('/').next().unwrap_or(trimmed).to_string())
-            })
-            .unwrap_or_else(|| "(process no longer running)".to_string());
+            })?;
 
         Some(Culprit { pid, name })
+    }
+
+    struct RunningApp {
+        bundle_id: String,
+        pid: i32,
+        active: bool,
+    }
+
+    /// Apps whose own setting turns Secure Input on: bundle id, name, the
+    /// preference key in the app's domain, and whether the app must be the
+    /// active one to count.
+    const SECURE_ENTRY_APPS: [(&str, &str, &str, bool); 2] = [
+        (
+            "com.apple.Terminal",
+            "Terminal",
+            "SecureKeyboardEntry",
+            false,
+        ),
+        ("com.googlecode.iterm2", "iTerm2", "Secure Input", true),
+    ];
+
+    const PASSWORD_MANAGERS: [(&str, &str); 4] = [
+        ("com.1password.1password", "1Password"),
+        ("com.agilebits.onepassword7", "1Password"),
+        ("com.bitwarden.desktop", "Bitwarden"),
+        ("org.keepassxc.keepassxc", "KeePassXC"),
+    ];
+
+    /// macOS often names `loginwindow`, or no process, while an app holds
+    /// Secure Input. Then a running Terminal with Secure Keyboard Entry on,
+    /// the active iTerm2 with it on, or the active password manager is the
+    /// likelier holder. A password manager in the background (1Password
+    /// lives in the menu bar) does not count.
+    fn pick_culprit(
+        reported: Option<Culprit>,
+        running: impl FnOnce() -> Vec<RunningApp>,
+        pref_on: impl Fn(&str, &str) -> bool,
+    ) -> Option<Culprit> {
+        if reported.as_ref().is_some_and(|c| c.name != "loginwindow") {
+            return reported;
+        }
+        let running = running();
+        let find = |bundle: &str| running.iter().find(|a| a.bundle_id == bundle);
+        let terminal = SECURE_ENTRY_APPS
+            .iter()
+            .find_map(|(bundle, name, key, needs_active)| {
+                let app = find(bundle)?;
+                ((app.active || !needs_active) && pref_on(bundle, key)).then_some((app, *name))
+            });
+        let known = terminal.or_else(|| {
+            PASSWORD_MANAGERS.iter().find_map(|(bundle, name)| {
+                let app = find(bundle)?;
+                app.active.then_some((app, *name))
+            })
+        });
+        match known {
+            Some((app, name)) => Some(Culprit {
+                pid: app.pid,
+                name: name.to_string(),
+            }),
+            None => reported,
+        }
+    }
+
+    fn running_apps() -> Vec<RunningApp> {
+        use objc2_app_kit::NSWorkspace;
+
+        NSWorkspace::sharedWorkspace()
+            .runningApplications()
+            .iter()
+            .filter_map(|app| {
+                Some(RunningApp {
+                    bundle_id: app.bundleIdentifier()?.to_string(),
+                    pid: app.processIdentifier(),
+                    active: app.isActive(),
+                })
+            })
+            .collect()
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        fn CFPreferencesAppSynchronize(app: *const std::ffi::c_void) -> u8;
+        fn CFPreferencesGetAppBooleanValue(
+            key: *const std::ffi::c_void,
+            app: *const std::ffi::c_void,
+            exists: *mut u8,
+        ) -> u8;
+    }
+
+    /// A boolean preference of another app, as `defaults read` shows it.
+    fn pref_on(domain: &str, key: &str) -> bool {
+        use objc2_foundation::NSString;
+
+        let domain = NSString::from_str(domain);
+        let key = NSString::from_str(key);
+        let domain_ref = objc2::rc::Retained::as_ptr(&domain).cast();
+        unsafe {
+            CFPreferencesAppSynchronize(domain_ref);
+            CFPreferencesGetAppBooleanValue(
+                objc2::rc::Retained::as_ptr(&key).cast(),
+                domain_ref,
+                std::ptr::null_mut(),
+            ) != 0
+        }
+    }
+
+    fn find_culprit() -> Option<Culprit> {
+        pick_culprit(lookup_culprit(), running_apps, pref_on)
     }
 
     pub fn status(app: &AppHandle) -> SecureInputStatus {
@@ -307,7 +418,7 @@ mod imp {
                 let was_enabled = state.enabled.swap(now_enabled, Ordering::SeqCst);
 
                 if now_enabled && !was_enabled {
-                    let culprit = lookup_culprit();
+                    let culprit = find_culprit();
                     match &culprit {
                         Some(c) => {
                             info!("SecureInput ENABLED (held by pid {} '{}')", c.pid, c.name)
@@ -643,7 +754,7 @@ mod imp {
             }
 
             let enabled = enabled_at_start || is_enabled();
-            let culprit = if enabled { lookup_culprit() } else { None };
+            let culprit = if enabled { find_culprit() } else { None };
             info!(
                 "keyboard diagnostic: secure_input={} key_down={} key_up={} flags_changed={} mouse={}",
                 enabled, key_down, key_up, flags_changed, mouse
@@ -662,6 +773,153 @@ mod imp {
         })
         .await
         .map_err(|e| format!("Diagnostic task failed: {e}"))?
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn culprit(name: &str, pid: i32) -> Option<Culprit> {
+            Some(Culprit {
+                pid,
+                name: name.to_string(),
+            })
+        }
+
+        /// Running apps as (bundle id, pid); the one with pid `active` is
+        /// the frontmost app.
+        fn apps_with(list: &[(&str, i32)], active: i32) -> impl FnOnce() -> Vec<RunningApp> {
+            let list: Vec<RunningApp> = list
+                .iter()
+                .map(|(bundle, pid)| RunningApp {
+                    bundle_id: bundle.to_string(),
+                    pid: *pid,
+                    active: *pid == active,
+                })
+                .collect();
+            move || list
+        }
+
+        fn apps(list: &[(&str, i32)]) -> impl FnOnce() -> Vec<RunningApp> {
+            apps_with(list, -1)
+        }
+
+        fn prefs(on: &'static [(&str, &str)]) -> impl Fn(&str, &str) -> bool {
+            move |domain, key| on.contains(&(domain, key))
+        }
+
+        fn name(c: Option<Culprit>) -> Option<(String, i32)> {
+            c.map(|c| (c.name, c.pid))
+        }
+
+        const TERMINAL_ON: &[(&str, &str)] = &[("com.apple.Terminal", "SecureKeyboardEntry")];
+        const ITERM_ON: &[(&str, &str)] = &[("com.googlecode.iterm2", "Secure Input")];
+
+        #[test]
+        fn a_named_app_is_kept() {
+            let picked = pick_culprit(
+                culprit("SecurityAgent", 7),
+                || panic!("no need to list apps"),
+                prefs(TERMINAL_ON),
+            );
+            assert_eq!(name(picked), Some(("SecurityAgent".into(), 7)));
+        }
+
+        #[test]
+        fn terminal_with_secure_entry_replaces_loginwindow() {
+            let picked = pick_culprit(
+                culprit("loginwindow", 150),
+                apps(&[("com.1password.1password", 30), ("com.apple.Terminal", 20)]),
+                prefs(TERMINAL_ON),
+            );
+            assert_eq!(name(picked), Some(("Terminal".into(), 20)));
+        }
+
+        #[test]
+        fn active_iterm_with_secure_entry_replaces_an_unknown_holder() {
+            let picked = pick_culprit(
+                None,
+                apps_with(
+                    &[("com.apple.Terminal", 20), ("com.googlecode.iterm2", 21)],
+                    21,
+                ),
+                prefs(ITERM_ON),
+            );
+            assert_eq!(name(picked), Some(("iTerm2".into(), 21)));
+        }
+
+        #[test]
+        fn iterm_in_the_background_does_not_count() {
+            let picked = pick_culprit(
+                culprit("loginwindow", 150),
+                apps(&[("com.googlecode.iterm2", 21)]),
+                prefs(ITERM_ON),
+            );
+            assert_eq!(name(picked), Some(("loginwindow".into(), 150)));
+        }
+
+        #[test]
+        fn a_terminal_that_is_not_running_does_not_count() {
+            let picked = pick_culprit(culprit("loginwindow", 150), apps(&[]), prefs(TERMINAL_ON));
+            assert_eq!(name(picked), Some(("loginwindow".into(), 150)));
+        }
+
+        #[test]
+        fn a_running_terminal_without_secure_entry_does_not_count() {
+            let picked = pick_culprit(
+                culprit("loginwindow", 150),
+                apps(&[("com.apple.Terminal", 20)]),
+                prefs(&[]),
+            );
+            assert_eq!(name(picked), Some(("loginwindow".into(), 150)));
+        }
+
+        #[test]
+        fn the_active_password_manager_comes_after_terminals() {
+            let picked = pick_culprit(
+                culprit("loginwindow", 150),
+                apps_with(
+                    &[("com.apple.Terminal", 20), ("org.keepassxc.keepassxc", 40)],
+                    40,
+                ),
+                prefs(&[]),
+            );
+            assert_eq!(name(picked), Some(("KeePassXC".into(), 40)));
+            let picked = pick_culprit(
+                None,
+                apps_with(&[("com.bitwarden.desktop", 41)], 41),
+                prefs(&[]),
+            );
+            assert_eq!(name(picked), Some(("Bitwarden".into(), 41)));
+            let picked = pick_culprit(
+                culprit("loginwindow", 150),
+                apps_with(
+                    &[("com.apple.Terminal", 20), ("com.1password.1password", 30)],
+                    30,
+                ),
+                prefs(TERMINAL_ON),
+            );
+            assert_eq!(name(picked), Some(("Terminal".into(), 20)));
+        }
+
+        #[test]
+        fn a_password_manager_in_the_menu_bar_does_not_count() {
+            let picked = pick_culprit(
+                culprit("loginwindow", 150),
+                apps_with(
+                    &[("com.1password.1password", 30), ("com.apple.Safari", 9)],
+                    9,
+                ),
+                prefs(&[]),
+            );
+            assert_eq!(name(picked), Some(("loginwindow".into(), 150)));
+        }
+
+        #[test]
+        fn nothing_known_keeps_what_macos_said() {
+            let picked = pick_culprit(None, apps(&[("com.apple.Safari", 9)]), prefs(&[]));
+            assert_eq!(name(picked), None);
+        }
     }
 }
 

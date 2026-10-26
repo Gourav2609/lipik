@@ -13,6 +13,7 @@ const PLAIN_NAMES: Record<string, string> = {
   SecurityAgent: "a macOS password prompt",
 };
 const TERMINALS = ["Terminal", "iTerm2", "iTerm"];
+const PASSWORD_MANAGERS = ["1Password", "Bitwarden", "KeePassXC"];
 
 const Keys = ({ binding }: { binding: string }) => (
   <span className="inline-flex gap-[4px] align-baseline">
@@ -68,6 +69,8 @@ export const SecureInputNotice = () => {
 
   const culprit = status.culprit_name;
   const terminal = culprit !== null && TERMINALS.includes(culprit);
+  const passwordManager =
+    culprit !== null && PASSWORD_MANAGERS.includes(culprit);
   const [why, fix] =
     culprit === "loginwindow"
       ? [
@@ -89,22 +92,42 @@ export const SecureInputNotice = () => {
             ),
             t(
               "secureInputNotice.fixTerminal",
-              "Turn it off in the {{app}} menu.",
+              "Turn off Secure Keyboard Entry in the {{app}} menu (or quit {{app}}).",
               { app: culprit },
             ),
           ]
-        : [
-            t(
-              "secureInputNotice.whyOther",
-              "macOS hides key presses while {{holder}} is open, to keep passwords safe.",
-              {
-                holder: culprit
-                  ? (PLAIN_NAMES[culprit] ?? culprit)
-                  : t("secureInputNotice.passwordField", "a password field"),
-              },
-            ),
-            t("secureInputNotice.fixOther", "It clears when you close it."),
-          ];
+        : passwordManager
+          ? [
+              t(
+                "secureInputNotice.whyPasswordManager",
+                "{{app}} is open and asks macOS to hide key presses from other apps.",
+                { app: culprit },
+              ),
+              t(
+                "secureInputNotice.fixPasswordManager",
+                "Close {{app}}'s window or lock it.",
+                { app: culprit },
+              ),
+            ]
+          : [
+              t(
+                "secureInputNotice.whyOther",
+                "macOS hides key presses while {{holder}} is open, to keep passwords safe.",
+                {
+                  holder: culprit
+                    ? (PLAIN_NAMES[culprit] ?? culprit)
+                    : t("secureInputNotice.passwordField", "a password field"),
+                },
+              ),
+              t("secureInputNotice.fixOther", "It clears when you close it."),
+            ];
+  const lockFallback =
+    culprit !== null && culprit !== "loginwindow"
+      ? t(
+          "secureInputNotice.lockFallback",
+          "If that doesn't clear it, lock your Mac and unlock it again (Control + Command + Q).",
+        )
+      : null;
   const dictateStillWorks = !paused.includes("transcribe");
   const pausedBinding =
     paused.length === 1 ? bindings?.[paused[0]]?.current_binding : undefined;
@@ -141,6 +164,7 @@ export const SecureInputNotice = () => {
                 "Holding fn to dictate still works.",
               )}{" "}
             {fix}
+            {lockFallback && ` ${lockFallback}`}
           </p>
         </div>
         <IconButton

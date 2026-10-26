@@ -1224,6 +1224,25 @@ async openMainPage(page: string) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async cleanupModelStatus() : Promise<CleanupModelStatus> {
+    return await TAURI_INVOKE("cleanup_model_status");
+},
+/**
+ * Downloads the clean-up model through Ollama and loads it. Progress comes
+ * as `CleanupModelPull` events. `Ok(false)`: cancelled, or replaced by a
+ * newer download.
+ */
+async pullCleanupModel() : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("pull_cleanup_model") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async cancelCleanupModelPull() : Promise<void> {
+    await TAURI_INVOKE("cancel_cleanup_model_pull");
+},
 async notetakerStart(title: string | null) : Promise<Result<Meeting, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("notetaker_start", { title }) };
@@ -1414,6 +1433,7 @@ async notepadMeeting() : Promise<string | null> {
 
 
 export const events = __makeEvents__<{
+cleanupModelPull: CleanupModelPull,
 historyUpdatePayload: HistoryUpdatePayload,
 notepadMeeting: NotepadMeeting,
 notetakerCallDetected: NotetakerCallDetected,
@@ -1427,6 +1447,7 @@ notetakerTranscript: NotetakerTranscript,
 streamPhaseEvent: StreamPhaseEvent,
 streamTextEvent: StreamTextEvent
 }>({
+cleanupModelPull: "cleanup-model-pull",
 historyUpdatePayload: "history-update-payload",
 notepadMeeting: "notepad-meeting",
 notetakerCallDetected: "notetaker-call-detected",
@@ -1564,6 +1585,24 @@ export type Citation = {
  * The [n] marker used in the answer text.
  */
 marker: number; meeting_id: string; meeting_title: string; start_ms: number; quote: string }
+/**
+ * Download progress of the clean-up model, in bytes over all its files.
+ */
+export type CleanupModelPull = { completed: number; total: number }
+export type CleanupModelState = "no_ollama" | "no_model" | 
+/**
+ * The model is plain `qwen3:4b`, which is too slow for dictation.
+ */
+"slow_model" | "downloading" | "ready"
+export type CleanupModelStatus = { state: CleanupModelState; 
+/**
+ * The configured model, or while `downloading` the model being downloaded.
+ */
+model: string; 
+/**
+ * Bytes so far while `state` is `downloading`.
+ */
+progress: CleanupModelPull | null }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type DailyWords = { 
