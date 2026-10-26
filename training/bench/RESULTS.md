@@ -12,7 +12,7 @@ Date: 2026-10-25. Silent run: audio made with `say -o`, never played; no mic.
   this Mac, so Aman and Tara took their place. 16 kHz mono WAV, 0.3 s of
   silence before and 0.6 s after each clip. 639 s of audio in all.
 - **Engine**: Lipik's own headless mode (`lipik --transcribe-file --repeat 3
-  --json`), so every model ran through the same transcribe-cpp code the app
+--json`), so every model ran through the same transcribe-cpp code the app
   uses, on Metal. `run_bench.py` runs a portable copy of the debug binary from
   `app/` (a `portable` marker sends its settings and models to `app/Data`), so
   the running app and its settings were never touched. The language setting
@@ -38,15 +38,15 @@ Date: 2026-10-25. Silent run: audio made with `say -o`, never played; no mic.
 
 ### Indian English (15 sentences x 4 voices = 60 clips)
 
-| Model + language | WER | CER | WER Aman | WER Rishi | WER Tara | WER Samantha (US) |
-|---|---|---|---|---|---|---|
-| **Parakeet en (default)** | **1.9** | 0.6 | 1.9 | 1.9 | **0.0** | 3.8 |
-| Qwen3-ASR 1.7B, en | 2.1 | **0.4** | **1.3** | **1.3** | 1.9 | 3.8 |
-| Whisper turbo, en | 2.9 | 0.9 | 1.9 | 1.9 | 3.8 | 3.8 |
-| Qwen3-ASR 0.6B, en / auto | 5.3 | 1.3 | 5.7 | 3.2 | 6.4 | 5.7 |
-| Qwen3-ASR 0.6B, hi | 51.6 | 22.2 | 49.7 | 47.1 | 63.1 | 46.5 |
-| Whisper turbo, hi | 117.4 | 70.7 | 98.7 | 120.4 | 116.6 | 133.8 |
-| Qwen3-ASR 1.7B, hi | 134.7 | 64.0 | 125.5 | 140.1 | 138.9 | 134.4 |
+| Model + language          | WER     | CER     | WER Aman | WER Rishi | WER Tara | WER Samantha (US) |
+| ------------------------- | ------- | ------- | -------- | --------- | -------- | ----------------- |
+| **Parakeet en (default)** | **1.9** | 0.6     | 1.9      | 1.9       | **0.0**  | 3.8               |
+| Qwen3-ASR 1.7B, en        | 2.1     | **0.4** | **1.3**  | **1.3**   | 1.9      | 3.8               |
+| Whisper turbo, en         | 2.9     | 0.9     | 1.9      | 1.9       | 3.8      | 3.8               |
+| Qwen3-ASR 0.6B, en / auto | 5.3     | 1.3     | 5.7      | 3.2       | 6.4      | 5.7               |
+| Qwen3-ASR 0.6B, hi        | 51.6    | 22.2    | 49.7     | 47.1      | 63.1     | 46.5              |
+| Whisper turbo, hi         | 117.4   | 70.7    | 98.7     | 120.4     | 116.6    | 133.8             |
+| Qwen3-ASR 1.7B, hi        | 134.7   | 64.0    | 125.5    | 140.1     | 138.9    | 134.4             |
 
 With language `hi`, all three multilingual models write English sentences in
 Devanagari (Whisper sometimes translates), so `hi` cannot be the setting for
@@ -54,40 +54,40 @@ English dictation.
 
 ### Hinglish in Roman letters (15 sentences x 4 voices = 60 clips)
 
-| Model + language | WER | CER | Loose WER | Loose CER |
-|---|---|---|---|---|
-| Parakeet en (default) | **61.8** | **17.4** | 57.5 | **15.0** |
-| Qwen3-ASR 0.6B, en | 67.9 | 35.8 | 49.3 | 25.8 |
-| Whisper turbo, en | 91.6 | 67.0 | 90.0 | 66.8 |
-| Qwen3-ASR 1.7B, en | 138.8 | 81.3 | **38.0** | 18.7 |
-| Qwen3-ASR 0.6B, auto | 150.7 | 87.9 | 39.5 | 20.1 |
-| Qwen3-ASR 0.6B, hi | 152.0 | 88.7 | 39.6 | 20.0 |
-| Qwen3-ASR 1.7B, hi | 175.0 | 99.8 | 43.8 | 22.9 |
-| Whisper turbo, hi | 166.8 | 94.1 | 46.2 | 21.5 |
+| Model + language      | WER      | CER      | Loose WER | Loose CER |
+| --------------------- | -------- | -------- | --------- | --------- |
+| Parakeet en (default) | **61.8** | **17.4** | 57.5      | **15.0**  |
+| Qwen3-ASR 0.6B, en    | 67.9     | 35.8     | 49.3      | 25.8      |
+| Whisper turbo, en     | 91.6     | 67.0     | 90.0      | 66.8      |
+| Qwen3-ASR 1.7B, en    | 138.8    | 81.3     | **38.0**  | 18.7      |
+| Qwen3-ASR 0.6B, auto  | 150.7    | 87.9     | 39.5      | 20.1      |
+| Qwen3-ASR 0.6B, hi    | 152.0    | 88.7     | 39.6      | 20.0      |
+| Qwen3-ASR 1.7B, hi    | 175.0    | 99.8     | 43.8      | 22.9      |
+| Whisper turbo, hi     | 166.8    | 94.1     | 46.2      | 21.5      |
 
 Per-voice scores for every model are in `python3 score.py`. Parakeet by
 voice: Aman 53.6, Tara 58.6, Rishi 65.0, Lekha 70.0 (strict WER).
 
 Script of the output on the 80 Hinglish clips (both groups):
 
-| Model + language | Clips written in Devanagari |
-|---|---|
-| Parakeet en | 0 / 80 (always Roman, but guesses English words: "dal dokie", "late hair") |
-| Whisper turbo, en | 1 / 80 (mostly translates to English or makes things up) |
-| Qwen3-ASR 0.6B, en | 18 / 80 |
-| Qwen3-ASR 1.7B, en | 71 / 80 (the `en` hint does not stop it writing Hindi) |
-| Qwen3-ASR 0.6B, auto | 77 / 80 (English words stay in Roman: "slack पे message दाल दू") |
-| Every model with `hi` | 78-80 / 80 |
+| Model + language      | Clips written in Devanagari                                                |
+| --------------------- | -------------------------------------------------------------------------- |
+| Parakeet en           | 0 / 80 (always Roman, but guesses English words: "dal dokie", "late hair") |
+| Whisper turbo, en     | 1 / 80 (mostly translates to English or makes things up)                   |
+| Qwen3-ASR 0.6B, en    | 18 / 80                                                                    |
+| Qwen3-ASR 1.7B, en    | 71 / 80 (the `en` hint does not stop it writing Hindi)                     |
+| Qwen3-ASR 0.6B, auto  | 77 / 80 (English words stay in Roman: "slack पे message दाल दू")           |
+| Every model with `hi` | 78-80 / 80                                                                 |
 
 ### Numbers and dates (10 sentences x 4 voices = 40 clips)
 
-| Model + language | WER | CER | Loose WER | Loose CER | WER Samantha (US, English lines only) |
-|---|---|---|---|---|---|
-| Parakeet en | **30.8** | **12.8** | 30.0 | 11.2 | **9.6** |
-| Qwen3-ASR 0.6B, en | 31.5 | 17.2 | 24.2 | 12.0 | 13.5 |
-| Whisper turbo, en | 32.8 | 19.8 | 32.0 | 18.6 | 11.5 |
-| Qwen3-ASR 1.7B, en | 60.2 | 30.7 | **19.8** | **8.0** | 11.5 |
-| Qwen3-ASR 0.6B, auto | 86.5 | 47.2 | 31.0 | 16.5 | 13.5 |
+| Model + language     | WER      | CER      | Loose WER | Loose CER | WER Samantha (US, English lines only) |
+| -------------------- | -------- | -------- | --------- | --------- | ------------------------------------- |
+| Parakeet en          | **30.8** | **12.8** | 30.0      | 11.2      | **9.6**                               |
+| Qwen3-ASR 0.6B, en   | 31.5     | 17.2     | 24.2      | 12.0      | 13.5                                  |
+| Whisper turbo, en    | 32.8     | 19.8     | 32.0      | 18.6      | 11.5                                  |
+| Qwen3-ASR 1.7B, en   | 60.2     | 30.7     | **19.8**  | **8.0**   | 11.5                                  |
+| Qwen3-ASR 0.6B, auto | 86.5     | 47.2     | 31.0      | 16.5      | 13.5                                  |
 
 Half of this group is Hinglish, which pulls every score up. On the English
 number lines the errors are mostly format, not hearing: "15th March" comes out
@@ -95,16 +95,16 @@ as "15 March" or "March 15", "3 pm" as "3 p.m.".
 
 ### Speed (warm, Metal, M4 Pro, debug binary; the C++ engine is a release build)
 
-| Model + language | x real time | Median per clip (3.9 s audio) | Slowest clip | Model load |
-|---|---|---|---|---|
-| **Parakeet en** | **65x** | **61 ms** | 105 ms | 212 ms |
-| Qwen3-ASR 0.6B, en | 29x | 131 ms | 294 ms | 308 ms |
-| Qwen3-ASR 0.6B, auto | 21x | 164 ms | 331 ms | 325 ms |
-| Qwen3-ASR 0.6B, hi | 20x | 203 ms | 332 ms | 325 ms |
-| Qwen3-ASR 1.7B, en | 12x | 262 ms | 616 ms | 655 ms |
-| Qwen3-ASR 1.7B, hi | 9x | 482 ms | 662 ms | 655 ms |
-| Whisper turbo, en | 6x | 620 ms | 1,194 ms | 253 ms |
-| Whisper turbo, hi | 4x | 675 ms | 2,516 ms | 248 ms |
+| Model + language     | x real time | Median per clip (3.9 s audio) | Slowest clip | Model load |
+| -------------------- | ----------- | ----------------------------- | ------------ | ---------- |
+| **Parakeet en**      | **65x**     | **61 ms**                     | 105 ms       | 212 ms     |
+| Qwen3-ASR 0.6B, en   | 29x         | 131 ms                        | 294 ms       | 308 ms     |
+| Qwen3-ASR 0.6B, auto | 21x         | 164 ms                        | 331 ms       | 325 ms     |
+| Qwen3-ASR 0.6B, hi   | 20x         | 203 ms                        | 332 ms       | 325 ms     |
+| Qwen3-ASR 1.7B, en   | 12x         | 262 ms                        | 616 ms       | 655 ms     |
+| Qwen3-ASR 1.7B, hi   | 9x          | 482 ms                        | 662 ms       | 655 ms     |
+| Whisper turbo, en    | 6x          | 620 ms                        | 1,194 ms     | 253 ms     |
+| Whisper turbo, hi    | 4x          | 675 ms                        | 2,516 ms     | 248 ms     |
 
 Whisper pads every clip to a 30 s window, so short dictations pay ~0.6 s no
 matter how short they are.

@@ -99,13 +99,9 @@ pub async fn retry_history_entry_transcription(
     let target = history_manager
         .dictation_target(id)
         .map_err(|e| e.to_string())?;
-    let processed = process_transcription_output(
-        &app,
-        &transcription,
-        entry.post_process_requested,
-        &target,
-    )
-    .await;
+    let processed =
+        process_transcription_output(&app, &transcription, entry.post_process_requested, &target)
+            .await;
     history_manager
         .update_transcription(
             id,

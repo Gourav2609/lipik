@@ -1,4 +1,8 @@
-import type { CalendarAccess, CalendarSource, NotetakerSettings } from "@/bindings";
+import type {
+  CalendarAccess,
+  CalendarSource,
+  NotetakerSettings,
+} from "@/bindings";
 import type { MockHandler } from "../mockTauri";
 
 // Settings → Notetaker in the preview. `?calendar=denied` (etc.) picks the
@@ -18,7 +22,12 @@ let calendar = (params.get("calendar") ?? "not_determined") as CalendarAccess;
 
 // `?calendarSources=none` shows the "no accounts" state of the connect modal.
 const SAMPLE_SOURCES: CalendarSource[] = [
-  { id: "g", title: "asha.rao@example.com", kind: "google", calendars: ["asha.rao@example.com", "Holidays", "Team"] },
+  {
+    id: "g",
+    title: "asha.rao@example.com",
+    kind: "google",
+    calendars: ["asha.rao@example.com", "Holidays", "Team"],
+  },
   { id: "x", title: "Exchange", kind: "exchange", calendars: ["Calendar"] },
   { id: "i", title: "iCloud", kind: "icloud", calendars: ["Family", "Home"] },
 ];
@@ -41,6 +50,13 @@ export const handlers: Record<string, MockHandler> = {
   },
   notetaker_calendar_sources: () =>
     calendar !== "full_access" || params.get("calendarSources") === "none"
-      ? [{ id: "local", title: "On My Mac", kind: "local", calendars: ["Calendar"] }]
+      ? [
+          {
+            id: "local",
+            title: "On My Mac",
+            kind: "local",
+            calendars: ["Calendar"],
+          },
+        ]
       : SAMPLE_SOURCES,
 };

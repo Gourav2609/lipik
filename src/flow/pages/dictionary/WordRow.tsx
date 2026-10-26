@@ -44,7 +44,9 @@ export const WordRow = ({
     <div className="flex min-w-0 items-center gap-[8px] whitespace-pre">
       {entry.replacement !== undefined ? (
         <>
-          <span className="truncate text-[var(--fk-text-muted)]">{entry.word}</span>
+          <span className="truncate text-[var(--fk-text-muted)]">
+            {entry.word}
+          </span>
           <ArrowRight
             size={14}
             strokeWidth={1.75}

@@ -277,7 +277,8 @@ impl SystemTap {
         this.sample_rate = format.mSampleRate;
         let tap_uid = unsafe { desc.UUID().UUIDString() };
 
-        let output_device = default_output_device().ok_or_else(|| anyhow!("No audio output device"))?;
+        let output_device =
+            default_output_device().ok_or_else(|| anyhow!("No audio output device"))?;
         this.output_device = output_device;
         let output_uid = get_string(output_device, kAudioDevicePropertyDeviceUID)
             .ok_or_else(|| anyhow!("Could not read the output device id"))?;
@@ -297,11 +298,17 @@ impl SystemTap {
         let description = dict(&[
             (kAudioAggregateDeviceNameKey, &*display_name as &AnyObject),
             (kAudioAggregateDeviceUIDKey, &*aggregate_uid as &AnyObject),
-            (kAudioAggregateDeviceMainSubDeviceKey, &*output_uid as &AnyObject),
+            (
+                kAudioAggregateDeviceMainSubDeviceKey,
+                &*output_uid as &AnyObject,
+            ),
             (kAudioAggregateDeviceIsPrivateKey, &*one as &AnyObject),
             (kAudioAggregateDeviceIsStackedKey, &*zero as &AnyObject),
             (kAudioAggregateDeviceTapAutoStartKey, &*one as &AnyObject),
-            (kAudioAggregateDeviceSubDeviceListKey, &*sub_devices as &AnyObject),
+            (
+                kAudioAggregateDeviceSubDeviceListKey,
+                &*sub_devices as &AnyObject,
+            ),
             (kAudioAggregateDeviceTapListKey, &*sub_taps as &AnyObject),
         ]);
 

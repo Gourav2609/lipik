@@ -28,7 +28,8 @@ export const startNotetaker = async (title: string | null) => {
     console.warn("Could not start meeting notes:", e);
     return null;
   });
-  if (r?.status === "error") console.warn("Could not start meeting notes:", r.error);
+  if (r?.status === "error")
+    console.warn("Could not start meeting notes:", r.error);
   return r?.status === "ok";
 };
 

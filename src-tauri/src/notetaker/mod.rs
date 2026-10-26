@@ -404,7 +404,12 @@ pub fn settings(app: &AppHandle) -> NotetakerSettings {
 const MIC_SILENT_SAMPLES: u64 = 10 * audio::RATE as u64;
 const SYSTEM_SILENT_SAMPLES: u64 = 30 * audio::RATE as u64;
 
-fn stream_status(feed: &SharedFeed, error: &Option<String>, system: bool, call_active: bool) -> StreamStatus {
+fn stream_status(
+    feed: &SharedFeed,
+    error: &Option<String>,
+    system: bool,
+    call_active: bool,
+) -> StreamStatus {
     if let Some(error) = error {
         return StreamStatus {
             state: StreamState::Unavailable,
@@ -429,7 +434,10 @@ fn stream_status(feed: &SharedFeed, error: &Option<String>, system: bool, call_a
     } else if !system && all_silent && f.samples > MIC_SILENT_SAMPLES {
         (
             StreamState::Silent,
-            Some("Nothing heard from the microphone yet. Check the microphone and its permission.".to_string()),
+            Some(
+                "Nothing heard from the microphone yet. Check the microphone and its permission."
+                    .to_string(),
+            ),
         )
     } else {
         (StreamState::Capturing, None)
@@ -449,7 +457,10 @@ fn idle_stream(starting: bool, system: bool) -> StreamStatus {
     StreamStatus {
         state: StreamState::Starting,
         detail: (system && cfg!(target_os = "macos")).then(|| {
-            format!("Starting. If macOS asks, allow {} under System Audio Recording.", crate::brand::APP_NAME)
+            format!(
+                "Starting. If macOS asks, allow {} under System Audio Recording.",
+                crate::brand::APP_NAME
+            )
         }),
     }
 }
@@ -550,7 +561,11 @@ impl NotetakerManager {
     }
 
     pub fn recording_meeting(&self) -> Option<String> {
-        self.session.lock().unwrap().as_ref().map(|s| s.meeting_id.clone())
+        self.session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|s| s.meeting_id.clone())
     }
 
     /// The call app the current recording stops with.
@@ -603,7 +618,11 @@ impl NotetakerManager {
     /// Starts recording. Without a title the current calendar event's title
     /// is used, else the call's app name. A call detected at this moment is
     /// linked, so the recording stops when that call ends.
-    pub fn start(self: &Arc<Self>, title: Option<String>, call: Option<DetectedCall>) -> Result<Meeting> {
+    pub fn start(
+        self: &Arc<Self>,
+        title: Option<String>,
+        call: Option<DetectedCall>,
+    ) -> Result<Meeting> {
         let id = new_meeting_id();
         if !self.starting.begin(&id) {
             return Err(anyhow!("A recording is already starting"));
@@ -614,7 +633,12 @@ impl NotetakerManager {
 
     /// Undoes a start that failed after its meeting was saved: closes the
     /// streams that opened and removes the meeting and its folder.
-    fn abandon_start(&self, id: &str, mic: Option<MicCapture>, system_stop: Option<Box<dyn FnOnce() + Send>>) {
+    fn abandon_start(
+        &self,
+        id: &str,
+        mic: Option<MicCapture>,
+        system_stop: Option<Box<dyn FnOnce() + Send>>,
+    ) {
         if let Some(mic) = mic {
             mic.stop();
         }
@@ -626,14 +650,24 @@ impl NotetakerManager {
     }
 
     /// Undoes a start that Stop or Delete cancelled while it waited.
-    fn cancel_start(&self, id: &str, mic: Option<MicCapture>, system_stop: Option<Box<dyn FnOnce() + Send>>) -> anyhow::Error {
+    fn cancel_start(
+        &self,
+        id: &str,
+        mic: Option<MicCapture>,
+        system_stop: Option<Box<dyn FnOnce() + Send>>,
+    ) -> anyhow::Error {
         log::info!("Notetaker: start of meeting {id} was cancelled");
         self.abandon_start(id, mic, system_stop);
         self.emit_state(None);
         anyhow!("Recording was cancelled")
     }
 
-    fn start_unlocked(self: &Arc<Self>, id: String, title: Option<String>, call: Option<DetectedCall>) -> Result<Meeting> {
+    fn start_unlocked(
+        self: &Arc<Self>,
+        id: String,
+        title: Option<String>,
+        call: Option<DetectedCall>,
+    ) -> Result<Meeting> {
         if let Some(s) = self.session.lock().unwrap().as_ref() {
             return Err(anyhow!("Already recording meeting {}", s.meeting_id));
         }
@@ -645,7 +679,9 @@ impl NotetakerManager {
         let event = calendar::current_event(&events, start_ms, 10 * 60_000).cloned();
         let call = call.or_else(|| self.active_calls().last().cloned());
 
-        let given = title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+        let given = title
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty());
         let (title, title_auto) = match (given, &event, &call) {
             (Some(t), _, _) => (t, false),
             (None, Some(e), _) => (e.title.clone(), false),
@@ -730,10 +766,7 @@ impl NotetakerManager {
             let this = self.clone();
             let id = id.clone();
             let stop = stop.clone();
-            let streams = vec![
-                ("mic", mic_feed.clone()),
-                ("system", system_feed.clone()),
-            ];
+            let streams = vec![("mic", mic_feed.clone()), ("system", system_feed.clone())];
             std::thread::Builder::new()
                 .name("notetaker-live".into())
                 .spawn(move || this.live_loop(&id, started, streams, stop))
@@ -811,11 +844,9 @@ impl NotetakerManager {
                 .first_at
                 .map(|t| t.saturating_duration_since(session.started).as_millis() as i64)
         };
-        let _ = self.store.set_offsets(
-            &id,
-            offset(&session.mic_feed),
-            offset(&session.system_feed),
-        );
+        let _ =
+            self.store
+                .set_offsets(&id, offset(&session.mic_feed), offset(&session.system_feed));
         if process {
             let _ = self.store.set_status(&id, MeetingStatus::Processing);
         }
@@ -856,11 +887,19 @@ impl NotetakerManager {
         };
         log::info!("Notetaker: recording {id} linked to the {} call", call.app);
         let _ = self.store.set_call(&id, &call.app, &call.bundle_id);
-        let _ = self.store.set_auto_title(&id, &format!("{} call", call.app));
+        let _ = self
+            .store
+            .set_auto_title(&id, &format!("{} call", call.app));
         let Ok(Some(meeting)) = self.store.meeting(&id) else {
             return;
         };
-        if let Some(s) = self.session.lock().unwrap().as_mut().filter(|s| s.meeting_id == id) {
+        if let Some(s) = self
+            .session
+            .lock()
+            .unwrap()
+            .as_mut()
+            .filter(|s| s.meeting_id == id)
+        {
             s.title = meeting.title;
         }
     }
@@ -873,7 +912,12 @@ impl NotetakerManager {
             let Some(s) = session.as_mut().filter(|s| s.meeting_id == id) else {
                 return;
             };
-            if s.mic_feed.lock().unwrap_or_else(|e| e.into_inner()).failed.is_none() {
+            if s.mic_feed
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .failed
+                .is_none()
+            {
                 return;
             }
             let Some(mic) = s.mic.take() else { return };
@@ -909,7 +953,9 @@ impl NotetakerManager {
                 std::thread::Builder::new()
                     .name(format!("notetaker-live-{source}"))
                     .spawn(move || live::run(&this, &id, source, feed, started, &stop))
-                    .inspect_err(|e| log::error!("Notetaker live {source} transcript did not start: {e}"))
+                    .inspect_err(|e| {
+                        log::error!("Notetaker live {source} transcript did not start: {e}")
+                    })
                     .ok()
             })
             .collect();
@@ -925,7 +971,10 @@ impl NotetakerManager {
             }
 
             if let Some((mic, system)) = self.stream_states(id) {
-                let key = format!("{:?}{:?}{:?}{:?}", mic.state, system.state, mic.detail, system.detail);
+                let key = format!(
+                    "{:?}{:?}{:?}{:?}",
+                    mic.state, system.state, mic.detail, system.detail
+                );
                 if key != last_status {
                     last_status = key;
                     let _ = NotetakerStreamChanged {
@@ -1005,8 +1054,16 @@ impl NotetakerManager {
 
         if transcribe {
             let sources = [
-                ("mic", dir.join("mic.wav"), meeting.mic_offset_ms.unwrap_or(0)),
-                ("system", dir.join("system.wav"), meeting.system_offset_ms.unwrap_or(0)),
+                (
+                    "mic",
+                    dir.join("mic.wav"),
+                    meeting.mic_offset_ms.unwrap_or(0),
+                ),
+                (
+                    "system",
+                    dir.join("system.wav"),
+                    meeting.system_offset_ms.unwrap_or(0),
+                ),
             ];
             let present: Vec<_> = sources.iter().filter(|(_, p, _)| p.exists()).collect();
             let mut results: Vec<(&str, Vec<Segment>)> = Vec::new();
@@ -1042,12 +1099,16 @@ impl NotetakerManager {
                     }
                     let merged = transcribe::merge_streams(mic, system);
                     if merged.is_empty() && !self.store.segments(id)?.is_empty() {
-                        log::warn!("Notetaker final pass heard no speech; keeping the live transcript");
+                        log::warn!(
+                            "Notetaker final pass heard no speech; keeping the live transcript"
+                        );
                     } else {
                         self.store.replace_final_segments(id, &merged)?;
                     }
                 }
-                Some(e) => log::warn!("Notetaker final pass failed, keeping the live transcript: {e}"),
+                Some(e) => {
+                    log::warn!("Notetaker final pass failed, keeping the live transcript: {e}")
+                }
             }
             let _ = NotetakerTranscript {
                 meeting_id: id.to_string(),
@@ -1067,7 +1128,8 @@ impl NotetakerManager {
             .ok_or_else(|| anyhow!("Meeting {id} is gone"))?;
         let segments = self.store.segments(id)?;
         let finish = |status: SummaryStatus, error: Option<String>| -> Result<()> {
-            self.store.set_summary_status(id, status, error.as_deref())?;
+            self.store
+                .set_summary_status(id, status, error.as_deref())?;
             let _ = NotetakerNoteReady {
                 meeting_id: id.to_string(),
                 summary_status: status,
@@ -1141,7 +1203,9 @@ impl NotetakerManager {
         if transcribe {
             let _ = self.store.set_status(id, MeetingStatus::Processing);
         }
-        let _ = self.store.set_summary_status(id, SummaryStatus::Pending, None);
+        let _ = self
+            .store
+            .set_summary_status(id, SummaryStatus::Pending, None);
         self.process_in_background(id.to_string(), transcribe)
     }
 
@@ -1160,7 +1224,10 @@ impl NotetakerManager {
                 let _ = self.store.set_end(&m.id, now_ms());
             }
             if self.store.process_attempts(&m.id).unwrap_or(0) >= 2 {
-                log::warn!("Notetaker: processing of {} was cut off twice, marking it failed", m.id);
+                log::warn!(
+                    "Notetaker: processing of {} was cut off twice, marking it failed",
+                    m.id
+                );
                 let _ = self.store.clear_process_attempts(&m.id);
                 self.fail(
                     &m.id,
@@ -1219,7 +1286,12 @@ impl NotetakerManager {
         Ok(())
     }
 
-    pub fn ask(&self, question: &str, meeting_id: Option<&str>, thread_id: Option<&str>) -> Result<AskAnswer> {
+    pub fn ask(
+        &self,
+        question: &str,
+        meeting_id: Option<&str>,
+        thread_id: Option<&str>,
+    ) -> Result<AskAnswer> {
         let question = question.trim();
         if question.is_empty() {
             return Err(anyhow!("Ask a question"));
@@ -1261,7 +1333,10 @@ impl NotetakerManager {
                     text.push_str(&format!(
                         "\nAction: {}{}",
                         a.text,
-                        a.owner.as_ref().map(|o| format!(" ({o})")).unwrap_or_default()
+                        a.owner
+                            .as_ref()
+                            .map(|o| format!(" ({o})"))
+                            .unwrap_or_default()
                     ));
                 }
                 let score = ai::score_passage(&text, &keywords, m.start_ms, now) + summary_boost;
@@ -1269,7 +1344,8 @@ impl NotetakerManager {
             }
             let thoughts = self.store.thoughts(&m.id)?;
             if !thoughts.trim().is_empty() {
-                let score = ai::score_passage(&thoughts, &keywords, m.start_ms, now) + summary_boost;
+                let score =
+                    ai::score_passage(&thoughts, &keywords, m.start_ms, now) + summary_boost;
                 scored.push((score, passage(0, format!("My notes: {thoughts}"))));
             }
             for window in self.store.segments(&m.id)?.chunks(6) {
@@ -1407,7 +1483,10 @@ fn system_worker(
         if stalled || device_changed {
             if stalled {
                 log::warn!("Notetaker system audio stopped; reconnecting");
-                writer.set_failed(Some("System audio stopped (output device changed or gone). Reconnecting…".to_string()));
+                writer.set_failed(Some(
+                    "System audio stopped (output device changed or gone). Reconnecting…"
+                        .to_string(),
+                ));
             } else {
                 log::info!("Notetaker: output device changed, rebuilding the system audio tap");
             }
@@ -1419,7 +1498,10 @@ fn system_worker(
 }
 
 #[cfg(not(target_os = "macos"))]
-fn start_system_audio(_dir: &std::path::Path, _feed: SharedFeed) -> Result<Box<dyn FnOnce() + Send>> {
+fn start_system_audio(
+    _dir: &std::path::Path,
+    _feed: SharedFeed,
+) -> Result<Box<dyn FnOnce() + Send>> {
     Err(anyhow!("System audio capture is only available on macOS"))
 }
 

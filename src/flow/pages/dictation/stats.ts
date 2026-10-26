@@ -15,7 +15,10 @@ const dayStart = (ms: number) => {
 };
 
 export const formatTime = (seconds: number) =>
-  new Date(seconds * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  new Date(seconds * 1000).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
 export const dayLabel = (day: number) => {
   const today = dayStart(Date.now());
@@ -26,7 +29,9 @@ export const dayLabel = (day: number) => {
     weekday: "short",
     day: "numeric",
     month: "short",
-    ...(date.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+    ...(date.getFullYear() === new Date().getFullYear()
+      ? {}
+      : { year: "numeric" }),
   });
 };
 

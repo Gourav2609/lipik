@@ -21,7 +21,9 @@ export const PillPreview = ({
 }) => {
   const line = state === "idle" || state === "done";
   const tile =
-    state === "hover" ? { minWidth: 184, height: 34 } : { width: 152, height: 36 };
+    state === "hover"
+      ? { minWidth: 184, height: 34 }
+      : { width: 152, height: 36 };
   return (
     <div
       className="fk-ob-pill relative flex shrink-0 items-center overflow-hidden"
@@ -31,7 +33,8 @@ export const PillPreview = ({
               width: 48,
               height: 6,
               borderRadius: 3,
-              background: state === "done" ? BRAND.inkLight : "rgba(18, 17, 15, 0.55)",
+              background:
+                state === "done" ? BRAND.inkLight : "rgba(18, 17, 15, 0.55)",
               boxShadow: "inset 0 0 0 1px rgba(238, 240, 255, 0.5)",
             }
           : {
@@ -86,13 +89,19 @@ export const PillPreview = ({
             Hold
             <span
               className="rounded-[4px] px-[4px] py-[2px] text-[11px] font-semibold leading-none"
-              style={{ boxShadow: `inset 0 0 0 1px ${PILL_RIM}`, color: PILL_MUTED }}
+              style={{
+                boxShadow: `inset 0 0 0 1px ${PILL_RIM}`,
+                color: PILL_MUTED,
+              }}
             >
               {hotkey}
             </span>
             to write
           </span>
-          <span className="h-[18px] w-px shrink-0" style={{ background: PILL_RIM }} />
+          <span
+            className="h-[18px] w-px shrink-0"
+            style={{ background: PILL_RIM }}
+          />
           <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px]">
             <NotebookPen size={14} strokeWidth={1.75} />
           </span>
@@ -142,7 +151,13 @@ export const WritingVisual = ({
   </Preview>
 );
 
-export const MeterVisual = ({ level, live }: { level: number; live: boolean }) => {
+export const MeterVisual = ({
+  level,
+  live,
+}: {
+  level: number;
+  live: boolean;
+}) => {
   const count = 41;
   return (
     <Preview className="flex-col gap-[16px]">
@@ -162,7 +177,11 @@ export const MeterVisual = ({ level, live }: { level: number; live: boolean }) =
             <span
               key={i}
               className="absolute top-[1px] w-[3px] rounded-b-full bg-[var(--fk-accent)] transition-[height] duration-[var(--fk-t-quick)]"
-              style={{ left: i * 9 - 1.5, height: h, opacity: 0.4 + 0.6 * centre }}
+              style={{
+                left: i * 9 - 1.5,
+                height: h,
+                opacity: 0.4 + 0.6 * centre,
+              }}
             />
           );
         })}
@@ -210,7 +229,12 @@ export const KeyboardVisual = ({
         />
         <KeyCap label="⌃" sub="control" hot={on("ctrl", "control")} />
         <KeyCap label="⌥" sub="option" hot={on("option", "alt")} />
-        <KeyCap label="⌘" sub="command" w={72} hot={on("command", "cmd", "meta", "super")} />
+        <KeyCap
+          label="⌘"
+          sub="command"
+          w={72}
+          hot={on("command", "cmd", "meta", "super")}
+        />
         <KeyCap w={148} hot={on("space")} />
       </div>
       <PillPreview state="recording" hotkey={hotkey} />
@@ -222,8 +246,13 @@ export const MarkVisual = () => (
   <Preview className="flex-col gap-[12px]">
     <LipikMark size={64} tile />
     <div className="flex items-baseline gap-[8px]">
-      <span className="fk-display text-[22px] font-semibold leading-[30px]">{APP_NAME}</span>
-      <span lang="hi" className="fk-display text-[16px] leading-[30px] text-[var(--fk-text-muted)]">
+      <span className="fk-display text-[22px] font-semibold leading-[30px]">
+        {APP_NAME}
+      </span>
+      <span
+        lang="hi"
+        className="fk-display text-[16px] leading-[30px] text-[var(--fk-text-muted)]"
+      >
         लिपिक
       </span>
     </div>

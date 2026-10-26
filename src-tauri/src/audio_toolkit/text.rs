@@ -803,9 +803,18 @@ mod tests {
 
     #[test]
     fn test_filter_english_erm() {
-        assert_eq!(filter_transcription_output("erm I think so", "en", &None), "I think so");
-        assert_eq!(filter_transcription_output("Erm, so it works", "en", &None), "So it works");
-        assert_eq!(filter_transcription_output("er ist schon da", "en", &None), "er ist schon da");
+        assert_eq!(
+            filter_transcription_output("erm I think so", "en", &None),
+            "I think so"
+        );
+        assert_eq!(
+            filter_transcription_output("Erm, so it works", "en", &None),
+            "So it works"
+        );
+        assert_eq!(
+            filter_transcription_output("er ist schon da", "en", &None),
+            "er ist schon da"
+        );
     }
 
     #[test]

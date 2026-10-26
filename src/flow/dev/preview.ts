@@ -9,7 +9,8 @@ export const isFlowPreview =
 /** ?look=<a|b|/** The window style from src/flow/looks; ?look=<id> previews another one. */
 export const LOOK = (isFlowPreview && params.get("look")) || "d";
 
-export const skipOnboarding = isFlowPreview && params.get("skipOnboarding") === "1";
+export const skipOnboarding =
+  isFlowPreview && params.get("skipOnboarding") === "1";
 
 if (isFlowPreview) {
   const theme = params.get("theme") === "light" ? "light" : "dark";

@@ -112,7 +112,10 @@ export default function General() {
   ];
 
   return (
-    <SettingsPage title="Dictation" intro="Your key, microphone and speech model.">
+    <SettingsPage
+      title="Dictation"
+      intro="Your key, microphone and speech model."
+    >
       <Section title="Shortcuts">
         <SettingsCard>
           <SettingRow

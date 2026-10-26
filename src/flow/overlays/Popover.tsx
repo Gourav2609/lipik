@@ -8,13 +8,15 @@ import {
 
 export const useEscape = (onClose: () => void) =>
   useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: globalThis.KeyboardEvent) =>
+      e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
 /** The top-bar buttons that open the appearance and account menus. */
-export const TOP_BAR_TRIGGERS = 'header button[aria-label="Appearance"], header button[aria-label="Account"]';
+export const TOP_BAR_TRIGGERS =
+  'header button[aria-label="Appearance"], header button[aria-label="Account"]';
 
 /** Top edge of menus opened from the header row: 52 px header + 4 px. */
 export const MENU_TOP = 56;
@@ -27,7 +29,11 @@ const moveFocus = (e: KeyboardEvent<HTMLDivElement>) => {
   e.preventDefault();
   const items = [...e.currentTarget.querySelectorAll<HTMLElement>(ITEMS)];
   const at = items.indexOf(document.activeElement as HTMLElement);
-  items[at < 0 && step < 0 ? items.length - 1 : (at + step + items.length) % items.length]?.focus();
+  items[
+    at < 0 && step < 0
+      ? items.length - 1
+      : (at + step + items.length) % items.length
+  ]?.focus();
 };
 
 /**
@@ -54,7 +60,8 @@ export const Popover = ({
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const target = e.target as Element;
-      if (ref.current?.contains(target) || (ignore && target.closest(ignore))) return;
+      if (ref.current?.contains(target) || (ignore && target.closest(ignore)))
+        return;
       onClose();
     };
     document.addEventListener("mousedown", onDown);

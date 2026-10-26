@@ -12,7 +12,11 @@ export const CONTEXTS: { id: ContextId; label: string; apps: string }[] = [
 export const STYLES: { id: StyleId; name: string; rule: string }[] = [
   { id: "formal", name: "Formal", rule: "Capitals and full punctuation" },
   { id: "casual", name: "Relaxed", rule: "Capitals, lighter punctuation" },
-  { id: "very-casual", name: "Lowercase", rule: "No capitals, little punctuation" },
+  {
+    id: "very-casual",
+    name: "Lowercase",
+    rule: "No capitals, little punctuation",
+  },
 ];
 
 export const SAMPLES: Record<ContextId, Record<StyleId, string>> = {
@@ -60,7 +64,8 @@ export const CLEANUP_LEVELS: {
     id: "light",
     name: "Light",
     description: "Takes out filler words. Keeps your wording.",
-    result: "So I think we should move the call to Tuesday, actually Wednesday works better.",
+    result:
+      "So I think we should move the call to Tuesday, actually Wednesday works better.",
   },
   {
     id: "medium",

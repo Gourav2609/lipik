@@ -76,7 +76,11 @@ pub fn transcription_manager(app: &AppHandle) -> Result<Arc<TranscriptionManager
 /// Transcribes one piece with the dictation model, never delaying a
 /// dictation. The model stays loaded between pieces; call `release_model`
 /// when the meeting is done.
-pub fn transcribe_piece(app: &AppHandle, audio: Vec<f32>, cancel: Option<&AtomicBool>) -> Result<String> {
+pub fn transcribe_piece(
+    app: &AppHandle,
+    audio: Vec<f32>,
+    cancel: Option<&AtomicBool>,
+) -> Result<String> {
     let _turn = wait_for_turn(app, cancel)?;
     let tm = transcription_manager(app)?;
     tm.initiate_model_load();
@@ -141,7 +145,12 @@ pub fn transcribe_file(
         while let Some(piece) = track.take(super::audio::FINAL_RULES, done) {
             let text = transcribe_piece(app, piece.audio.clone(), None)?;
             if !text.trim().is_empty() {
-                out.push(piece_segment(&piece, offset_ms, source, text.trim().to_string()));
+                out.push(piece_segment(
+                    &piece,
+                    offset_ms,
+                    source,
+                    text.trim().to_string(),
+                ));
             }
             progress(read as f32 / total);
         }
@@ -155,10 +164,10 @@ pub fn transcribe_file(
 
 /// Short or very common words that say nothing about where a line came from.
 const COMMON: &[&str] = &[
-    "a", "an", "the", "and", "or", "but", "so", "to", "of", "in", "on", "at", "for", "with",
-    "is", "it", "its", "that", "this", "i", "you", "we", "they", "he", "she", "me", "my",
-    "be", "do", "have", "yes", "yeah", "no", "ok", "okay", "right", "um", "uh", "like",
-    "just", "think", "know", "s", "t",
+    "a", "an", "the", "and", "or", "but", "so", "to", "of", "in", "on", "at", "for", "with", "is",
+    "it", "its", "that", "this", "i", "you", "we", "they", "he", "she", "me", "my", "be", "do",
+    "have", "yes", "yeah", "no", "ok", "okay", "right", "um", "uh", "like", "just", "think",
+    "know", "s", "t",
 ];
 /// Their words are placed in time by spreading a line evenly over its span;
 /// this much slack covers that guess.
@@ -176,7 +185,10 @@ fn word_list(text: &str) -> Vec<String> {
 /// replies ("yeah", "I think so") are never treated as echo.
 fn is_echo(mic: &Segment, system: &[(&Segment, Vec<String>)]) -> bool {
     let mine = word_list(&mic.text);
-    let meaningful = mine.iter().filter(|w| !COMMON.contains(&w.as_str())).count();
+    let meaningful = mine
+        .iter()
+        .filter(|w| !COMMON.contains(&w.as_str()))
+        .count();
     if mine.len() < 4 || meaningful < 2 {
         return false;
     }
@@ -192,7 +204,11 @@ fn is_echo(mic: &Segment, system: &[(&Segment, Vec<String>)]) -> bool {
         let from = at(mic.start_ms - ECHO_SLACK_MS);
         let to = (at(mic.end_ms + ECHO_SLACK_MS) + 1).min(words.len());
         if to > from {
-            theirs.extend(words[from..to].windows(2).map(|p| (p[0].as_str(), p[1].as_str())));
+            theirs.extend(
+                words[from..to]
+                    .windows(2)
+                    .map(|p| (p[0].as_str(), p[1].as_str())),
+            );
         }
     }
     let pairs = mine.len() - 1;
@@ -236,11 +252,21 @@ mod tests {
     fn merge_orders_and_drops_echo() {
         let mic = vec![
             seg("mic", 0, 4_000, "Hi everyone, let's start"),
-            seg("mic", 10_000, 14_000, "we should ship the release on friday"),
+            seg(
+                "mic",
+                10_000,
+                14_000,
+                "we should ship the release on friday",
+            ),
         ];
         let system = vec![
             seg("system", 5_000, 9_000, "Sounds good to me"),
-            seg("system", 9_500, 15_000, "We should ship the release on Friday, right?"),
+            seg(
+                "system",
+                9_500,
+                15_000,
+                "We should ship the release on Friday, right?",
+            ),
         ];
         let merged = merge_streams(mic, system);
         let texts: Vec<&str> = merged.iter().map(|s| s.text.as_str()).collect();
@@ -267,7 +293,12 @@ mod tests {
         let mic = vec![
             seg("mic", 3_000, 4_000, "yeah okay"),
             seg("mic", 5_000, 6_000, "I think so"),
-            seg("mic", 20_000, 24_000, "the launch should move to march instead"),
+            seg(
+                "mic",
+                20_000,
+                24_000,
+                "the launch should move to march instead",
+            ),
         ];
         let merged = merge_streams(mic, system);
         assert_eq!(merged.iter().filter(|s| s.source == "mic").count(), 3);

@@ -22,7 +22,13 @@ export const CopyStats = ({ text }: { text: string }) => {
       variant="secondary"
       size="sm"
       title="Copy a short summary of your stats"
-      icon={copied ? <Check size={16} strokeWidth={1.75} /> : <Copy size={16} strokeWidth={1.75} />}
+      icon={
+        copied ? (
+          <Check size={16} strokeWidth={1.75} />
+        ) : (
+          <Copy size={16} strokeWidth={1.75} />
+        )
+      }
       onClick={copy}
     >
       {copied ? "Copied" : "Copy stats"}

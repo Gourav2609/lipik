@@ -36,11 +36,18 @@ export const handlers: Record<string, MockHandler> = {
   add_dictionary_word: ({ word }) =>
     change(() => {
       const w = String(word);
-      if (dict.words.some((x) => same(x.word, w))) return `"${w}" is already in your dictionary`;
+      if (dict.words.some((x) => same(x.word, w)))
+        return `"${w}" is already in your dictionary`;
       dict = {
         ...dict,
         words: [
-          { id: String(nextId++), word: w, starred: false, auto_learned: false, shared: false },
+          {
+            id: String(nextId++),
+            word: w,
+            starred: false,
+            auto_learned: false,
+            shared: false,
+          },
           ...dict.words,
         ],
       };
@@ -64,10 +71,14 @@ export const handlers: Record<string, MockHandler> = {
   add_replacement: ({ from, to }) =>
     change(() => {
       const f = String(from);
-      if (dict.replacements.some((r) => same(r.from, f))) return `"${f}" already has a replacement`;
+      if (dict.replacements.some((r) => same(r.from, f)))
+        return `"${f}" already has a replacement`;
       dict = {
         ...dict,
-        replacements: [{ id: String(nextId++), from: f, to: String(to) }, ...dict.replacements],
+        replacements: [
+          { id: String(nextId++), from: f, to: String(to) },
+          ...dict.replacements,
+        ],
       };
       return null;
     }),
@@ -83,7 +94,10 @@ export const handlers: Record<string, MockHandler> = {
     }),
   delete_replacement: ({ id }) =>
     change(() => {
-      dict = { ...dict, replacements: dict.replacements.filter((r) => r.id !== id) };
+      dict = {
+        ...dict,
+        replacements: dict.replacements.filter((r) => r.id !== id),
+      };
       return null;
     }),
 };

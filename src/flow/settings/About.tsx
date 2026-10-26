@@ -23,15 +23,13 @@ export default function About() {
   }, []);
 
   return (
-    <SettingsPage
-      title="About"
-      intro={`${APP_NAME} is free and open source.`}
-    >
+    <SettingsPage title="About" intro={`${APP_NAME} is free and open source.`}>
       <div className="flex items-center gap-[16px] rounded-[var(--fk-r-lg)] border-l-[3px] border-[var(--fk-accent)] bg-[var(--fk-accent-soft)] px-[20px] py-[20px]">
         <LipikMark size={48} tile />
         <div>
           <div className="fk-display text-[22px] leading-[30px]">
-            {APP_NAME} <span className="text-[var(--fk-text-muted)]">लिपिक</span>
+            {APP_NAME}{" "}
+            <span className="text-[var(--fk-text-muted)]">लिपिक</span>
           </div>
           <div className="text-[14.5px] leading-[21px] text-[var(--fk-text-muted)]">
             Speak. {APP_NAME} writes it down.
@@ -40,7 +38,10 @@ export default function About() {
       </div>
       <Section title="This copy">
         <SettingsCard>
-          <SettingRow title="Version" control={<Value>{version || "Unknown"}</Value>} />
+          <SettingRow
+            title="Version"
+            control={<Value>{version || "Unknown"}</Value>}
+          />
           <SettingRow title="Licence" control={<Value>MIT</Value>} />
           <SettingRow
             title="Credits"

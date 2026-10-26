@@ -24,7 +24,9 @@ export const ToneList = () => {
             className="grid grid-cols-[168px_minmax(0,1fr)_auto] items-start gap-[24px] border-b border-[var(--fk-border)] px-[12px] py-[16px]"
           >
             <div>
-              <div className="text-[15px] font-semibold leading-[22px]">{c.label}</div>
+              <div className="text-[15px] font-semibold leading-[22px]">
+                {c.label}
+              </div>
               <div className="mt-[2px] text-[13px] leading-[18px] text-[var(--fk-text-muted)]">
                 {c.apps}
               </div>

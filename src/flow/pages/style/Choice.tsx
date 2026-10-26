@@ -1,6 +1,11 @@
 import { useRef, type KeyboardEvent } from "react";
 
-const STEP: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+const STEP: Record<string, number> = {
+  ArrowRight: 1,
+  ArrowDown: 1,
+  ArrowLeft: -1,
+  ArrowUp: -1,
+};
 
 /** Segmented radio group: a tinted track with the chosen option as a raised sheet. */
 export const Choice = <T extends string>({
@@ -15,7 +20,10 @@ export const Choice = <T extends string>({
   onChange: (id: T) => void;
 }) => {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  const selected = Math.max(0, options.findIndex((o) => o.id === value));
+  const selected = Math.max(
+    0,
+    options.findIndex((o) => o.id === value),
+  );
 
   const onKeyDown = (e: KeyboardEvent, i: number) => {
     const step = STEP[e.key];

@@ -106,7 +106,10 @@ const useToday = () => {
   const [today, setToday] = useState(() => startOfDay(new Date()));
   useEffect(() => {
     const untilTomorrow = addDays(today, 1).getTime() - Date.now() + 1000;
-    const timer = setTimeout(() => setToday(startOfDay(new Date())), untilTomorrow);
+    const timer = setTimeout(
+      () => setToday(startOfDay(new Date())),
+      untilTomorrow,
+    );
     return () => clearTimeout(timer);
   }, [today]);
   return today;

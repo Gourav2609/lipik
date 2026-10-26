@@ -342,9 +342,8 @@ impl HistoryManager {
 
     /// The app a dictation went into, as stored with it ("other" when unknown).
     pub fn dictation_target(&self, id: i64) -> Result<crate::textflow::Target> {
-        let (bundle_id, app_type): (Option<String>, Option<String>) = self
-            .get_connection()?
-            .query_row(
+        let (bundle_id, app_type): (Option<String>, Option<String>) =
+            self.get_connection()?.query_row(
                 "SELECT app_bundle_id, app_type FROM transcription_history WHERE id = ?1",
                 params![id],
                 |row| Ok((row.get(0)?, row.get(1)?)),

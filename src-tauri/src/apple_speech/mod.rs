@@ -225,9 +225,16 @@ impl AppleSpeech {
         for sample in pcm {
             bytes.extend_from_slice(&sample.to_le_bytes());
         }
-        if let Err(e) = helper.stdin.write_all(&bytes).and_then(|_| helper.stdin.flush()) {
+        if let Err(e) = helper
+            .stdin
+            .write_all(&bytes)
+            .and_then(|_| helper.stdin.flush())
+        {
             self.reset(&mut slot);
-            return Err(failure("failed", format!("Apple speech helper exited: {e}")));
+            return Err(failure(
+                "failed",
+                format!("Apple speech helper exited: {e}"),
+            ));
         }
         loop {
             if control.is_some_and(|c| c.kill.load(Ordering::SeqCst)) {
@@ -235,7 +242,11 @@ impl AppleSpeech {
                 return Err(failure("cancelled", "Apple speech request cancelled"));
             }
             let left = deadline.saturating_duration_since(Instant::now());
-            let wait = if control.is_some() { left.min(QUEUE_POLL) } else { left };
+            let wait = if control.is_some() {
+                left.min(QUEUE_POLL)
+            } else {
+                left
+            };
             match helper.lines.recv_timeout(wait) {
                 Ok(line) => {
                     let reply: Value = match serde_json::from_str(&line) {
@@ -255,7 +266,10 @@ impl AppleSpeech {
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) if Instant::now() < deadline => {}
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    warn!("Apple speech helper timed out after {:?}; restarting it", timeout);
+                    warn!(
+                        "Apple speech helper timed out after {:?}; restarting it",
+                        timeout
+                    );
                     self.reset(&mut slot);
                     return Err(failure("failed", "Apple speech timed out"));
                 }

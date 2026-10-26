@@ -14,25 +14,80 @@ const LONG = [
 
 const ENTRIES: [number, number, number, string][] = [
   [1, 10, 12, LONG],
-  [1, 10, 8, "So, what did we decide about the new colors for the settings screen?"],
-  [1, 10, 7, "Nothing is blocking me on the review. I can see zero open comments."],
-  [1, 0, 44, "Look at how the sidebar collapses on a narrow window and see how quickly it settles. What exactly are we missing here?"],
-  [1, 0, 41, "How is the new search working here? Is it fast, or is it slow for you?"],
+  [
+    1,
+    10,
+    8,
+    "So, what did we decide about the new colors for the settings screen?",
+  ],
+  [
+    1,
+    10,
+    7,
+    "Nothing is blocking me on the review. I can see zero open comments.",
+  ],
+  [
+    1,
+    0,
+    44,
+    "Look at how the sidebar collapses on a narrow window and see how quickly it settles. What exactly are we missing here?",
+  ],
+  [
+    1,
+    0,
+    41,
+    "How is the new search working here? Is it fast, or is it slow for you?",
+  ],
   [1, 0, 41, "So, can you show me?"],
-  [2, 20, 36, "Also, make sure the backup runs every night and not every hour, okay? Keep the old copies for one week."],
-  [2, 20, 29, "And don't limit yourself to ten examples. You can keep adding them until the list feels complete. When it gets too long, we can trim it down later, but for now just keep going."],
-  [2, 20, 28, "Add a short note to the release page. Even small fixes are worth listing, because people read the notes before they update, right? Just keep each one to a line."],
+  [
+    2,
+    20,
+    36,
+    "Also, make sure the backup runs every night and not every hour, okay? Keep the old copies for one week.",
+  ],
+  [
+    2,
+    20,
+    29,
+    "And don't limit yourself to ten examples. You can keep adding them until the list feels complete. When it gets too long, we can trim it down later, but for now just keep going.",
+  ],
+  [
+    2,
+    20,
+    28,
+    "Add a short note to the release page. Even small fixes are worth listing, because people read the notes before they update, right? Just keep each one to a line.",
+  ],
   [2, 20, 17, "If I don't reply in twenty minutes, go ahead and send it."],
   [2, 20, 9, "Can we start a short guide on keyboard shortcuts for new users?"],
   [2, 20, 9, ""],
-  [2, 19, 56, "Can you pick ten sample files and check that every one of them opens?"],
-  [2, 19, 38, "Can we move faster if we skip the export step and only work on the preview part? Would that save us a day?"],
+  [
+    2,
+    19,
+    56,
+    "Can you pick ten sample files and check that every one of them opens?",
+  ],
+  [
+    2,
+    19,
+    38,
+    "Can we move faster if we skip the export step and only work on the preview part? Would that save us a day?",
+  ],
   [2, 19, 32, "This build is taking a long time today."],
   [2, 19, 32, "Why can't we sort the list by date instead?"],
-  [2, 19, 30, "Share a list with me of the pages that were changed this week so I can review them in the right order."],
+  [
+    2,
+    19,
+    30,
+    "Share a list with me of the pages that were changed this week so I can review them in the right order.",
+  ],
   [2, 19, 28, "Can you open the other settings window, please?"],
   [2, 16, 58, "Okay, I think this is fine. Let's keep it."],
-  [2, 16, 56, "And what about the welcome screen and the empty states for search? We also need to look at those before the demo, right?"],
+  [
+    2,
+    16,
+    56,
+    "And what about the welcome screen and the empty states for search? We also need to look at those before the demo, right?",
+  ],
 ];
 
 const at = (daysAgo: number, hour: number, minute: number) => {
@@ -97,8 +152,13 @@ export const handlers: Record<string, MockHandler> = isDictation
         const entry = history.find((e) => e.id === id);
         if (!entry) return null;
         const next = String(text).trim();
-        entry.corrected_text = next === entry.transcription_text.trim() ? null : next;
-        return { entry: { ...entry }, learned_words: [], learned_replacements: [] };
+        entry.corrected_text =
+          next === entry.transcription_text.trim() ? null : next;
+        return {
+          entry: { ...entry },
+          learned_words: [],
+          learned_replacements: [],
+        };
       },
     }
   : {};

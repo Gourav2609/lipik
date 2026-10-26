@@ -35,7 +35,13 @@ export const MenuItem = ({
   </button>
 );
 
-const SubHeader = ({ label, onBack }: { label: string; onBack: () => void }) => (
+const SubHeader = ({
+  label,
+  onBack,
+}: {
+  label: string;
+  onBack: () => void;
+}) => (
   <button
     type="button"
     onClick={onBack}

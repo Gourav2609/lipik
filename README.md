@@ -6,7 +6,7 @@ Hold `fn`, speak, and let go. Lipik turns what you said into clean text and
 types it into whatever app you are in: an email, a chat, a code editor, a
 document. The speech model runs locally, so your voice never leaves your Mac.
 
-*Lipik* (लिपिक) is Hindi for a scribe: the person who writes things down for
+_Lipik_ (लिपिक) is Hindi for a scribe: the person who writes things down for
 you.
 
 ## What it does
@@ -52,7 +52,7 @@ Handy's recording and transcription engine and adds:
 
 ## Screenshots
 
-*Coming soon.*
+_Coming soon._
 
 ## Install
 

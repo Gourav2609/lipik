@@ -213,7 +213,9 @@ export const AskDrawer = ({
       aria-label="Ask about this meeting"
     >
       <div className="np-drawer-head">
-        <span>{ask.history ? "Earlier questions" : "Ask about this meeting"}</span>
+        <span>
+          {ask.history ? "Earlier questions" : "Ask about this meeting"}
+        </span>
         <button
           type="button"
           className="np-tool"
@@ -259,7 +261,9 @@ export const AskDrawer = ({
               </button>
             ))
           ) : (
-            <div className="np-a error">No earlier questions about this meeting.</div>
+            <div className="np-a error">
+              No earlier questions about this meeting.
+            </div>
           )
         ) : ask.msgs.length ? (
           ask.msgs.map((m, i) =>

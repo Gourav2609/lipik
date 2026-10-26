@@ -74,18 +74,15 @@ export const useHistory = () => {
     };
   }, [load]);
 
-  const toggleSaved = useCallback(
-    async (id: number) => {
-      const flip = () =>
-        setEntries((prev) =>
-          prev.map((e) => (e.id === id ? { ...e, saved: !e.saved } : e)),
-        );
-      flip();
-      const result = await commands.toggleHistoryEntrySaved(id).catch(() => null);
-      if (result?.status !== "ok") flip();
-    },
-    [],
-  );
+  const toggleSaved = useCallback(async (id: number) => {
+    const flip = () =>
+      setEntries((prev) =>
+        prev.map((e) => (e.id === id ? { ...e, saved: !e.saved } : e)),
+      );
+    flip();
+    const result = await commands.toggleHistoryEntrySaved(id).catch(() => null);
+    if (result?.status !== "ok") flip();
+  }, []);
 
   const remove = useCallback(
     async (id: number) => {

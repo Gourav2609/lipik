@@ -39,7 +39,9 @@ const readHeroDismissed = () => {
 
 // Preview-only knobs for screenshots: dictHover=<row>, dictSort=alpha, q=<search>,
 // dictDialog=add|replace|edit, dictHero=0.
-const preview = new URLSearchParams(isFlowPreview ? window.location.search : "");
+const preview = new URLSearchParams(
+  isFlowPreview ? window.location.search : "",
+);
 
 type Dialog =
   | { mode: "add"; replacement?: boolean }
@@ -196,7 +198,10 @@ export default function Dictionary() {
         <WordDialog
           initial={
             dialog.mode === "edit"
-              ? { word: dialog.entry.word, replacement: dialog.entry.replacement }
+              ? {
+                  word: dialog.entry.word,
+                  replacement: dialog.entry.replacement,
+                }
               : undefined
           }
           startAsReplacement={dialog.mode === "add" && !!dialog.replacement}

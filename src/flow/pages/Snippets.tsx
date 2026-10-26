@@ -40,7 +40,9 @@ const EXAMPLES = [
 
 // Preview-only knobs for screenshots: snipHover=<row>, snipSort=alpha, q=<search>,
 // snipDialog=new|edit.
-const preview = new URLSearchParams(isFlowPreview ? window.location.search : "");
+const preview = new URLSearchParams(
+  isFlowPreview ? window.location.search : "",
+);
 
 const RuledExamples = () => (
   <div className="hidden h-full items-center justify-end pr-[56px] xl:flex">
@@ -50,7 +52,9 @@ const RuledExamples = () => (
           key={cue}
           className="grid h-[36px] grid-cols-[104px_minmax(0,1fr)] items-center gap-[12px] border-b border-[color-mix(in_srgb,var(--fk-accent)_22%,transparent)] px-[4px] text-[14px]"
         >
-          <span className="truncate font-medium text-[var(--fk-accent)]">{cue}</span>
+          <span className="truncate font-medium text-[var(--fk-accent)]">
+            {cue}
+          </span>
           <span className="truncate text-[var(--fk-text-muted)]">{text}</span>
         </div>
       ))}
@@ -73,7 +77,8 @@ export default function Snippets() {
   const forcedHover = Number(preview.get("snipHover") ?? -1);
 
   const searching = query.trim() !== "";
-  const showHero = (!heroDismissed || (loaded && snippets.length === 0)) && !searching;
+  const showHero =
+    (!heroDismissed || (loaded && snippets.length === 0)) && !searching;
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -89,11 +94,14 @@ export default function Snippets() {
   }, [snippets, query, sort]);
 
   useEffect(() => {
-    if (preview.get("snipDialog") === "edit" && snippets[0]) setEditing(snippets[0]);
+    if (preview.get("snipDialog") === "edit" && snippets[0])
+      setEditing(snippets[0]);
   }, [loaded]);
 
   const importFile = async (file: File) => {
-    const added = await snippetStore.addMany(parseSnippetImport(await file.text()));
+    const added = await snippetStore.addMany(
+      parseSnippetImport(await file.text()),
+    );
     toast(
       added
         ? `Added ${added} ${added === 1 ? "snippet" : "snippets"}`

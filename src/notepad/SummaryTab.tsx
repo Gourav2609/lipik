@@ -74,7 +74,9 @@ const stepMessages = (detail: MeetingDetail, step: number) => {
   const minutes = Math.max(1, Math.round(meetingLength(detail) / 60_000));
   const words = detail.segments.reduce((n, s) => n + wordCount(s.text), 0);
   if (step === 0)
-    return [`Saving ${minutes} ${minutes === 1 ? "minute" : "minutes"} of audio`];
+    return [
+      `Saving ${minutes} ${minutes === 1 ? "minute" : "minutes"} of audio`,
+    ];
   if (step === 1)
     return [
       "Writing the final transcript",

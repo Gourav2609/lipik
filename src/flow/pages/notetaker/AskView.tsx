@@ -106,7 +106,11 @@ const Answer = ({
                 onClick={() => onOpenCitation({ ...c, start_ms: 0 })}
                 className="nt-line flex h-[40px] w-full items-center gap-[8px] px-[12px] text-left text-[14px]"
               >
-                <FileText size={16} strokeWidth={1.75} className="shrink-0 text-[var(--fk-text-muted)]" />
+                <FileText
+                  size={16}
+                  strokeWidth={1.75}
+                  className="shrink-0 text-[var(--fk-text-muted)]"
+                />
                 <span className="truncate">{c.meeting_title}</span>
               </button>
             ))}
@@ -182,7 +186,14 @@ export const AskView = ({
     commands
       .notetakerChat(threadId)
       .then((r) => live && setMessages(unwrap(r)))
-      .catch(() => live && setPending({ question: "", error: "Couldn't open this chat. Try again from Earlier questions." }));
+      .catch(
+        () =>
+          live &&
+          setPending({
+            question: "",
+            error: "Couldn't open this chat. Try again from Earlier questions.",
+          }),
+      );
     return () => {
       live = false;
     };

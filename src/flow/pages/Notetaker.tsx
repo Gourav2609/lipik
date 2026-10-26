@@ -197,7 +197,9 @@ export default function Notetaker() {
     askBox = (
       <AskBox
         key="chat"
-        placeholder={view.threadId ? "Ask a follow-up" : "Ask about your meetings"}
+        placeholder={
+          view.threadId ? "Ask a follow-up" : "Ask about your meetings"
+        }
         onAsk={(q) => ask(q, view)}
       />
     );

@@ -51,7 +51,8 @@ interface FlowState {
 const oneOf = <T extends string>(
   list: readonly T[],
   value: string | null,
-): T | null => (value && (list as readonly string[]).includes(value) ? (value as T) : null);
+): T | null =>
+  value && (list as readonly string[]).includes(value) ? (value as T) : null;
 
 const params = new URLSearchParams(window.location.search);
 

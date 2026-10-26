@@ -3,7 +3,13 @@ import { useEffect, useRef } from "react";
 import { DeleteButton } from "./DeleteButton";
 import { formatUpdated, useScratchpad, type Note } from "./store";
 
-export const NoteEditor = ({ note, onBack }: { note: Note; onBack: () => void }) => {
+export const NoteEditor = ({
+  note,
+  onBack,
+}: {
+  note: Note;
+  onBack: () => void;
+}) => {
   const updateNote = useScratchpad((s) => s.updateNote);
   const deleteNote = useScratchpad((s) => s.deleteNote);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -21,7 +27,10 @@ export const NoteEditor = ({ note, onBack }: { note: Note; onBack: () => void })
   }, [note.body]);
 
   return (
-    <div className="fk-page select-text" onKeyDown={(e) => e.key === "Escape" && onBack()}>
+    <div
+      className="fk-page select-text"
+      onKeyDown={(e) => e.key === "Escape" && onBack()}
+    >
       <div className="mx-auto max-w-[760px]">
         <div className="flex h-[36px] items-center justify-between">
           <button

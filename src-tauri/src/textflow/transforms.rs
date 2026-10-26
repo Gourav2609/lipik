@@ -1,9 +1,9 @@
 //! ⌥1..⌥9 transforms: copy the selection, rewrite it with the local model and
 //! paste the result over it.
 
+use super::llm;
 use super::pipeline::transform_system_prompt;
 use super::store::TextFlow;
-use super::llm;
 use crate::actions::ShortcutAction;
 use crate::settings::{ClipboardHandling, ShortcutBinding};
 use serde::Serialize;
@@ -80,7 +80,11 @@ pub fn sync_shortcuts(app: &AppHandle) {
             Err(e) => log::warn!("Failed to unregister transform shortcut {index}: {e}"),
         }
     }
-    for index in wanted.difference(&current.clone()).copied().collect::<Vec<_>>() {
+    for index in wanted
+        .difference(&current.clone())
+        .copied()
+        .collect::<Vec<_>>()
+    {
         match crate::shortcut::register_shortcut(app, binding(index)) {
             Ok(()) => {
                 current.insert(index);

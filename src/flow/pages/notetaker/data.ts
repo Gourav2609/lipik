@@ -136,7 +136,9 @@ export const deleteNote = (id: string) =>
   succeeds(async () => unwrap(await commands.notetakerDelete(id)));
 
 export const moveNote = (id: string, folder: string | null) =>
-  succeeds(async () => unwrap(await commands.notetakerMoveToFolder(id, folder)));
+  succeeds(async () =>
+    unwrap(await commands.notetakerMoveToFolder(id, folder)),
+  );
 
 export const regenerateNote = (id: string) =>
   succeeds(async () => unwrap(await commands.notetakerRegenerate(id)));
@@ -300,7 +302,10 @@ export const useMeetingDetail = (id: string) => {
         live.current = [...live.current, ...payload.segments];
         setDetail(
           (d) =>
-            d && { ...d, segments: mergeSegments(d.segments, payload.segments) },
+            d && {
+              ...d,
+              segments: mergeSegments(d.segments, payload.segments),
+            },
         );
       }),
       events.notetakerProcessing.listen(({ payload }) => {
@@ -372,7 +377,10 @@ export const shortDay = (ms: number, now = Date.now()) => {
   });
 };
 
-const clock = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" });
+const clock = new Intl.DateTimeFormat([], {
+  hour: "numeric",
+  minute: "2-digit",
+});
 
 export const timeRange = (start: number, end: number) =>
   `${clock.format(start)} – ${clock.format(end)}`;

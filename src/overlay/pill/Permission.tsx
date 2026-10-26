@@ -158,7 +158,12 @@ export const Permission: React.FC<Props> = ({
   const [w, h] = size();
   const curve =
     stage === "grow"
-      ? [t("width", PERM_W), t("left", PERM_W), t("height", PERM_H), t("top", PERM_H)]
+      ? [
+          t("width", PERM_W),
+          t("left", PERM_W),
+          t("height", PERM_H),
+          t("top", PERM_H),
+        ]
       : stage === "settled"
         ? ["width", "left", "height", "top"].map((p) => t(p, PERM_SETTLE))
         : stage === "fade"
@@ -186,13 +191,34 @@ export const Permission: React.FC<Props> = ({
               : undefined
         }
       >
-        <svg className="perm-icon" width="16.5" height="16.5" viewBox="0 0 16.5 16.5" fill="none">
-          <circle cx="8.25" cy="8.25" r="7.4" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M8.25 4.6v4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <svg
+          className="perm-icon"
+          width="16.5"
+          height="16.5"
+          viewBox="0 0 16.5 16.5"
+          fill="none"
+        >
+          <circle
+            cx="8.25"
+            cy="8.25"
+            r="7.4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
+          <path
+            d="M8.25 4.6v4.5"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
           <circle cx="8.25" cy="11.7" r="0.95" fill="currentColor" />
         </svg>
         <b className="perm-title">{copy.title}</b>
-        <button className="perm-close" aria-label="Close" onClick={() => leave()}>
+        <button
+          className="perm-close"
+          aria-label="Close"
+          onClick={() => leave()}
+        >
           <svg className="ring" width="30" height="30" viewBox="0 0 30 30">
             {stage !== "seed" && (
               <circle

@@ -60,7 +60,8 @@ const CALENDAR_TEXT: Record<CalendarAccess, string> = {
   full_access: `${APP_NAME} reads today's and tomorrow's events from the Calendar app.`,
   not_determined: `Let ${APP_NAME} read your calendar so notes get the meeting's name and you get a reminder.`,
   denied: `Access is off. Turn on ${APP_NAME} in System Settings › Privacy & Security › Calendars, then check again.`,
-  restricted: "Calendar access is blocked on this Mac, for example by a device profile.",
+  restricted:
+    "Calendar access is blocked on this Mac, for example by a device profile.",
   write_only: `${APP_NAME} can only add events. Allow full access in System Settings › Privacy & Security › Calendars.`,
   unsupported: "Calendar access isn't available on this computer.",
 };
@@ -146,7 +147,11 @@ const CalendarControl = ({ access }: { access: CalendarAccess | null }) => {
       </span>
     );
   }
-  if (access !== "not_determined" && access !== "denied" && access !== "write_only") {
+  if (
+    access !== "not_determined" &&
+    access !== "denied" &&
+    access !== "write_only"
+  ) {
     return null;
   }
   return (
@@ -189,8 +194,10 @@ export default function NotetakerSettings() {
               <Select
                 label="Reminder before a meeting"
                 value={String(s.notify_before_seconds)}
-                options={withValue(NOTIFY_OPTIONS, s.notify_before_seconds, (n) =>
-                  n % 60 ? `${n} sec` : `${n / 60} min`,
+                options={withValue(
+                  NOTIFY_OPTIONS,
+                  s.notify_before_seconds,
+                  (n) => (n % 60 ? `${n} sec` : `${n / 60} min`),
                 )}
                 disabled={loading}
                 onChange={(v) => update({ notify_before_seconds: Number(v) })}

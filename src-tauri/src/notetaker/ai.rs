@@ -38,7 +38,13 @@ impl Ollama {
             let client = reqwest::Client::builder()
                 .timeout(Duration::from_secs(3))
                 .build()?;
-            Ok(client.get(&url).send().await?.error_for_status()?.json().await?)
+            Ok(client
+                .get(&url)
+                .send()
+                .await?
+                .error_for_status()?
+                .json()
+                .await?)
         });
         let tags = match result {
             Ok(tags) => tags,
@@ -107,7 +113,9 @@ fn parse_json_reply(content: &str) -> Result<Value> {
         None => content,
     };
     let start = text.find('{').ok_or_else(|| anyhow!("Reply had no JSON"))?;
-    let end = text.rfind('}').ok_or_else(|| anyhow!("Reply had no JSON"))?;
+    let end = text
+        .rfind('}')
+        .ok_or_else(|| anyhow!("Reply had no JSON"))?;
     Ok(serde_json::from_str(&text[start..=end])?)
 }
 
@@ -145,9 +153,11 @@ fn transcript_lines(segments: &[Segment]) -> Vec<String> {
 /// A cautious token count: English runs about 4 characters per token, while
 /// other scripts (Devanagari, CJK) can take a token or more per character.
 fn approx_tokens(text: &str) -> usize {
-    let (ascii, other) = text
-        .chars()
-        .fold((0, 0), |(a, o), c| if c.is_ascii() { (a + 1, o) } else { (a, o + 1) });
+    let (ascii, other) =
+        text.chars().fold(
+            (0, 0),
+            |(a, o), c| if c.is_ascii() { (a + 1, o) } else { (a, o + 1) },
+        );
     ascii / 4 + other + 1
 }
 
@@ -191,13 +201,21 @@ const NOTES_SHAPE: &str = r#"{
   "speakers": [{"segment": 12, "name": "name of the person speaking in that 'Them' line"}]
 }"#;
 
-fn notes_prompt(meeting: &Meeting, thoughts: &str, transcript: &str, part: Option<(usize, usize)>) -> String {
+fn notes_prompt(
+    meeting: &Meeting,
+    thoughts: &str,
+    transcript: &str,
+    part: Option<(usize, usize)>,
+) -> String {
     let attendees = attendee_names(&meeting.attendees);
     let mut prompt = format!(
         "Meeting: {}\nDate: {}\n",
         meeting.title,
         chrono::DateTime::from_timestamp_millis(meeting.start_ms)
-            .map(|d| d.with_timezone(&chrono::Local).format("%A %-d %B %Y, %H:%M").to_string())
+            .map(|d| d
+                .with_timezone(&chrono::Local)
+                .format("%A %-d %B %Y, %H:%M")
+                .to_string())
             .unwrap_or_default()
     );
     if let Some(me) = me_name(&meeting.attendees) {
@@ -241,7 +259,11 @@ fn text(v: &Value) -> Option<String> {
 }
 
 fn texts(v: &Value) -> Vec<String> {
-    v.as_array().into_iter().flatten().filter_map(text).collect()
+    v.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(text)
+        .collect()
 }
 
 fn items(v: &Value) -> impl Iterator<Item = &Value> {
@@ -263,7 +285,8 @@ fn raw_notes(v: &Value) -> RawNotes {
             .filter_map(|s| {
                 let heading = text(&s["heading"]).unwrap_or_default();
                 let bullets = texts(&s["bullets"]);
-                (!heading.is_empty() || !bullets.is_empty()).then_some(NoteSection { heading, bullets })
+                (!heading.is_empty() || !bullets.is_empty())
+                    .then_some(NoteSection { heading, bullets })
             })
             .collect(),
         key_points: texts(&v["key_points"]),
@@ -314,7 +337,10 @@ pub fn summarize(
     let mut partials = Vec::new();
     for (i, part) in parts.iter().enumerate() {
         let numbering = (parts.len() > 1).then_some((i + 1, parts.len()));
-        let value = ollama.chat_json(NOTES_SYSTEM, &notes_prompt(meeting, thoughts, part, numbering))?;
+        let value = ollama.chat_json(
+            NOTES_SYSTEM,
+            &notes_prompt(meeting, thoughts, part, numbering),
+        )?;
         let what = match numbering {
             Some((i, n)) => format!("part {i} of {n}"),
             None => "the meeting".to_string(),
@@ -347,7 +373,11 @@ Reply with JSON in this shape:\n{NOTES_SHAPE}",
             meeting.title,
             serde_json::to_string_pretty(&merged)?
         );
-        notes_from(&ollama.chat_json(NOTES_SYSTEM, &prompt)?, "the merged notes")?.summary
+        notes_from(
+            &ollama.chat_json(NOTES_SYSTEM, &prompt)?,
+            "the merged notes",
+        )?
+        .summary
     };
 
     let valid: HashSet<usize> = segments
@@ -370,12 +400,67 @@ pub struct Passage {
 }
 
 const STOPWORDS: &[&str] = &[
-    "the", "and", "for", "are", "was", "were", "what", "who", "whom", "when", "where", "which",
-    "how", "did", "does", "about", "with", "from", "that", "this", "have", "has", "had", "you",
-    "your", "our", "they", "them", "their", "there", "been", "will", "would", "could", "should",
-    "can", "any", "all", "into", "out", "not", "but", "his", "her", "she", "him", "its", "say",
-    "said", "tell", "give", "meeting", "meetings", "call", "calls", "please", "summarize",
-    "summary", "week", "today", "yesterday",
+    "the",
+    "and",
+    "for",
+    "are",
+    "was",
+    "were",
+    "what",
+    "who",
+    "whom",
+    "when",
+    "where",
+    "which",
+    "how",
+    "did",
+    "does",
+    "about",
+    "with",
+    "from",
+    "that",
+    "this",
+    "have",
+    "has",
+    "had",
+    "you",
+    "your",
+    "our",
+    "they",
+    "them",
+    "their",
+    "there",
+    "been",
+    "will",
+    "would",
+    "could",
+    "should",
+    "can",
+    "any",
+    "all",
+    "into",
+    "out",
+    "not",
+    "but",
+    "his",
+    "her",
+    "she",
+    "him",
+    "its",
+    "say",
+    "said",
+    "tell",
+    "give",
+    "meeting",
+    "meetings",
+    "call",
+    "calls",
+    "please",
+    "summarize",
+    "summary",
+    "week",
+    "today",
+    "yesterday",
 ];
 
 pub fn keywords(question: &str) -> Vec<String> {
@@ -391,7 +476,10 @@ pub fn keywords(question: &str) -> Vec<String> {
 /// Keyword hits, weighted toward recent meetings (half-life 14 days).
 pub fn score_passage(text: &str, keywords: &[String], meeting_start_ms: i64, now_ms: i64) -> f64 {
     let lower = text.to_lowercase();
-    let hits: usize = keywords.iter().map(|k| lower.matches(k.as_str()).count()).sum();
+    let hits: usize = keywords
+        .iter()
+        .map(|k| lower.matches(k.as_str()).count())
+        .sum();
     let age_days = (now_ms - meeting_start_ms).max(0) as f64 / 86_400_000.0;
     let recency = 0.5f64.powf(age_days / 14.0);
     hits as f64 + 0.5 * recency
@@ -423,7 +511,11 @@ pub fn answer(
     let mut context = String::new();
     for (i, p) in passages.iter().enumerate() {
         let day = chrono::DateTime::from_timestamp_millis(p.meeting_start_ms)
-            .map(|d| d.with_timezone(&chrono::Local).format("%a %-d %b").to_string())
+            .map(|d| {
+                d.with_timezone(&chrono::Local)
+                    .format("%a %-d %b")
+                    .to_string()
+            })
             .unwrap_or_default();
         context.push_str(&format!(
             "[{}] \"{}\" ({day}) at {}:\n{}\n\n",
@@ -446,10 +538,15 @@ pub fn answer(
 after each claim it supports. If the passages don't answer it, say so. Use short markdown \
 (bullets when listing). Reply with JSON: {{\"answer\": \"...\", \"used\": [1, 2]}}"
     ));
-    let system = "You answer questions about the user's meetings using passages from their meeting notes \
+    let system =
+        "You answer questions about the user's meetings using passages from their meeting notes \
 and transcripts. 'Me' is the user. Answer in the language of the question. Reply with JSON only.";
     let value = ollama.chat_json(system, &prompt)?;
-    let text = value["answer"].as_str().unwrap_or_default().trim().to_string();
+    let text = value["answer"]
+        .as_str()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
     if text.is_empty() {
         bail!("The model gave an empty answer");
     }

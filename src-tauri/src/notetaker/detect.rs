@@ -281,8 +281,14 @@ mod tests {
     #[test]
     fn matches_apps_and_helpers() {
         assert_eq!(call_app("us.zoom.xos").unwrap().1, "Zoom");
-        assert_eq!(call_app("com.google.Chrome.helper").unwrap().1, "Google Chrome");
-        assert_eq!(call_app("com.microsoft.teams2").unwrap().1, "Microsoft Teams");
+        assert_eq!(
+            call_app("com.google.Chrome.helper").unwrap().1,
+            "Google Chrome"
+        );
+        assert_eq!(
+            call_app("com.microsoft.teams2").unwrap().1,
+            "Microsoft Teams"
+        );
         assert!(call_app("com.google.Chromecast").is_none());
         assert!(call_app("com.apple.Music").is_none());
     }
@@ -295,7 +301,12 @@ mod tests {
         );
         assert_eq!(outer_app_path("/usr/libexec/coreaudiod"), None);
         assert_eq!(call_app("com.brave.Browser.helper").unwrap().1, "Brave");
-        assert_eq!(call_app("com.google.Chrome.app.kjgfgldnnfoeklkmfkjfagphfepbbdan").unwrap().1, "Google Chrome");
+        assert_eq!(
+            call_app("com.google.Chrome.app.kjgfgldnnfoeklkmfkjfagphfepbbdan")
+                .unwrap()
+                .1,
+            "Google Chrome"
+        );
     }
 
     #[test]

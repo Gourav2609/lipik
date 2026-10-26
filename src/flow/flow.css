@@ -37,9 +37,12 @@
   --fk-scrim: rgba(20, 24, 38, 0.32);
   --fk-focus: 0 0 0 3px rgba(50, 69, 196, 0.22);
 
-  --fk-elev-1: 0 1px 2px rgba(20, 24, 38, 0.06), 0 0 0 1px rgba(20, 24, 38, 0.05);
-  --fk-elev-2: 0 10px 28px -8px rgba(20, 24, 38, 0.2), 0 0 0 1px rgba(20, 24, 38, 0.07);
-  --fk-elev-3: 0 28px 72px -16px rgba(16, 20, 40, 0.32), 0 0 0 1px rgba(20, 24, 38, 0.08);
+  --fk-elev-1:
+    0 1px 2px rgba(20, 24, 38, 0.06), 0 0 0 1px rgba(20, 24, 38, 0.05);
+  --fk-elev-2:
+    0 10px 28px -8px rgba(20, 24, 38, 0.2), 0 0 0 1px rgba(20, 24, 38, 0.07);
+  --fk-elev-3:
+    0 28px 72px -16px rgba(16, 20, 40, 0.32), 0 0 0 1px rgba(20, 24, 38, 0.08);
   --fk-shadow: var(--fk-elev-3);
 
   --fk-checklist-bg: var(--fk-surface);
@@ -110,9 +113,12 @@
   --fk-scrim: rgba(5, 7, 12, 0.6);
   --fk-focus: 0 0 0 3px rgba(141, 156, 255, 0.3);
 
-  --fk-elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --fk-elev-2: 0 12px 32px -8px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  --fk-elev-3: 0 32px 80px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --fk-elev-1:
+    0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --fk-elev-2:
+    0 12px 32px -8px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --fk-elev-3:
+    0 32px 80px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.07);
 
   --fk-toggle-off: #646d86;
   --fk-toggle-knob-on: #0d1024;
@@ -142,7 +148,9 @@
     box-shadow: var(--fk-focus);
   }
 
-  .fk label:focus-within > input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+  .fk
+    label:focus-within
+    > input:not([type="checkbox"]):not([type="radio"]):focus-visible,
   .fk label:focus-within > textarea:focus-visible {
     box-shadow: none;
   }

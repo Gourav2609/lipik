@@ -68,7 +68,8 @@ impl Prepared {
     fn unmask(&self, text: &str) -> Option<String> {
         let mut out = text.to_string();
         for (marker, expansion) in &self.snippets {
-            if out.matches(marker.as_str()).count() != self.masked.matches(marker.as_str()).count() {
+            if out.matches(marker.as_str()).count() != self.masked.matches(marker.as_str()).count()
+            {
                 return None;
             }
             out = out.replace(marker.as_str(), expansion);
@@ -78,7 +79,8 @@ impl Prepared {
 
     /// The text with snippets expanded.
     pub fn text(&self) -> String {
-        self.unmask(&self.masked).unwrap_or_else(|| self.masked.clone())
+        self.unmask(&self.masked)
+            .unwrap_or_else(|| self.masked.clone())
     }
 }
 
@@ -246,7 +248,11 @@ pub(super) fn warm_up_messages(app: &AppHandle) -> Vec<llm::Message> {
         let words: Vec<String> = d.dictionary.words.iter().map(|w| w.word.clone()).collect();
         (d.style.for_category(target.category()), words)
     });
-    let vocabulary = if vocabulary.len() <= MAX_VOCABULARY { vocabulary } else { Vec::new() };
+    let vocabulary = if vocabulary.len() <= MAX_VOCABULARY {
+        vocabulary
+    } else {
+        Vec::new()
+    };
     cleanup_messages(&target.label(), kind, &vocabulary, false, "ok")
 }
 
@@ -295,7 +301,11 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
         return None;
     }
     let rules_text = rules::apply(&prepared.masked, &vocabulary);
-    let fallback = || prepared.unmask(&rules_text).unwrap_or_else(|| prepared.text());
+    let fallback = || {
+        prepared
+            .unmask(&rules_text)
+            .unwrap_or_else(|| prepared.text())
+    };
     if text::count_words(&words_only) < MIN_MODEL_WORDS {
         return Some(fallback());
     }
@@ -312,13 +322,22 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
         let marked = gate::end_mark(&rules_text);
         return Some(prepared.unmask(&marked).unwrap_or_else(fallback));
     }
-    let sent: usize = parts.iter().map(|p| text::count_words(&rules_text[p.start..p.end])).sum();
+    let sent: usize = parts
+        .iter()
+        .map(|p| text::count_words(&rules_text[p.start..p.end]))
+        .sum();
     let whole = sent as f64 >= gate::WHOLE_SHARE * text::count_words(&rules_text) as f64;
     let relevant = relevant_vocabulary(&vocabulary, &prepared.masked);
     let label = target.label();
     let has_snippets = !prepared.snippets.is_empty();
     let request = |text: &str| {
-        cleanup_messages(&label, kind, &relevant, has_snippets && text.contains("[[S"), text)
+        cleanup_messages(
+            &label,
+            kind,
+            &relevant,
+            has_snippets && text.contains("[[S"),
+            text,
+        )
     };
     let endpoint = llm::endpoint(app);
     // Loading the model takes seconds; paste the rules text instead of
@@ -349,7 +368,11 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
     };
     if whole {
         let reply = ask(rules_text.clone()).await;
-        log::debug!("Clean-up took {:?} (whole text, {} words)", started.elapsed(), sent);
+        log::debug!(
+            "Clean-up took {:?} (whole text, {} words)",
+            started.elapsed(),
+            sent
+        );
         let reply = match reply {
             Ok(reply) => reply,
             Err(e) => {
@@ -385,7 +408,10 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
         parts.len(),
         sent,
         text::count_words(&rules_text),
-        parts.iter().flat_map(|p| p.reasons.iter()).collect::<Vec<_>>()
+        parts
+            .iter()
+            .flat_map(|p| p.reasons.iter())
+            .collect::<Vec<_>>()
     );
     let text = gate::end_mark(&out);
     Some(prepared.unmask(&text).unwrap_or_else(fallback))
@@ -510,7 +536,10 @@ pub async fn auto_transform(app: &AppHandle, text: String) -> String {
     match llm::chat(&llm::endpoint(app), &system, &text, TRANSFORM_TIMEOUT).await {
         Ok(out) if !out.trim().is_empty() && !too_long(&out, &text, 4.0, 400) => out,
         Ok(_) => {
-            log::warn!("Auto transform '{}' output rejected (empty or far too long)", transform.name);
+            log::warn!(
+                "Auto transform '{}' output rejected (empty or far too long)",
+                transform.name
+            );
             text
         }
         Err(e) => {
@@ -637,7 +666,10 @@ mod tests {
         let vocabulary = vec!["Rivaan".to_string(), "Meher Kapadia".to_string()];
         let messages = cleanup_messages("Slack", StyleKind::Casual, &vocabulary, true, "hi");
         assert_eq!(messages.len(), 2 + 2 * blocks);
-        assert_eq!((messages[0].role, messages[0].content.as_str()), ("system", *system));
+        assert_eq!(
+            (messages[0].role, messages[0].content.as_str()),
+            ("system", *system)
+        );
         let example_vocabulary = format!("Vocabulary: {}", EXAMPLE_VOCABULARY.join(", "));
         for (pair, e) in messages[1..].chunks(2).zip(examples) {
             assert!(!e.app.is_empty() && !e.spoken.is_empty() && !e.cleaned.is_empty());
@@ -653,7 +685,10 @@ mod tests {
         let last = messages.last().unwrap();
         let lines: Vec<&str> = last.content.lines().collect();
         assert_eq!(last.role, "user");
-        assert_eq!(lines[..2], ["App: Slack", "Vocabulary: Rivaan, Meher Kapadia"]);
+        assert_eq!(
+            lines[..2],
+            ["App: Slack", "Vocabulary: Rivaan, Meher Kapadia"]
+        );
         assert_eq!(Some(lines[2]), style_rule(StyleKind::Casual));
         assert!(lines[3].contains("[[S0]]"));
         assert_eq!(lines[4..], ["<transcript>", "hi", "</transcript>"]);
@@ -731,14 +766,20 @@ mod tests {
             ))
             .expect("Ollama reply");
             let text = accept(transcript, &reply, &rules_text, &[]);
-            println!("{transcript:?} -> {reply:?} -> {text:?} ({:?}, num_ctx {context})", started.elapsed());
+            println!(
+                "{transcript:?} -> {reply:?} -> {text:?} ({:?}, num_ctx {context})",
+                started.elapsed()
+            );
             assert_eq!(text, "Hey, can we move the call to 5?");
         }
     }
 
     #[test]
     fn wrapping_tags_and_quotes_are_removed() {
-        assert_eq!(strip_wrapping("<transcript>\nHi there.\n</transcript>"), "Hi there.");
+        assert_eq!(
+            strip_wrapping("<transcript>\nHi there.\n</transcript>"),
+            "Hi there."
+        );
         assert_eq!(strip_wrapping("\"Hi there.\""), "Hi there.");
     }
 }

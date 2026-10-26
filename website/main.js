@@ -34,7 +34,9 @@ const waves = $$(".wave").map((el) => {
 });
 const visible = new Set();
 const io = new IntersectionObserver((entries) =>
-  entries.forEach((e) => (e.isIntersecting ? visible.add(e.target) : visible.delete(e.target)))
+  entries.forEach((e) =>
+    e.isIntersecting ? visible.add(e.target) : visible.delete(e.target),
+  ),
 );
 waves.forEach((w) => io.observe(w.el));
 
@@ -51,7 +53,12 @@ function drawWaves(t) {
     const max = w.el.clientHeight || 20;
     w.bars.forEach((b, i) => {
       const k = live
-        ? 0.2 + 0.8 * Math.abs(Math.sin(t / 170 + i * 1.9 + w.seed) * Math.sin(t / 460 + i * 0.7))
+        ? 0.2 +
+          0.8 *
+            Math.abs(
+              Math.sin(t / 170 + i * 1.9 + w.seed) *
+                Math.sin(t / 460 + i * 0.7),
+            )
         : 0.12;
       b.style.height = `${Math.max(3, Math.round(max * k))}px`;
     });
@@ -59,7 +66,12 @@ function drawWaves(t) {
   requestAnimationFrame(drawWaves);
 }
 if (reduced) {
-  waves.forEach((w) => w.bars.forEach((b, i) => (b.style.height = `${[6, 12, 18, 10, 16, 8, 14, 9, 5][i % 9]}px`)));
+  waves.forEach((w) =>
+    w.bars.forEach(
+      (b, i) =>
+        (b.style.height = `${[6, 12, 18, 10, 16, 8, 14, 9, 5][i % 9]}px`),
+    ),
+  );
 } else {
   requestAnimationFrame(drawWaves);
 }
@@ -121,14 +133,16 @@ const mbMenus = $("#mb-menus");
 const mbLipik = $("#mb-lipik");
 
 function showWindow(scene) {
-  $$(".win", screen).forEach((w) => w.classList.toggle("is-on", w.dataset.win === scene.win));
+  $$(".win", screen).forEach((w) =>
+    w.classList.toggle("is-on", w.dataset.win === scene.win),
+  );
   mbApp.textContent = scene.app;
   mbMenus.replaceChildren(
     ...scene.menus.split(" ").map((m) => {
       const span = document.createElement("span");
       span.textContent = m;
       return span;
-    })
+    }),
   );
   const field = $(`[data-win="${scene.win}"] .field`, screen);
   $(".slot", field).textContent = "";
@@ -141,11 +155,15 @@ function land(field, text) {
   slot.textContent = text;
   field.classList.add("has-text");
   slot.classList.add("is-new");
-  requestAnimationFrame(() => requestAnimationFrame(() => slot.classList.remove("is-new")));
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => slot.classList.remove("is-new")),
+  );
 }
 
 let heroInView = true;
-new IntersectionObserver(([e]) => (heroInView = e.isIntersecting)).observe(frame);
+new IntersectionObserver(([e]) => (heroInView = e.isIntersecting)).observe(
+  frame,
+);
 const ready = async () => {
   while (!heroInView || document.hidden) await wait(400);
 };
@@ -263,7 +281,12 @@ const tabs = CLEAN.map((ex, i) => {
 tabsEl.addEventListener("keydown", (e) => {
   const i = tabs.indexOf(document.activeElement);
   if (i < 0) return;
-  const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+  const next = {
+    ArrowRight: i + 1,
+    ArrowLeft: i - 1,
+    Home: 0,
+    End: tabs.length - 1,
+  }[e.key];
   if (next === undefined) return;
   e.preventDefault();
   const j = (next + tabs.length) % tabs.length;
@@ -323,7 +346,7 @@ new IntersectionObserver(
       obs.disconnect();
     }
   },
-  { threshold: 0.4 }
+  { threshold: 0.4 },
 ).observe(panel);
 
 /* Radio groups made of buttons (tone, snippets): click and arrow keys */
@@ -340,7 +363,9 @@ function radioGroup(group, onPick) {
   items.forEach((b, i) => b.addEventListener("click", () => pick(i)));
   group.addEventListener("keydown", (e) => {
     const i = items.indexOf(document.activeElement);
-    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[
+      e.key
+    ];
     if (i < 0 || !d) return;
     e.preventDefault();
     pick((i + d + items.length) % items.length, true);
@@ -371,7 +396,9 @@ langTags[0].classList.add("is-on");
 if (!reduced) {
   let li = 0;
   let langVisible = false;
-  new IntersectionObserver(([e]) => (langVisible = e.isIntersecting)).observe($("#lang-list"));
+  new IntersectionObserver(([e]) => (langVisible = e.isIntersecting)).observe(
+    $("#lang-list"),
+  );
   setInterval(() => {
     if (!langVisible || document.hidden) return;
     const prev = langItems[li];
@@ -384,14 +411,21 @@ if (!reduced) {
 }
 
 /* Vocabulary */
-const MORE_WORDS = ["Anaïs", "pgvector", "Siobhán", "Llanfair", "Okonkwo", "Hyderabadi"];
+const MORE_WORDS = [
+  "Anaïs",
+  "pgvector",
+  "Siobhán",
+  "Llanfair",
+  "Okonkwo",
+  "Hyderabadi",
+];
 const chips = $("#chips");
 const addBtn = $("#chip-add");
 const vocabLine = $("#vocab-line");
 const VOCAB_LINES = {
-  "Anaïs": "<mark>Anaïs</mark> has the signed contract.",
+  Anaïs: "<mark>Anaïs</mark> has the signed contract.",
   pgvector: "We moved search to <mark>pgvector</mark> last week.",
-  "Siobhán": "Loop in <mark>Siobhán</mark> before Friday.",
+  Siobhán: "Loop in <mark>Siobhán</mark> before Friday.",
   Llanfair: "The office in <mark>Llanfair</mark> opens at nine.",
   Okonkwo: "Dr <mark>Okonkwo</mark> can see you at 4:15.",
   Hyderabadi: "Order the <mark>Hyderabadi</mark> biryani for six.",
@@ -494,7 +528,9 @@ if (reduced) {
   stepFn.classList.add("is-down");
 } else {
   let stepVisible = false;
-  new IntersectionObserver(([e]) => (stepVisible = e.isIntersecting)).observe(stepFn);
+  new IntersectionObserver(([e]) => (stepVisible = e.isIntersecting)).observe(
+    stepFn,
+  );
   setInterval(() => {
     if (stepVisible) stepFn.classList.toggle("is-down");
   }, 1200);

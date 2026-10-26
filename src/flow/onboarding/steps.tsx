@@ -1,5 +1,12 @@
 import "../settings/settings.css";
-import { Fragment, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import {
   Check,
   CircleAlert,
@@ -53,7 +60,11 @@ const LinkButton = ({
   onClick: () => void;
   children: ReactNode;
 }) => (
-  <Button variant="ghost" onClick={onClick} className="!font-medium !text-[var(--fk-text-muted)]">
+  <Button
+    variant="ghost"
+    onClick={onClick}
+    className="!font-medium !text-[var(--fk-text-muted)]"
+  >
     {children}
   </Button>
 );
@@ -106,7 +117,9 @@ const USE_KEY = "lipik.onboarding.usecases";
 const readUseCases = (): UseCase[] => {
   try {
     const raw = JSON.parse(localStorage.getItem(USE_KEY) ?? "[]");
-    return Array.isArray(raw) ? raw.filter((x) => USE_CASES.some((u) => u.id === x)) : [];
+    return Array.isArray(raw)
+      ? raw.filter((x) => USE_CASES.some((u) => u.id === x))
+      : [];
   } catch {
     return [];
   }
@@ -188,7 +201,9 @@ const PermissionRow = ({
     </span>
     <div className="min-w-0 flex-1">
       <div className="text-[15px] font-semibold leading-[22px]">{title}</div>
-      <div className="text-[13px] leading-[18px] text-[var(--fk-text-muted)]">{body}</div>
+      <div className="text-[13px] leading-[18px] text-[var(--fk-text-muted)]">
+        {body}
+      </div>
     </div>
     {granted ? (
       <span className="flex h-[30px] shrink-0 items-center gap-[4px] rounded-[8px] bg-[var(--fk-ok-soft)] px-[10px] text-[13.5px] font-semibold text-[var(--fk-ok)]">
@@ -196,7 +211,12 @@ const PermissionRow = ({
         Allowed
       </span>
     ) : (
-      <Button size="sm" onClick={onAllow} disabled={granted === null} className="shrink-0">
+      <Button
+        size="sm"
+        onClick={onAllow}
+        disabled={granted === null}
+        className="shrink-0"
+      >
         Allow
       </Button>
     )}
@@ -247,7 +267,11 @@ const Permissions = ({ next, back }: StepProps) => {
     >
       {timedOut && (
         <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
-          <CircleAlert size={16} strokeWidth={1.75} className="shrink-0 text-[var(--fk-live)]" />
+          <CircleAlert
+            size={16}
+            strokeWidth={1.75}
+            className="shrink-0 text-[var(--fk-live)]"
+          />
           macOS didn't answer. Try again, or restart {APP_NAME}.
         </p>
       )}
@@ -270,9 +294,9 @@ const MicTest = ({ next, back }: StepProps) => {
   useEffect(() => {
     if (level !== null && level > 0.25) setHeard(true);
   }, [level]);
-  const options = (audioDevices.length ? audioDevices : [{ name: "Default" }]).map(
-    (d) => ({ value: d.name, label: d.name }),
-  );
+  const options = (
+    audioDevices.length ? audioDevices : [{ name: "Default" }]
+  ).map((d) => ({ value: d.name, label: d.name }));
   return (
     <StepLayout
       eyebrow="Microphone"
@@ -292,7 +316,9 @@ const MicTest = ({ next, back }: StepProps) => {
       visual={<MeterVisual level={level ?? 0} live={level !== null} />}
     >
       <div className="flex items-center justify-between gap-[16px]">
-        <span className="text-[14px] font-medium text-[var(--fk-text-muted)]">Microphone</span>
+        <span className="text-[14px] font-medium text-[var(--fk-text-muted)]">
+          Microphone
+        </span>
         <Select
           label="Microphone"
           value={value}
@@ -322,7 +348,9 @@ const Shortcut = ({ next, back }: StepProps) => {
       back={back}
       actions={
         <>
-          {!edit && <LinkButton onClick={() => setEdit(true)}>Change key</LinkButton>}
+          {!edit && (
+            <LinkButton onClick={() => setEdit(true)}>Change key</LinkButton>
+          )}
           <Continue next={next} />
         </>
       }
@@ -339,7 +367,10 @@ const Shortcut = ({ next, back }: StepProps) => {
 
 /* ---------- practice ---------- */
 
-const PROMPTS: Record<UseCase, { app: string; Icon: typeof Mail; to: string; say: string }> = {
+const PROMPTS: Record<
+  UseCase,
+  { app: string; Icon: typeof Mail; to: string; say: string }
+> = {
   email: {
     app: "Mail",
     Icon: Mail,
@@ -382,7 +413,11 @@ const ModelLine = () => {
   return (
     <div className="mt-[16px] flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
       {setup.status === "failed" ? (
-        <CircleAlert size={16} strokeWidth={1.75} className="text-[var(--fk-live)]" />
+        <CircleAlert
+          size={16}
+          strokeWidth={1.75}
+          className="text-[var(--fk-live)]"
+        />
       ) : (
         <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
       )}
@@ -399,7 +434,9 @@ const ModelLine = () => {
 const Practice = ({ next, back }: StepProps) => {
   const { key } = useHotkey();
   const [cases] = useState(() => {
-    const picked = isFlowPreview ? (["email", "chat"] as UseCase[]) : readUseCases();
+    const picked = isFlowPreview
+      ? (["email", "chat"] as UseCase[])
+      : readUseCases();
     return picked.length ? picked : (["email"] as UseCase[]);
   });
   const [tab, setTab] = useState(0);
@@ -437,7 +474,8 @@ const Practice = ({ next, back }: StepProps) => {
       title="Try it once"
       body={
         <>
-          Click in the box, hold <Keys label={key} />, read the line out loud, then let go.
+          Click in the box, hold <Keys label={key} />, read the line out loud,
+          then let go.
         </>
       }
       back={back}
@@ -510,8 +548,8 @@ const PillStep = ({ next, back }: StepProps) => {
       title="Always at the bottom"
       body={
         <>
-          The pill shows when {APP_NAME} is listening. Hold <Keys label={key} /> or click it to
-          start, and drag it along the edge if it is in the way.
+          The pill shows when {APP_NAME} is listening. Hold <Keys label={key} />{" "}
+          or click it to start, and drag it along the edge if it is in the way.
         </>
       }
       back={back}
@@ -564,7 +602,8 @@ const Done = ({ next, back }: StepProps) => {
       title="You’re set"
       body={
         <>
-          Hold <Keys label={key} /> in any app, or tap it twice to keep going hands-free.
+          Hold <Keys label={key} /> in any app, or tap it twice to keep going
+          hands-free.
         </>
       }
       back={back}

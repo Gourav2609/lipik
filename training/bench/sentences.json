@@ -1,44 +1,219 @@
 [
-  {"id": "en01", "group": "english", "ref": "Priya, can you review my PR before the standup?"},
-  {"id": "en02", "group": "english", "ref": "Rahul pushed the fix to staging, please check the Jira ticket."},
-  {"id": "en03", "group": "english", "ref": "I will deploy the release after lunch if the build passes."},
-  {"id": "en04", "group": "english", "ref": "Let's sync on Slack about the onboarding flow tomorrow."},
-  {"id": "en05", "group": "english", "ref": "Anjali is handling the client demo, so loop her into the thread."},
-  {"id": "en06", "group": "english", "ref": "The API is timing out again, can someone look at the logs?"},
-  {"id": "en07", "group": "english", "ref": "Please update the dashboard and share the link with Vikram."},
-  {"id": "en08", "group": "english", "ref": "Arjun, the merge conflict is in the payments module."},
-  {"id": "en09", "group": "english", "ref": "Can we move the sprint planning to Thursday afternoon?"},
-  {"id": "en10", "group": "english", "ref": "Sneha said the QA build is blocked on the login bug."},
-  {"id": "en11", "group": "english", "ref": "I have added comments on the design doc, take a look when you are free."},
-  {"id": "en12", "group": "english", "ref": "Rohit will rotate the API keys before the audit."},
-  {"id": "en13", "group": "english", "ref": "The customer wants a refund, can you escalate it to Neha?"},
-  {"id": "en14", "group": "english", "ref": "Let me know once the hotfix is live in production."},
-  {"id": "en15", "group": "english", "ref": "Karthik, please write unit tests for the new endpoint."},
+  {
+    "id": "en01",
+    "group": "english",
+    "ref": "Priya, can you review my PR before the standup?"
+  },
+  {
+    "id": "en02",
+    "group": "english",
+    "ref": "Rahul pushed the fix to staging, please check the Jira ticket."
+  },
+  {
+    "id": "en03",
+    "group": "english",
+    "ref": "I will deploy the release after lunch if the build passes."
+  },
+  {
+    "id": "en04",
+    "group": "english",
+    "ref": "Let's sync on Slack about the onboarding flow tomorrow."
+  },
+  {
+    "id": "en05",
+    "group": "english",
+    "ref": "Anjali is handling the client demo, so loop her into the thread."
+  },
+  {
+    "id": "en06",
+    "group": "english",
+    "ref": "The API is timing out again, can someone look at the logs?"
+  },
+  {
+    "id": "en07",
+    "group": "english",
+    "ref": "Please update the dashboard and share the link with Vikram."
+  },
+  {
+    "id": "en08",
+    "group": "english",
+    "ref": "Arjun, the merge conflict is in the payments module."
+  },
+  {
+    "id": "en09",
+    "group": "english",
+    "ref": "Can we move the sprint planning to Thursday afternoon?"
+  },
+  {
+    "id": "en10",
+    "group": "english",
+    "ref": "Sneha said the QA build is blocked on the login bug."
+  },
+  {
+    "id": "en11",
+    "group": "english",
+    "ref": "I have added comments on the design doc, take a look when you are free."
+  },
+  {
+    "id": "en12",
+    "group": "english",
+    "ref": "Rohit will rotate the API keys before the audit."
+  },
+  {
+    "id": "en13",
+    "group": "english",
+    "ref": "The customer wants a refund, can you escalate it to Neha?"
+  },
+  {
+    "id": "en14",
+    "group": "english",
+    "ref": "Let me know once the hotfix is live in production."
+  },
+  {
+    "id": "en15",
+    "group": "english",
+    "ref": "Karthik, please write unit tests for the new endpoint."
+  },
 
-  {"id": "hg01", "group": "hinglish", "ref": "kal ki meeting cancel kar do, Rahul ko bata dena"},
-  {"id": "hg02", "group": "hinglish", "ref": "Priya, PR review karke merge kar dena please"},
-  {"id": "hg03", "group": "hinglish", "ref": "yaar build phir se fail ho gaya, logs check karo"},
-  {"id": "hg04", "group": "hinglish", "ref": "mujhe lagta hai deploy aaj shaam tak ho jayega"},
-  {"id": "hg05", "group": "hinglish", "ref": "Slack pe message daal do ki standup late hai"},
-  {"id": "hg06", "group": "hinglish", "ref": "client ko bolo ki demo kal subah karenge"},
-  {"id": "hg07", "group": "hinglish", "ref": "Ankit, Jira ticket abhi tak update nahi hua hai"},
-  {"id": "hg08", "group": "hinglish", "ref": "main ghar se kaam kar raha hoon, call pe aa jaunga"},
-  {"id": "hg09", "group": "hinglish", "ref": "yeh bug production mein bhi aa raha hai kya"},
-  {"id": "hg10", "group": "hinglish", "ref": "Neha se pooch lo ki design final hua ya nahi"},
-  {"id": "hg11", "group": "hinglish", "ref": "thoda jaldi karo, release aaj hi nikalna hai"},
-  {"id": "hg12", "group": "hinglish", "ref": "mere laptop mein kuch problem hai, IT ko ticket daal do"},
-  {"id": "hg13", "group": "hinglish", "ref": "Rohit bhai, aapka code review ho gaya hai"},
-  {"id": "hg14", "group": "hinglish", "ref": "lunch ke baad sab log conference room mein aa jana"},
-  {"id": "hg15", "group": "hinglish", "ref": "agar test pass ho gaye toh main merge kar dunga"},
+  {
+    "id": "hg01",
+    "group": "hinglish",
+    "ref": "kal ki meeting cancel kar do, Rahul ko bata dena"
+  },
+  {
+    "id": "hg02",
+    "group": "hinglish",
+    "ref": "Priya, PR review karke merge kar dena please"
+  },
+  {
+    "id": "hg03",
+    "group": "hinglish",
+    "ref": "yaar build phir se fail ho gaya, logs check karo"
+  },
+  {
+    "id": "hg04",
+    "group": "hinglish",
+    "ref": "mujhe lagta hai deploy aaj shaam tak ho jayega"
+  },
+  {
+    "id": "hg05",
+    "group": "hinglish",
+    "ref": "Slack pe message daal do ki standup late hai"
+  },
+  {
+    "id": "hg06",
+    "group": "hinglish",
+    "ref": "client ko bolo ki demo kal subah karenge"
+  },
+  {
+    "id": "hg07",
+    "group": "hinglish",
+    "ref": "Ankit, Jira ticket abhi tak update nahi hua hai"
+  },
+  {
+    "id": "hg08",
+    "group": "hinglish",
+    "ref": "main ghar se kaam kar raha hoon, call pe aa jaunga"
+  },
+  {
+    "id": "hg09",
+    "group": "hinglish",
+    "ref": "yeh bug production mein bhi aa raha hai kya"
+  },
+  {
+    "id": "hg10",
+    "group": "hinglish",
+    "ref": "Neha se pooch lo ki design final hua ya nahi"
+  },
+  {
+    "id": "hg11",
+    "group": "hinglish",
+    "ref": "thoda jaldi karo, release aaj hi nikalna hai"
+  },
+  {
+    "id": "hg12",
+    "group": "hinglish",
+    "ref": "mere laptop mein kuch problem hai, IT ko ticket daal do"
+  },
+  {
+    "id": "hg13",
+    "group": "hinglish",
+    "ref": "Rohit bhai, aapka code review ho gaya hai"
+  },
+  {
+    "id": "hg14",
+    "group": "hinglish",
+    "ref": "lunch ke baad sab log conference room mein aa jana"
+  },
+  {
+    "id": "hg15",
+    "group": "hinglish",
+    "ref": "agar test pass ho gaye toh main merge kar dunga"
+  },
 
-  {"id": "mx01", "group": "numbers", "lang": "en", "ref": "Schedule the review for 15th March at 3 pm."},
-  {"id": "mx02", "group": "numbers", "lang": "en", "ref": "The invoice of 25000 rupees is due on 2nd April."},
-  {"id": "mx03", "group": "numbers", "lang": "en", "ref": "We have 120 open tickets and 8 of them are critical."},
-  {"id": "mx04", "group": "numbers", "lang": "en", "ref": "Rahul, the call is at 10:30 tomorrow morning."},
-  {"id": "mx05", "group": "numbers", "lang": "en", "ref": "Revenue grew by 12 percent in the last quarter."},
-  {"id": "mx06", "group": "numbers", "lang": "hg", "ref": "kal 11 baje meeting hai, 5 log aayenge", "say": "kal eleven baje meeting hai, five log aayenge"},
-  {"id": "mx07", "group": "numbers", "lang": "hg", "ref": "Priya ko 2 din ki chhutti chahiye, 20 tareekh se", "say": "Priya ko two din ki chhutti chahiye, twenty tareekh se"},
-  {"id": "mx08", "group": "numbers", "lang": "hg", "ref": "budget 50000 tak rakhna, usse zyada nahi", "say": "budget fifty thousand tak rakhna, usse zyada nahi"},
-  {"id": "mx09", "group": "numbers", "lang": "hg", "ref": "release 3 tareekh ko hogi, uske baad 2 hafte ka break", "say": "release three tareekh ko hogi, uske baad two hafte ka break"},
-  {"id": "mx10", "group": "numbers", "lang": "hg", "ref": "4 baje tak report bhej dena, Neha wait kar rahi hai", "say": "four baje tak report bhej dena, Neha wait kar rahi hai"}
+  {
+    "id": "mx01",
+    "group": "numbers",
+    "lang": "en",
+    "ref": "Schedule the review for 15th March at 3 pm."
+  },
+  {
+    "id": "mx02",
+    "group": "numbers",
+    "lang": "en",
+    "ref": "The invoice of 25000 rupees is due on 2nd April."
+  },
+  {
+    "id": "mx03",
+    "group": "numbers",
+    "lang": "en",
+    "ref": "We have 120 open tickets and 8 of them are critical."
+  },
+  {
+    "id": "mx04",
+    "group": "numbers",
+    "lang": "en",
+    "ref": "Rahul, the call is at 10:30 tomorrow morning."
+  },
+  {
+    "id": "mx05",
+    "group": "numbers",
+    "lang": "en",
+    "ref": "Revenue grew by 12 percent in the last quarter."
+  },
+  {
+    "id": "mx06",
+    "group": "numbers",
+    "lang": "hg",
+    "ref": "kal 11 baje meeting hai, 5 log aayenge",
+    "say": "kal eleven baje meeting hai, five log aayenge"
+  },
+  {
+    "id": "mx07",
+    "group": "numbers",
+    "lang": "hg",
+    "ref": "Priya ko 2 din ki chhutti chahiye, 20 tareekh se",
+    "say": "Priya ko two din ki chhutti chahiye, twenty tareekh se"
+  },
+  {
+    "id": "mx08",
+    "group": "numbers",
+    "lang": "hg",
+    "ref": "budget 50000 tak rakhna, usse zyada nahi",
+    "say": "budget fifty thousand tak rakhna, usse zyada nahi"
+  },
+  {
+    "id": "mx09",
+    "group": "numbers",
+    "lang": "hg",
+    "ref": "release 3 tareekh ko hogi, uske baad 2 hafte ka break",
+    "say": "release three tareekh ko hogi, uske baad two hafte ka break"
+  },
+  {
+    "id": "mx10",
+    "group": "numbers",
+    "lang": "hg",
+    "ref": "4 baje tak report bhej dena, Neha wait kar rahi hai",
+    "say": "four baje tak report bhej dena, Neha wait kar rahi hai"
+  }
 ]

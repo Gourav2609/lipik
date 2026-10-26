@@ -23,6 +23,8 @@ export const PageHeader = ({
         </p>
       )}
     </div>
-    {actions && <div className="flex shrink-0 items-center gap-[8px]">{actions}</div>}
+    {actions && (
+      <div className="flex shrink-0 items-center gap-[8px]">{actions}</div>
+    )}
   </header>
 );

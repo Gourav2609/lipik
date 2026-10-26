@@ -44,9 +44,14 @@ const fn ms(ms: u64) -> u64 {
 #[derive(Debug, PartialEq)]
 pub enum Step {
     /// Speech started at this sample of the stream.
-    Begin { start: u64 },
+    Begin {
+        start: u64,
+    },
     Audio(Vec<f32>),
-    End { end: u64, voiced: u64 },
+    End {
+        end: u64,
+        voiced: u64,
+    },
 }
 
 struct Utterance {
@@ -112,7 +117,11 @@ impl Gate {
                         u.quiet += n;
                     }
                     let len = end - u.start;
-                    let pause = if len >= ms(LONG_MS) { LONG_PAUSE_MS } else { END_PAUSE_MS };
+                    let pause = if len >= ms(LONG_MS) {
+                        LONG_PAUSE_MS
+                    } else {
+                        END_PAUSE_MS
+                    };
                     if u.quiet >= ms(pause) || len >= ms(MAX_MS) {
                         let step = Step::End {
                             end: (u.last_voice + ms(TRAIL_PAD_MS)).min(end),
@@ -210,8 +219,8 @@ impl Source<'_> {
         if self.side.is_some() || self.no_side {
             return;
         }
-        let loaded = transcribe::transcription_manager(self.app())
-            .and_then(|tm| tm.side_stream_engine());
+        let loaded =
+            transcribe::transcription_manager(self.app()).and_then(|tm| tm.side_stream_engine());
         match loaded {
             Ok(side) => self.side = Some(side),
             Err(e) => {
@@ -463,7 +472,9 @@ mod tests {
         probs.extend(vec![0.0; frames_for(END_PAUSE_MS) + 5]);
         let steps = run_gate(&probs);
         let begin = 20 * F as u64 - ms(PREROLL_MS) / F as u64 * F as u64;
-        assert!(matches!(steps[0], Step::Begin { start } if start <= 20 * F as u64 && start >= begin - F as u64));
+        assert!(
+            matches!(steps[0], Step::Begin { start } if start <= 20 * F as u64 && start >= begin - F as u64)
+        );
         let ends: Vec<_> = steps
             .iter()
             .filter_map(|s| match s {
@@ -480,8 +491,14 @@ mod tests {
     fn long_speech_is_cut_at_the_maximum() {
         let probs = vec![0.9; frames_for(MAX_MS) * 2 + 3];
         let steps = run_gate(&probs);
-        let begins = steps.iter().filter(|s| matches!(s, Step::Begin { .. })).count();
-        let ends = steps.iter().filter(|s| matches!(s, Step::End { .. })).count();
+        let begins = steps
+            .iter()
+            .filter(|s| matches!(s, Step::Begin { .. }))
+            .count();
+        let ends = steps
+            .iter()
+            .filter(|s| matches!(s, Step::End { .. }))
+            .count();
         assert_eq!(begins, 3);
         assert_eq!(ends, 3);
     }

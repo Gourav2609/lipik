@@ -52,10 +52,14 @@ pub fn is_focused(app: &AppHandle) -> bool {
 
 fn colors(app: &AppHandle) -> (tauri::Theme, tauri::window::Color) {
     match crate::settings::get_settings(app).theme {
-        Theme::Light => (tauri::Theme::Light, tauri::window::Color(0xFB, 0xFC, 0xFD, 0xFF)),
-        Theme::Dark | Theme::System => {
-            (tauri::Theme::Dark, tauri::window::Color(0x15, 0x19, 0x23, 0xFF))
-        }
+        Theme::Light => (
+            tauri::Theme::Light,
+            tauri::window::Color(0xFB, 0xFC, 0xFD, 0xFF),
+        ),
+        Theme::Dark | Theme::System => (
+            tauri::Theme::Dark,
+            tauri::window::Color(0x15, 0x19, 0x23, 0xFF),
+        ),
     }
 }
 

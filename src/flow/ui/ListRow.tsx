@@ -34,7 +34,10 @@ export const ListGroup = ({
   className = "",
   ...rest
 }: HTMLAttributes<HTMLDivElement>) => (
-  <div className={`border-t border-[var(--fk-border)] ${className}`} {...rest} />
+  <div
+    className={`border-t border-[var(--fk-border)] ${className}`}
+    {...rest}
+  />
 );
 
 /** Small square icon button used inside row actions. */

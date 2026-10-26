@@ -12,14 +12,17 @@ const shareText = (words: number, streak: number) =>
   (streak > 1 ? `, ${streak} days in a row.` : ".");
 
 export default function Insights() {
-  const { loaded, stats, wpm, wordsCorrected, dictionaryFixes, usage } = useInsightsStats();
+  const { loaded, stats, wpm, wordsCorrected, dictionaryFixes, usage } =
+    useInsightsStats();
 
   return (
     <div className="fk-page fk-insights">
       <PageHeader
         title="Stats"
         description="How much you write, and how fast."
-        actions={<CopyStats text={shareText(stats.totalWords, stats.currentStreak)} />}
+        actions={
+          <CopyStats text={shareText(stats.totalWords, stats.currentStreak)} />
+        }
       />
       <StatStrip
         stats={stats}

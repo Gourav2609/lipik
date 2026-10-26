@@ -92,7 +92,11 @@ const ScratchpadHome = ({ onOpen }: { onOpen: (id: string) => void }) => {
             className="flex items-center gap-[10px] text-[14px] text-[var(--fk-text-muted)]"
           >
             Open from the pill
-            <Toggle checked={addToBar} onChange={setAddToBar} label="Open Drafts from the pill" />
+            <Toggle
+              checked={addToBar}
+              onChange={setAddToBar}
+              label="Open Drafts from the pill"
+            />
           </label>
         }
       />
@@ -133,7 +137,11 @@ const ScratchpadHome = ({ onOpen }: { onOpen: (id: string) => void }) => {
             label={searching ? "Close search" : "Search"}
             onClick={() => (searching ? closeSearch() : setSearching(true))}
           >
-            {searching ? <X size={16} strokeWidth={1.75} /> : <Search size={16} strokeWidth={1.75} />}
+            {searching ? (
+              <X size={16} strokeWidth={1.75} />
+            ) : (
+              <Search size={16} strokeWidth={1.75} />
+            )}
           </IconButton>
           <IconButton label="New draft" onClick={newNote}>
             <Plus size={16} strokeWidth={1.75} />
@@ -160,7 +168,9 @@ const ScratchpadHome = ({ onOpen }: { onOpen: (id: string) => void }) => {
                 className="relative py-[12px] has-[:focus-visible]:bg-[var(--fk-surface)]"
               >
                 <div className="flex items-baseline gap-[12px]">
-                  <span className="truncate font-semibold">{noteTitle(note)}</span>
+                  <span className="truncate font-semibold">
+                    {noteTitle(note)}
+                  </span>
                   <span className="fk-num ml-auto shrink-0 text-[13px] text-[var(--fk-text-faint)] transition-opacity duration-[var(--fk-t-quick)] group-focus-within:opacity-0 group-hover:opacity-0">
                     {formatUpdated(note.updatedAt)}
                   </span>

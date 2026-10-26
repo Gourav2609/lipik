@@ -104,17 +104,42 @@ const DOCUMENT_APPS: &[&str] = &[
 ];
 
 const EMAIL_SITES: &[&str] = &[
-    "gmail", "inbox", "outlook", "yahoo mail", "proton mail", "fastmail", "superhuman",
+    "gmail",
+    "inbox",
+    "outlook",
+    "yahoo mail",
+    "proton mail",
+    "fastmail",
+    "superhuman",
 ];
 const WORK_SITES: &[&str] = &[
-    "slack", "linear", "notion", "jira", "confluence", "microsoft teams", "asana", "trello",
-    "clickup", "github",
+    "slack",
+    "linear",
+    "notion",
+    "jira",
+    "confluence",
+    "microsoft teams",
+    "asana",
+    "trello",
+    "clickup",
+    "github",
 ];
 const PERSONAL_SITES: &[&str] = &[
-    "whatsapp", "messenger", "telegram", "discord", "instagram", "signal",
+    "whatsapp",
+    "messenger",
+    "telegram",
+    "discord",
+    "instagram",
+    "signal",
 ];
 const AI_SITES: &[&str] = &["chatgpt", "claude", "gemini", "perplexity", "copilot"];
-const DOCUMENT_SITES: &[&str] = &["google docs", "- docs", "microsoft word", "dropbox paper", "quip"];
+const DOCUMENT_SITES: &[&str] = &[
+    "google docs",
+    "- docs",
+    "microsoft word",
+    "dropbox paper",
+    "quip",
+];
 
 fn title_has(title: &str, needles: &[&str]) -> bool {
     needles.iter().any(|n| title.contains(n))
@@ -286,7 +311,11 @@ mod ax {
             if CFStringGetCString(value.0, buffer.as_mut_ptr(), buffer.len() as isize, UTF8) == 0 {
                 return None;
             }
-            Some(CStr::from_ptr(buffer.as_ptr()).to_string_lossy().into_owned())
+            Some(
+                CStr::from_ptr(buffer.as_ptr())
+                    .to_string_lossy()
+                    .into_owned(),
+            )
         }
     }
 
@@ -325,7 +354,10 @@ mod tests {
 
     #[test]
     fn browser_uses_window_title() {
-        assert_eq!(app_type(&ctx("com.google.Chrome", Some("Inbox (3) - Gmail"))), "email");
+        assert_eq!(
+            app_type(&ctx("com.google.Chrome", Some("Inbox (3) - Gmail"))),
+            "email"
+        );
         assert_eq!(app_type(&ctx("com.apple.Safari", Some("ChatGPT"))), "ai");
         assert_eq!(app_type(&ctx("com.apple.Safari", None)), "other");
         assert_eq!(style_category("ai"), StyleCategory::Other);
@@ -335,8 +367,14 @@ mod tests {
     fn app_label_names_the_app() {
         let slack = Some("com.tinyspeck.slackmacgap");
         assert_eq!(app_label(Some("Slack"), slack, "work"), "Slack");
-        assert_eq!(app_label(Some("Safari"), Some("com.apple.Safari"), "email"), "Safari (Email)");
-        assert_eq!(app_label(Some("Safari"), Some("com.apple.Safari"), "other"), "Safari");
+        assert_eq!(
+            app_label(Some("Safari"), Some("com.apple.Safari"), "email"),
+            "Safari (Email)"
+        );
+        assert_eq!(
+            app_label(Some("Safari"), Some("com.apple.Safari"), "other"),
+            "Safari"
+        );
         assert_eq!(app_label(None, slack, "work"), "Work chat");
         assert_eq!(app_label(None, None, "other"), "App");
     }

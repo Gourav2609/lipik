@@ -1865,12 +1865,18 @@ mod tests {
         let mut settings = get_default_settings();
         settings.recording_retention_period = RecordingRetentionPeriod::PreserveLimit;
         assert!(apply_settings_migrations(&mut settings, &raw));
-        assert_eq!(settings.recording_retention_period, RecordingRetentionPeriod::Forever);
+        assert_eq!(
+            settings.recording_retention_period,
+            RecordingRetentionPeriod::Forever
+        );
 
         let mut settings = get_default_settings();
         settings.recording_retention_period = RecordingRetentionPeriod::Days3;
         apply_settings_migrations(&mut settings, &raw);
-        assert_eq!(settings.recording_retention_period, RecordingRetentionPeriod::Days3);
+        assert_eq!(
+            settings.recording_retention_period,
+            RecordingRetentionPeriod::Days3
+        );
     }
 
     #[test]

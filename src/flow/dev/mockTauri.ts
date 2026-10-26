@@ -164,7 +164,9 @@ const defaults = (theme: "dark" | "light"): Record<string, MockHandler> => {
     check_custom_sounds: () => ({ start: false, stop: false }),
     // ?secureInput=<process> shows the paused-shortcut notice.
     get_secure_input_status: () => {
-      const culprit = new URLSearchParams(window.location.search).get("secureInput");
+      const culprit = new URLSearchParams(window.location.search).get(
+        "secureInput",
+      );
       return {
         enabled: culprit !== null,
         sustained: culprit !== null,
@@ -184,7 +186,8 @@ const defaults = (theme: "dark" | "light"): Record<string, MockHandler> => {
       supported: false,
       overall_access: "allowed",
     }),
-    get_app_dir_path: () => `/Users/you/Library/Application Support/${APP_NAME}`,
+    get_app_dir_path: () =>
+      `/Users/you/Library/Application Support/${APP_NAME}`,
     get_log_dir_path: () => `/Users/you/Library/Logs/${APP_NAME}`,
     check_apple_intelligence_available: () => false,
     get_audio_file_path: () => "",
@@ -206,7 +209,10 @@ const extraHandlers = (): Record<string, MockHandler> => {
     "./mocks/*.ts",
     { eager: true },
   );
-  return Object.assign({}, ...Object.values(modules).map((m) => m.handlers ?? {}));
+  return Object.assign(
+    {},
+    ...Object.values(modules).map((m) => m.handlers ?? {}),
+  );
 };
 
 export const installMockTauri = ({ theme }: { theme: "dark" | "light" }) => {

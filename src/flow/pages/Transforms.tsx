@@ -1,19 +1,33 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, Plus, RotateCcw } from "lucide-react";
-import { Button, HeroBanner, HeroButton, ListGroup, ListRow, PageHeader, Toggle } from "../ui";
+import {
+  Button,
+  HeroBanner,
+  HeroButton,
+  ListGroup,
+  ListRow,
+  PageHeader,
+  Toggle,
+} from "../ui";
 import { useFlowStore } from "../state";
 import { isFlowPreview } from "../dev/preview";
 import { OptKeys } from "./transforms/Keycap";
 import { HowItWorks } from "./transforms/HowItWorks";
 import { TransformDialog } from "./transforms/TransformDialog";
 import { confirmAction } from "./transforms/confirm";
-import { transformsActions as act, useTransforms, type Transform } from "./transforms/store";
+import {
+  transformsActions as act,
+  useTransforms,
+  type Transform,
+} from "./transforms/store";
 import { APP_NAME } from "@/flow/brand";
 
 const CARD =
   "flex min-h-[136px] flex-col items-start rounded-[14px] p-[20px] text-left transition-shadow duration-[var(--fk-t-base)] ease-[var(--fk-ease)]";
-const CARD_TITLE = "mt-[16px] w-full truncate text-[16px] font-semibold leading-[22px]";
-const CARD_TEXT = "mt-[4px] w-full text-[14px] leading-[20px] text-[var(--fk-text-muted)]";
+const CARD_TITLE =
+  "mt-[16px] w-full truncate text-[16px] font-semibold leading-[22px]";
+const CARD_TEXT =
+  "mt-[4px] w-full text-[14px] leading-[20px] text-[var(--fk-text-muted)]";
 
 const confirmReset = async () => {
   if (
@@ -25,10 +39,18 @@ const confirmReset = async () => {
     act.resetTransforms();
 };
 
-const SettingText = ({ title, children }: { title: string; children: ReactNode }) => (
+const SettingText = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) => (
   <div className="py-[12px]">
     <div className="text-[15px] font-semibold leading-[22px]">{title}</div>
-    <div className="mt-[2px] text-[14px] leading-[22px] text-[var(--fk-text-muted)]">{children}</div>
+    <div className="mt-[2px] text-[14px] leading-[22px] text-[var(--fk-text-muted)]">
+      {children}
+    </div>
   </div>
 );
 
@@ -69,7 +91,9 @@ export default function Transforms() {
             <HeroButton strong onClick={() => setPage("scratchpad")}>
               Try in Drafts
             </HeroButton>
-            <HeroButton onClick={() => setHowOpen(true)}>How it works</HeroButton>
+            <HeroButton onClick={() => setHowOpen(true)}>
+              How it works
+            </HeroButton>
           </>
         }
       />
@@ -79,12 +103,16 @@ export default function Transforms() {
           showActions
           className="hover:bg-transparent"
           actions={
-            <Toggle checked={s.optIn} onChange={act.setOptIn} label="Rewrite shortcuts" />
+            <Toggle
+              checked={s.optIn}
+              onChange={act.setOptIn}
+              label="Rewrite shortcuts"
+            />
           }
         >
           <SettingText title="Rewrite shortcuts">
-            Press <OptKeys keyLabel="1" /> on selected text to rewrite it. <OptKeys keyLabel="o" />{" "}
-            shows what changed.
+            Press <OptKeys keyLabel="1" /> on selected text to rewrite it.{" "}
+            <OptKeys keyLabel="o" /> shows what changed.
           </SettingText>
         </ListRow>
         <ListRow
@@ -189,7 +217,9 @@ export default function Transforms() {
         <TransformDialog
           initial={editing.mode === "edit" ? editing.transform : undefined}
           onSave={(d) =>
-            editing.mode === "edit" ? act.update(editing.transform.id, d) : act.add(d)
+            editing.mode === "edit"
+              ? act.update(editing.transform.id, d)
+              : act.add(d)
           }
           onDelete={
             editing.mode === "edit" && !editing.transform.builtIn

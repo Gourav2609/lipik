@@ -159,7 +159,11 @@ impl AudioVisualiser {
 
         // One extra value after the buckets: the window's true RMS in dBFS,
         // which the macOS pill maps to bar width.
-        buckets.push(if rms > 1e-5 { 20.0 * rms.log10() } else { -100.0 });
+        buckets.push(if rms > 1e-5 {
+            20.0 * rms.log10()
+        } else {
+            -100.0
+        });
 
         Some(buckets)
     }

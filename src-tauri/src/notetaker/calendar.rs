@@ -68,7 +68,11 @@ pub fn find_meeting_url(texts: &[Option<String>]) -> Option<String> {
 
 /// The event happening now (or starting within `lead_ms`), preferring the one
 /// that started most recently.
-pub fn current_event(events: &[CalendarEvent], now_ms: i64, lead_ms: i64) -> Option<&CalendarEvent> {
+pub fn current_event(
+    events: &[CalendarEvent],
+    now_ms: i64,
+    lead_ms: i64,
+) -> Option<&CalendarEvent> {
     events
         .iter()
         .filter(|e| !e.all_day && e.start_ms - lead_ms <= now_ms && now_ms < e.end_ms)
@@ -159,7 +163,10 @@ mod imp {
                 .eventIdentifier()
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| e.calendarItemIdentifier().to_string());
-            let url = e.URL().and_then(|u| u.absoluteString()).map(|s| s.to_string());
+            let url = e
+                .URL()
+                .and_then(|u| u.absoluteString())
+                .map(|s| s.to_string());
             let location = e.location().map(|s| s.to_string());
             let notes = e.notes().map(|s| s.to_string());
             CalendarEvent {

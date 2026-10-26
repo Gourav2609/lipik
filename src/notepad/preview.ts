@@ -524,8 +524,7 @@ if (isNotepadPreview) {
             mic: { state: "capturing", detail: null },
             system: {
               state: "silent",
-              detail:
-                `Nothing heard from the call yet. If others are talking, allow ${APP_NAME} under System Settings > Privacy & Security > System Audio Recording Only.`,
+              detail: `Nothing heard from the call yet. If others are talking, allow ${APP_NAME} under System Settings > Privacy & Security > System Audio Recording Only.`,
             },
           }),
       ],

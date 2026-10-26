@@ -51,7 +51,10 @@ pub fn local_text_looks_english(text: &str, custom_words: &[String]) -> bool {
             continue;
         }
         let lower = word.to_lowercase();
-        let lower = lower.strip_suffix("'s").unwrap_or(&lower).trim_matches('\'');
+        let lower = lower
+            .strip_suffix("'s")
+            .unwrap_or(&lower)
+            .trim_matches('\'');
         if lower.is_empty() {
             continue;
         }
@@ -86,10 +89,14 @@ mod tests {
     #[test]
     fn keeps_english_with_names_and_acronyms() {
         assert!(english("Priya, can you review my PR before the stand-up?"));
-        assert!(english("Rahul pushed the fix to staging, please check the JIRA ticket."));
+        assert!(english(
+            "Rahul pushed the fix to staging, please check the JIRA ticket."
+        ));
         assert!(english("Rohit will rotate the API keys before the audit."));
         assert!(english("Schedule the review for 15th March at 3 p.m."));
-        assert!(english("Let's sync on Slack about the onboarding flow tomorrow."));
+        assert!(english(
+            "Let's sync on Slack about the onboarding flow tomorrow."
+        ));
     }
 
     #[test]
@@ -124,7 +131,11 @@ mod tests {
     fn dictionary_words_count_as_english() {
         let text = "Karthik, ping Vikram about the Zorblax rollout.";
         assert!(!english(text));
-        let words = ["Karthik".to_string(), "Zorblax".to_string(), "Vikram".to_string()];
+        let words = [
+            "Karthik".to_string(),
+            "Zorblax".to_string(),
+            "Vikram".to_string(),
+        ];
         assert!(local_text_looks_english(text, &words));
     }
 }

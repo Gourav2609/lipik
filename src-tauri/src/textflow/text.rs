@@ -44,7 +44,10 @@ fn tokens(text: &str) -> Vec<Token> {
 
 /// Word tokens with their byte positions: (start, end, lowercased word).
 pub fn word_spans(text: &str) -> Vec<(usize, usize, String)> {
-    tokens(text).into_iter().map(|t| (t.start, t.end, t.lower)).collect()
+    tokens(text)
+        .into_iter()
+        .map(|t| (t.start, t.end, t.lower))
+        .collect()
 }
 
 /// Lowercased word tokens of a phrase, as used for matching.
@@ -104,7 +107,12 @@ fn same_char(a: char, b: char) -> bool {
 }
 
 /// Byte end of `pattern` matched at char index `i`, if it matches there.
-fn literal_at(chars: &[(usize, char)], text_len: usize, i: usize, pattern: &[char]) -> Option<usize> {
+fn literal_at(
+    chars: &[(usize, char)],
+    text_len: usize,
+    i: usize,
+    pattern: &[char],
+) -> Option<usize> {
     let mut j = i;
     let mut p = 0;
     while p < pattern.len() {
@@ -144,7 +152,10 @@ fn find_hits(text: &str, patterns: &[Pattern]) -> Vec<Hit> {
             Pattern::Words(words) if !words.is_empty() => {
                 for i in 0..text_tokens.len() {
                     let fits = i + words.len() <= text_tokens.len()
-                        && words.iter().zip(&text_tokens[i..]).all(|(w, t)| *w == t.lower);
+                        && words
+                            .iter()
+                            .zip(&text_tokens[i..])
+                            .all(|(w, t)| *w == t.lower);
                     if fits {
                         candidates.push(Hit {
                             start: text_tokens[i].start,
@@ -205,7 +216,10 @@ pub fn apply_replacements(text: &str, pairs: &[(&str, &str)]) -> (String, usize)
     let mut last = 0;
     for hit in &hits {
         out.push_str(&text[last..hit.start]);
-        out.push_str(&capitalize_like(&text[hit.start..hit.end], pairs[hit.rule].1));
+        out.push_str(&capitalize_like(
+            &text[hit.start..hit.end],
+            pairs[hit.rule].1,
+        ));
         last = hit.end;
     }
     out.push_str(&text[last..]);
@@ -326,7 +340,10 @@ mod tests {
     #[test]
     fn counts_dictionary_phrases() {
         let phrases = vec![Pattern::new("Lipik"), Pattern::new("Priya Raman")];
-        assert_eq!(count_phrases("lipik wrote to Priya Raman. Lipik!", &phrases), 3);
+        assert_eq!(
+            count_phrases("lipik wrote to Priya Raman. Lipik!", &phrases),
+            3
+        );
     }
 
     #[test]

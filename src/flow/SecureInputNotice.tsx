@@ -71,18 +71,38 @@ export const SecureInputNotice = () => {
   const [why, fix] =
     culprit === "loginwindow"
       ? [
-          t("secureInputNotice.whyLockScreen", "macOS is still blocking key presses from the lock screen."),
-          t("secureInputNotice.fixLockScreen", "Lock your Mac and unlock it again (Control + Command + Q) to clear it."),
+          t(
+            "secureInputNotice.whyLockScreen",
+            "macOS is still blocking key presses from the lock screen.",
+          ),
+          t(
+            "secureInputNotice.fixLockScreen",
+            "Lock your Mac and unlock it again (Control + Command + Q) to clear it.",
+          ),
         ]
       : terminal
         ? [
-            t("secureInputNotice.whyTerminal", "Secure Keyboard Entry in {{app}} hides key presses from other apps.", { app: culprit }),
-            t("secureInputNotice.fixTerminal", "Turn it off in the {{app}} menu.", { app: culprit }),
+            t(
+              "secureInputNotice.whyTerminal",
+              "Secure Keyboard Entry in {{app}} hides key presses from other apps.",
+              { app: culprit },
+            ),
+            t(
+              "secureInputNotice.fixTerminal",
+              "Turn it off in the {{app}} menu.",
+              { app: culprit },
+            ),
           ]
         : [
-            t("secureInputNotice.whyOther", "macOS hides key presses while {{holder}} is open, to keep passwords safe.", {
-              holder: culprit ? (PLAIN_NAMES[culprit] ?? culprit) : t("secureInputNotice.passwordField", "a password field"),
-            }),
+            t(
+              "secureInputNotice.whyOther",
+              "macOS hides key presses while {{holder}} is open, to keep passwords safe.",
+              {
+                holder: culprit
+                  ? (PLAIN_NAMES[culprit] ?? culprit)
+                  : t("secureInputNotice.passwordField", "a password field"),
+              },
+            ),
             t("secureInputNotice.fixOther", "It clears when you close it."),
           ];
   const dictateStillWorks = !paused.includes("transcribe");
@@ -100,7 +120,10 @@ export const SecureInputNotice = () => {
         <div className="min-w-0 flex-1">
           <p className="text-[14.5px] font-semibold leading-[22px]">
             {status.recorder_blocked && paused.length === 0 ? (
-              t("secureInputNotice.recorderTitle", "Shortcuts can't be changed right now")
+              t(
+                "secureInputNotice.recorderTitle",
+                "Shortcuts can't be changed right now",
+              )
             ) : pausedBinding ? (
               <>
                 <Keys binding={pausedBinding} />{" "}
@@ -113,7 +136,10 @@ export const SecureInputNotice = () => {
           <p className="mt-[2px] text-[13.5px] leading-[20px] text-[var(--fk-text-muted)]">
             {why}{" "}
             {dictateStillWorks &&
-              t("secureInputNotice.fnWorks", "Holding fn to dictate still works.")}{" "}
+              t(
+                "secureInputNotice.fnWorks",
+                "Holding fn to dictate still works.",
+              )}{" "}
             {fix}
           </p>
         </div>

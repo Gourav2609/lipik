@@ -2,7 +2,11 @@ import { useState, type FormEvent } from "react";
 import { ModalShell } from "../../overlays/ModalShell";
 import { Button, TextInput, Toggle } from "../../ui";
 import { APP_NAME } from "@/flow/brand";
-import { MAX_WORD_LENGTH, normalizeWord, type EntryInput } from "./useDictionary";
+import {
+  MAX_WORD_LENGTH,
+  normalizeWord,
+  type EntryInput,
+} from "./useDictionary";
 
 const Label = ({ children }: { children: string }) => (
   <span className="mb-[8px] block text-[13px] font-semibold leading-[18px] text-[var(--fk-text-muted)]">

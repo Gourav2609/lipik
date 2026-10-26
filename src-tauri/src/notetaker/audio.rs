@@ -78,7 +78,10 @@ impl StreamWriter {
         let due = (now.saturating_duration_since(started).as_secs_f64() * RATE as f64) as u64;
         let mut behind = due.saturating_sub(self.written + samples.len() as u64);
         if behind > GAP_FILL_SAMPLES {
-            log::warn!("Notetaker stream fell {} ms behind; filling with silence", samples_to_ms(behind));
+            log::warn!(
+                "Notetaker stream fell {} ms behind; filling with silence",
+                samples_to_ms(behind)
+            );
             let zeros = vec![0.0; RATE];
             while behind > 0 {
                 let n = behind.min(RATE as u64) as usize;
@@ -146,20 +149,33 @@ struct LevelTap {
 
 impl LevelTap {
     fn new(app: AppHandle) -> Self {
-        Self { app, sum: 0.0, count: 0 }
+        Self {
+            app,
+            sum: 0.0,
+            count: 0,
+        }
     }
 
     fn push(&mut self, samples: &[f32], rate: u32) {
-        self.sum += samples.iter().map(|&s| (s as f64) * (s as f64)).sum::<f64>();
+        self.sum += samples
+            .iter()
+            .map(|&s| (s as f64) * (s as f64))
+            .sum::<f64>();
         self.count += samples.len();
         if self.count < (rate / 40).max(1) as usize {
             return;
         }
         let rms = (self.sum / self.count as f64).sqrt();
-        let db = if rms > 1e-5 { 20.0 * rms.log10() } else { -100.0 };
+        let db = if rms > 1e-5 {
+            20.0 * rms.log10()
+        } else {
+            -100.0
+        };
         self.sum = 0.0;
         self.count = 0;
-        let _ = self.app.emit_to("recording_overlay", "notetaker-level", db as f32);
+        let _ = self
+            .app
+            .emit_to("recording_overlay", "notetaker-level", db as f32);
     }
 }
 
@@ -286,7 +302,11 @@ impl Resampler {
             pos: 0.0,
             prev: 0.0,
             lp: 0.0,
-            alpha: if step > 1.0 { (dt / (rc + dt)) as f32 } else { 1.0 },
+            alpha: if step > 1.0 {
+                (dt / (rc + dt)) as f32
+            } else {
+                1.0
+            },
         }
     }
 

@@ -20,7 +20,10 @@ async fn blocking<T: Send + 'static>(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn notetaker_start(manager: Manager<'_>, title: Option<String>) -> Result<Meeting, String> {
+pub async fn notetaker_start(
+    manager: Manager<'_>,
+    title: Option<String>,
+) -> Result<Meeting, String> {
     let m = manager.inner().clone();
     blocking(move || {
         let meeting = m.start(title, None)?;
@@ -56,7 +59,10 @@ pub async fn notetaker_list(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn notetaker_get(manager: Manager<'_>, id: String) -> Result<Option<MeetingDetail>, String> {
+pub async fn notetaker_get(
+    manager: Manager<'_>,
+    id: String,
+) -> Result<Option<MeetingDetail>, String> {
     let m = manager.inner().clone();
     blocking(move || m.get(&id)).await
 }
@@ -81,7 +87,11 @@ pub async fn notetaker_delete(manager: Manager<'_>, id: String) -> Result<(), St
 
 #[tauri::command]
 #[specta::specta]
-pub async fn notetaker_rename(manager: Manager<'_>, id: String, title: String) -> Result<(), String> {
+pub async fn notetaker_rename(
+    manager: Manager<'_>,
+    id: String,
+    title: String,
+) -> Result<(), String> {
     let m = manager.inner().clone();
     blocking(move || m.rename(&id, &title)).await
 }
@@ -169,7 +179,10 @@ pub async fn notetaker_chats(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn notetaker_chat(manager: Manager<'_>, thread_id: String) -> Result<Vec<ChatMessage>, String> {
+pub async fn notetaker_chat(
+    manager: Manager<'_>,
+    thread_id: String,
+) -> Result<Vec<ChatMessage>, String> {
     let m = manager.inner().clone();
     blocking(move || m.chat_messages(&thread_id)).await
 }

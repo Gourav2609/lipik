@@ -3,7 +3,9 @@ import { isFlowPreview } from "../dev/preview";
 
 /** Input level 0..1 from the webview's own microphone stream; null if unavailable. */
 export const useMicLevel = (enabled: boolean, deviceName: string | null) => {
-  const [level, setLevel] = useState<number | null>(isFlowPreview ? 0.55 : null);
+  const [level, setLevel] = useState<number | null>(
+    isFlowPreview ? 0.55 : null,
+  );
 
   useEffect(() => {
     if (!enabled || isFlowPreview) return;
@@ -16,7 +18,8 @@ export const useMicLevel = (enabled: boolean, deviceName: string | null) => {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const match = devices.find(
-          (d) => d.kind === "audioinput" && deviceName && d.label === deviceName,
+          (d) =>
+            d.kind === "audioinput" && deviceName && d.label === deviceName,
         );
         stream = await navigator.mediaDevices.getUserMedia({
           audio: match ? { deviceId: { exact: match.deviceId } } : true,

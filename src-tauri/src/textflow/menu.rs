@@ -23,7 +23,11 @@ fn set_pill_visible(app: &AppHandle, visible: bool) {
     let app_for_main = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(window) = app_for_main.get_webview_window("recording_overlay") {
-            let _ = if visible { window.show() } else { window.hide() };
+            let _ = if visible {
+                window.show()
+            } else {
+                window.hide()
+            };
         }
     });
     let until = HIDDEN_UNTIL.load(Ordering::SeqCst);
@@ -74,8 +78,7 @@ pub fn keep_hidden_after_dictation(app: &AppHandle) {
         let app = handle.clone();
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(400));
-            if hidden_until().is_none()
-                || RECORDING_GENERATION.load(Ordering::SeqCst) != generation
+            if hidden_until().is_none() || RECORDING_GENERATION.load(Ordering::SeqCst) != generation
             {
                 return;
             }
@@ -125,7 +128,11 @@ pub fn emit_pill_mic(app: &AppHandle) {
     };
     let recommended = is_builtin(&name);
     let payload = PillMic {
-        name: if recommended { "Built-in mic".to_string() } else { name },
+        name: if recommended {
+            "Built-in mic".to_string()
+        } else {
+            name
+        },
         recommended,
     };
     let _ = app.emit("pill-mic", payload);

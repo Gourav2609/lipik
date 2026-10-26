@@ -7,11 +7,11 @@ Rust lives in `src-tauri/src/textflow/`. Commands are tauri-specta commands, so
 
 ## Where data is stored
 
-| Data | File (app data folder) | Why |
-|---|---|---|
-| Dictionary, replacements, snippets, style, transforms | `textflow.json` | Small, read on every dictation. Kept in memory and written (temp file + rename) on every change, so the dictation path never touches disk or parses JSON. Kept out of `settings_store.json` because `get_settings()` parses the whole settings object many times per dictation. |
-| Scratchpad notes | `scratchpad.db` (SQLite, table `notes`) | Note bodies can be long and are saved often; one row per note. |
-| Insights numbers | `history.db`, new columns on `transcription_history` | Next to each dictation's audio and text. |
+| Data                                                  | File (app data folder)                               | Why                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dictionary, replacements, snippets, style, transforms | `textflow.json`                                      | Small, read on every dictation. Kept in memory and written (temp file + rename) on every change, so the dictation path never touches disk or parses JSON. Kept out of `settings_store.json` because `get_settings()` parses the whole settings object many times per dictation. |
+| Scratchpad notes                                      | `scratchpad.db` (SQLite, table `notes`)              | Note bodies can be long and are saved often; one row per note.                                                                                                                                                                                                                  |
+| Insights numbers                                      | `history.db`, new columns on `transcription_history` | Next to each dictation's audio and text.                                                                                                                                                                                                                                        |
 
 On the first run `textflow.json` is created and Handy's existing
 `custom_words` are imported as dictionary words. A `textflow.json` that can't
@@ -20,15 +20,15 @@ are imported again from `custom_words`; nothing overwrites the bad file.
 
 ## Dictionary
 
-| Command | Returns |
-|---|---|
-| `get_dictionary()` | `Dictionary` |
-| `add_dictionary_word(word: string)` | `Result<Dictionary>` |
+| Command                                                              | Returns              |
+| -------------------------------------------------------------------- | -------------------- |
+| `get_dictionary()`                                                   | `Dictionary`         |
+| `add_dictionary_word(word: string)`                                  | `Result<Dictionary>` |
 | `update_dictionary_word(id: string, word: string, starred: boolean)` | `Result<Dictionary>` |
-| `delete_dictionary_word(id: string)` | `Result<Dictionary>` |
-| `add_replacement(from: string, to: string)` | `Result<Dictionary>` |
-| `update_replacement(id: string, from: string, to: string)` | `Result<Dictionary>` |
-| `delete_replacement(id: string)` | `Result<Dictionary>` |
+| `delete_dictionary_word(id: string)`                                 | `Result<Dictionary>` |
+| `add_replacement(from: string, to: string)`                          | `Result<Dictionary>` |
+| `update_replacement(id: string, from: string, to: string)`           | `Result<Dictionary>` |
+| `delete_replacement(id: string)`                                     | `Result<Dictionary>` |
 
 ```ts
 Dictionary = { words: DictionaryWord[]; replacements: Replacement[] }
@@ -67,12 +67,12 @@ Replacement = { id: string; from: string; to: string; auto_learned: boolean }
 
 ## Snippets
 
-| Command | Returns |
-|---|---|
-| `get_snippets()` | `Snippet[]` |
-| `add_snippet(trigger: string, expansion: string)` | `Result<Snippet[]>` |
+| Command                                                          | Returns             |
+| ---------------------------------------------------------------- | ------------------- |
+| `get_snippets()`                                                 | `Snippet[]`         |
+| `add_snippet(trigger: string, expansion: string)`                | `Result<Snippet[]>` |
 | `update_snippet(id: string, trigger: string, expansion: string)` | `Result<Snippet[]>` |
-| `delete_snippet(id: string)` | `Result<Snippet[]>` |
+| `delete_snippet(id: string)`                                     | `Result<Snippet[]>` |
 
 `Snippet = { id: string; trigger: string; expansion: string }`
 
@@ -84,11 +84,11 @@ only the expansion is pasted (no stray period).
 
 ## Style
 
-| Command | Returns |
-|---|---|
-| `get_style_settings()` | `StyleSettings` |
+| Command                                                | Returns                 |
+| ------------------------------------------------------ | ----------------------- |
+| `get_style_settings()`                                 | `StyleSettings`         |
 | `set_style(category: StyleCategory, style: StyleKind)` | `Result<StyleSettings>` |
-| `set_auto_cleanup(enabled: boolean)` | `Result<StyleSettings>` |
+| `set_auto_cleanup(enabled: boolean)`                   | `Result<StyleSettings>` |
 
 ```ts
 StyleCategory = "personal" | "work" | "email" | "other"
@@ -105,14 +105,14 @@ turning it off afterwards sticks; dev builds wrote it as
 The app that was in front when recording started decides the category
 (bundle id, plus the window title for browsers):
 
-| App type | Style category | Examples |
-|---|---|---|
-| personal | personal | Messages, WhatsApp, Telegram, Discord, Signal; WhatsApp/Messenger/Discord tabs |
-| work | work | Slack, Teams, Linear, Notion, Jira; matching browser tabs, GitHub |
-| email | email | Mail, Outlook, Spark, Superhuman; Gmail/Outlook/Inbox tabs |
-| ai | other | ChatGPT, Claude, Cursor, Windsurf, Perplexity; their tabs |
-| document | other | Notes, Pages, Word, Obsidian, TextEdit; Google Docs tabs |
-| other | other | everything else |
+| App type | Style category | Examples                                                                       |
+| -------- | -------------- | ------------------------------------------------------------------------------ |
+| personal | personal       | Messages, WhatsApp, Telegram, Discord, Signal; WhatsApp/Messenger/Discord tabs |
+| work     | work           | Slack, Teams, Linear, Notion, Jira; matching browser tabs, GitHub              |
+| email    | email          | Mail, Outlook, Spark, Superhuman; Gmail/Outlook/Inbox tabs                     |
+| ai       | other          | ChatGPT, Claude, Cursor, Windsurf, Perplexity; their tabs                      |
+| document | other          | Notes, Pages, Word, Obsidian, TextEdit; Google Docs tabs                       |
+| other    | other          | everything else                                                                |
 
 ### How clean-up works
 
@@ -179,6 +179,7 @@ stay). The research behind the steps is in `training/cleanup/`
 The checks run after dictionary replacements and snippets: the reply is
 compared with that text (before the rules step). The rules text is pasted
 instead when the reply:
+
 - is empty, or much longer than that text (1.5x + 40 characters);
 - uses a script the text does not (a Devanagari "ठीक है" for a spoken "ok");
 - has lost most of the Hindi words of a Hinglish transcript (2 or more
@@ -214,14 +215,14 @@ the transform.
 
 ## Transforms
 
-| Command | Returns |
-|---|---|
-| `get_transforms()` | `TransformSettings` |
+| Command                                                                                                                 | Returns                     |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `get_transforms()`                                                                                                      | `TransformSettings`         |
 | `save_transform(id: string \| null, name: string, description: string, prompt: string, shortcut_index: number \| null)` | `Result<TransformSettings>` |
-| `delete_transform(id: string)` | `Result<TransformSettings>` |
-| `reset_transforms()` | `Result<TransformSettings>` |
-| `set_transforms_opt_in(enabled: boolean)` | `Result<TransformSettings>` |
-| `set_auto_apply(enabled: boolean, transform_id: string \| null)` | `Result<TransformSettings>` |
+| `delete_transform(id: string)`                                                                                          | `Result<TransformSettings>` |
+| `reset_transforms()`                                                                                                    | `Result<TransformSettings>` |
+| `set_transforms_opt_in(enabled: boolean)`                                                                               | `Result<TransformSettings>` |
+| `set_auto_apply(enabled: boolean, transform_id: string \| null)`                                                        | `Result<TransformSettings>` |
 
 ```ts
 TransformSettings = { opt_in: boolean; auto_apply: AutoApply; items: Transform[] }
@@ -246,12 +247,12 @@ Transform = { id: string; name: string; description: string; prompt: string; sho
 
 ## Scratchpad
 
-| Command | Returns |
-|---|---|
-| `list_notes()` | `Result<Note[]>` (newest first) |
-| `get_note(id: string)` | `Result<Note \| null>` |
-| `save_note(id: string \| null, title: string, body: string)` | `Result<string>` (the id) |
-| `delete_note(id: string)` | `Result<null>` |
+| Command                                                      | Returns                         |
+| ------------------------------------------------------------ | ------------------------------- |
+| `list_notes()`                                               | `Result<Note[]>` (newest first) |
+| `get_note(id: string)`                                       | `Result<Note \| null>`          |
+| `save_note(id: string \| null, title: string, body: string)` | `Result<string>` (the id)       |
+| `delete_note(id: string)`                                    | `Result<null>`                  |
 
 `Note = { id: string; title: string; body: string; updated_at: number }` (unix ms).
 `save_note` keeps a caller-chosen id, so notes already in the page's
@@ -297,15 +298,16 @@ installs. Settings schema 3 moves stores on the old default
 
 ## Pill menu
 
-| Command | What it does |
-|---|---|
+| Command                          | What it does                                                                                                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pill_hide_for(minutes: number)` | Hides the pill window for that long (0 shows it now). Emits `pill-hidden`. A dictation in that time still shows the pill, which hides again 400 ms after the dictation ends. |
-| `pill_hidden_until()` | `number \| null`: unix ms the pill is hidden until. |
-| `paste_last_transcript()` | `Result<null>`: pastes the latest non-empty transcript (final text) into the focused app. |
-| `open_main_page(page: string)` | `Result<null>`: shows the main window and emits `flow-open-page` (payload: page id) to it. |
-| microphones | Use Handy's existing `get_available_microphones()` and `set_selected_microphone(device_name)` (`"default"` = system default). |
+| `pill_hidden_until()`            | `number \| null`: unix ms the pill is hidden until.                                                                                                                          |
+| `paste_last_transcript()`        | `Result<null>`: pastes the latest non-empty transcript (final text) into the focused app.                                                                                    |
+| `open_main_page(page: string)`   | `Result<null>`: shows the main window and emits `flow-open-page` (payload: page id) to it.                                                                                   |
+| microphones                      | Use Handy's existing `get_available_microphones()` and `set_selected_microphone(device_name)` (`"default"` = system default).                                                |
 
 Events:
+
 - `pill-mic` `{ name: string; recommended: boolean }`: on every recording
   start. `recommended` is true for the built-in microphone, whose name is
   then given as "Built-in mic".

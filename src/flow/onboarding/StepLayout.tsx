@@ -45,7 +45,12 @@ export const StepLayout = ({
       {children && <div className="fk-ob-enter-late mt-[20px]">{children}</div>}
       <div className="mt-[32px] flex items-center gap-[8px]">
         {back && (
-          <Button variant="secondary" onClick={back} aria-label="Back" className="w-[36px] !px-0">
+          <Button
+            variant="secondary"
+            onClick={back}
+            aria-label="Back"
+            className="w-[36px] !px-0"
+          >
             <ArrowLeft size={16} strokeWidth={1.75} />
           </Button>
         )}

@@ -435,8 +435,7 @@ const Pill: React.FC = () => {
 
   const permDone = useCallback(() => {
     setPerm(null);
-    if (permQueue.current.length)
-      later("perm", PERM_GAP, () => askFor([]));
+    if (permQueue.current.length) later("perm", PERM_GAP, () => askFor([]));
   }, [askFor, later]);
 
   useEffect(() => {
@@ -1270,7 +1269,11 @@ const Pill: React.FC = () => {
       {(
         [
           ["pad", 0, tr("pill.showNotepad", "Show Notepad")],
-          ["stop", NOTE_STOP_SHIFT, tr("pill.stopNotetaker", "Stop meeting notes")],
+          [
+            "stop",
+            NOTE_STOP_SHIFT,
+            tr("pill.stopNotetaker", "Stop meeting notes"),
+          ],
           ["more", NOTE_MORE, tr("pill.upcomingMeetings", "Upcoming meetings")],
         ] as const
       ).map(([key, shift, text]) => (

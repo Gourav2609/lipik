@@ -48,18 +48,29 @@ files["tray_idle_warning_dark.png"] = sets.tray__dark.warning;
 files["handy.png"] = tile(INK, mark("#fbf9f4"));
 files["recording.png"] = tile(INK, mark("#fbf9f4")) + dot(LIVE, INK);
 files["transcribing.png"] = tile(INK, mark("#fbf9f4", SHORT));
-files["handy_warning.png"] = tile(INK, mark("#fbf9f4")) + alert(LIVE, "#fbf9f4");
+files["handy_warning.png"] =
+  tile(INK, mark("#fbf9f4")) + alert(LIVE, "#fbf9f4");
 
 const dir = mkdtempSync(join(tmpdir(), "lipik-icons-"));
 const render = (svg, size, out, view = 24) => {
   const file = join(dir, "i.svg");
-  writeFileSync(file, `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${view} ${view}">${svg}</svg>`);
-  execFileSync("swift", [join(ROOT, "scripts/render-svg.swift"), file, String(size), out], { stdio: "inherit" });
+  writeFileSync(
+    file,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${view} ${view}">${svg}</svg>`,
+  );
+  execFileSync(
+    "swift",
+    [join(ROOT, "scripts/render-svg.swift"), file, String(size), out],
+    { stdio: "inherit" },
+  );
 };
 for (const [name, svg] of Object.entries(files)) {
   render(svg, 64, join(ROOT, "src-tauri/resources", name));
 }
-const icon = readFileSync(join(ROOT, "src-tauri/icons/icon.svg"), "utf8").replace(/^<svg[^>]*>|<\/svg>\s*$/g, "");
+const icon = readFileSync(
+  join(ROOT, "src-tauri/icons/icon.svg"),
+  "utf8",
+).replace(/^<svg[^>]*>|<\/svg>\s*$/g, "");
 render(icon, 1024, join(ROOT, "src-tauri/icons/icon.png"), 1024);
 rmSync(dir, { recursive: true, force: true });
 console.log(Object.keys(files).length + 1, "icons written");

@@ -67,10 +67,7 @@ type BubbleProps = {
 
 const Bubble = memo(
   ({ seg, index, live, flash, query, words }: BubbleProps) => (
-    <div
-      className={`np-bubble${flash ? " flash" : ""}`}
-      data-seg={index}
-    >
+    <div className={`np-bubble${flash ? " flash" : ""}`} data-seg={index}>
       {words !== undefined ? (
         <span className="tent">
           {seg.text.trim().split(/\s+/).slice(0, words).join(" ")}
@@ -78,9 +75,7 @@ const Bubble = memo(
       ) : (
         <Marked text={seg.text.trim()} query={query} />
       )}
-      {!live && (
-        <span className="np-bubble-flag">{clock(seg.start_ms)}</span>
-      )}
+      {!live && <span className="np-bubble-flag">{clock(seg.start_ms)}</span>}
     </div>
   ),
 );
@@ -180,7 +175,9 @@ export const TranscriptTab = (p: Props) => {
             className="np-tool"
             aria-label="Translate"
             title="Translate"
-            onClick={() => p.onSoon(`Live translation isn't in ${APP_NAME} yet`)}
+            onClick={() =>
+              p.onSoon(`Live translation isn't in ${APP_NAME} yet`)
+            }
           >
             <Languages size={16} strokeWidth={1.75} />
           </button>
@@ -219,7 +216,9 @@ export const TranscriptTab = (p: Props) => {
             </div>
           )
         ) : (
-          <div className="np-empty">Nothing was transcribed in this meeting.</div>
+          <div className="np-empty">
+            Nothing was transcribed in this meeting.
+          </div>
         ))}
 
       {groups.map((g, gi) => (

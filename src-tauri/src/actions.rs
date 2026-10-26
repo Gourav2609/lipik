@@ -589,7 +589,8 @@ impl ShortcutAction for TranscribeAction {
 
 /// Transcribe and paste audio kept from a cancelled dictation (the pill's Undo).
 pub fn resume_transcription(app: &AppHandle, binding_id: &str, samples: Vec<f32>) {
-    app.state::<Arc<TranscriptionManager>>().initiate_model_load();
+    app.state::<Arc<TranscriptionManager>>()
+        .initiate_model_load();
     RECORDING_SESSION.fetch_add(1, Ordering::SeqCst);
     TranscribeAction {
         post_process: binding_id == "transcribe_with_post_process",
@@ -889,7 +890,10 @@ impl TranscribeAction {
                                             set_tray_state(&ah_clone, TrayIconState::Idle);
                                         }
                                         let inserted = has_field
-                                            && match utils::paste(final_text.clone(), ah_clone.clone()) {
+                                            && match utils::paste(
+                                                final_text.clone(),
+                                                ah_clone.clone(),
+                                            ) {
                                                 Ok(()) => {
                                                     debug!(
                                                         "Text pasted successfully in {:?}",
@@ -1024,7 +1028,8 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
     for index in 1..=9 {
         map.insert(
             format!("transform_{index}"),
-            Arc::new(crate::textflow::transforms::TransformAction(index)) as Arc<dyn ShortcutAction>,
+            Arc::new(crate::textflow::transforms::TransformAction(index))
+                as Arc<dyn ShortcutAction>,
         );
     }
     map

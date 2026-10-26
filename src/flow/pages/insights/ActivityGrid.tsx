@@ -32,7 +32,13 @@ const StreakDot = ({ onInk }: { onInk: boolean }) => (
   />
 );
 
-export const ActivityGrid = ({ stats, loaded }: { stats: InsightsStats; loaded: boolean }) => {
+export const ActivityGrid = ({
+  stats,
+  loaded,
+}: {
+  stats: InsightsStats;
+  loaded: boolean;
+}) => {
   const [page, setPage] = useState(0);
   const { today } = stats;
   const todayKey = dayKey(today);
@@ -131,7 +137,8 @@ export const ActivityGrid = ({ stats, loaded }: { stats: InsightsStats; loaded: 
                       style={{
                         width: CELL,
                         height: CELL,
-                        background: lvl >= 0 ? LEVELS[lvl] : "var(--fk-surface-2)",
+                        background:
+                          lvl >= 0 ? LEVELS[lvl] : "var(--fk-surface-2)",
                         boxShadow:
                           key === todayKey && !words
                             ? "inset 0 0 0 1.5px var(--fk-border-strong)"
@@ -139,7 +146,9 @@ export const ActivityGrid = ({ stats, loaded }: { stats: InsightsStats; loaded: 
                         animationDelay: `${w * 16}ms`,
                       }}
                     >
-                      {stats.streakDays.has(key) && <StreakDot onInk={lvl >= 2} />}
+                      {stats.streakDays.has(key) && (
+                        <StreakDot onInk={lvl >= 2} />
+                      )}
                     </div>
                   );
                 })}

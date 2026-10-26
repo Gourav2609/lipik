@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark,
   Check,
@@ -82,7 +76,8 @@ const Editor = ({
   const [value, setValue] = useState(initial);
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
-  const canSave = value.trim().length > 0 && value.trim() !== initial && !saving;
+  const canSave =
+    value.trim().length > 0 && value.trim() !== initial && !saving;
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -125,7 +120,9 @@ const Editor = ({
         <span className="mr-auto flex items-center gap-[4px] text-[13px] text-[var(--fk-text-faint)]">
           <Kbd>⌘</Kbd>
           <Kbd>↵</Kbd>
-          <span className="mr-[8px]">{tr("dictation.editHintSave", "to save")}</span>
+          <span className="mr-[8px]">
+            {tr("dictation.editHintSave", "to save")}
+          </span>
           <Kbd>esc</Kbd>
           <span>{tr("dictation.editHintCancel", "to cancel")}</span>
         </span>
@@ -245,7 +242,11 @@ const Row = ({
       </div>
       <div className="min-w-0 max-w-[680px] flex-1">
         {editing ? (
-          <Editor initial={text} onSave={saveText} onCancel={() => setEditing(false)} />
+          <Editor
+            initial={text}
+            onSave={saveText}
+            onCancel={() => setEditing(false)}
+          />
         ) : (
           <p
             className={`select-text whitespace-pre-wrap break-words text-[15px] leading-[22px] ${text ? "" : "text-[var(--fk-text-faint)]"}`}
@@ -254,7 +255,10 @@ const Row = ({
           </p>
         )}
         {notice && (
-          <p role="status" className="mt-[4px] text-[13px] leading-[18px] text-[var(--fk-accent)]">
+          <p
+            role="status"
+            className="mt-[4px] text-[13px] leading-[18px] text-[var(--fk-accent)]"
+          >
             {notice}
           </p>
         )}
@@ -262,7 +266,11 @@ const Row = ({
       <div
         className={`absolute -top-[17px] right-[12px] z-[15] flex items-center gap-[2px] rounded-[10px] bg-[var(--fk-menu-bg)] p-[2px] shadow-[var(--fk-elev-2)] transition-opacity duration-[var(--fk-t-quick)] ${editing ? "hidden" : active ? "" : "pointer-events-none opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"}`}
       >
-        <IconButton label={playing ? "Pause" : "Play recording"} active={playing} onClick={onPlay}>
+        <IconButton
+          label={playing ? "Pause" : "Play recording"}
+          active={playing}
+          onClick={onPlay}
+        >
           {playing ? <Pause {...ICON} /> : <Play {...ICON} />}
         </IconButton>
         <IconButton label={copied ? "Copied" : "Copy"} onClick={copy}>
@@ -337,7 +345,9 @@ export const HistoryList = ({
   const [query, setQuery] = useState(initialQuery ?? "");
   const [playingId, setPlayingId] = useState<number | null>(null);
   const [rows, setRows] = useState(PAGE_ROWS);
-  const audioRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null);
+  const audioRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(
+    null,
+  );
   const moreRef = useRef<HTMLDivElement>(null);
 
   const stop = () => {
@@ -352,9 +362,14 @@ export const HistoryList = ({
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? entries.filter((e) => entryText(e).toLowerCase().includes(q)) : entries;
+    return q
+      ? entries.filter((e) => entryText(e).toLowerCase().includes(q))
+      : entries;
   }, [entries, query]);
-  const groups = useMemo(() => groupByDay(matches.slice(0, rows)), [matches, rows]);
+  const groups = useMemo(
+    () => groupByDay(matches.slice(0, rows)),
+    [matches, rows],
+  );
   const hasMore = matches.length > rows;
 
   useEffect(() => {

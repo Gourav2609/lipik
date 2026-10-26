@@ -36,7 +36,10 @@ export const FlowOnboarding = ({
 }) => {
   const theme = useResolvedTheme();
   const [index, setIndex] = useState(() =>
-    Math.max(0, STEPS.findIndex((s) => s.id === initialStep)),
+    Math.max(
+      0,
+      STEPS.findIndex((s) => s.id === initialStep),
+    ),
   );
   const step = STEPS[index];
   const Body = step.Component;
@@ -66,7 +69,9 @@ export const FlowOnboarding = ({
           className="absolute left-[96px] top-1/2 flex -translate-y-1/2 items-center gap-[8px]"
         >
           <LipikMark size={20} className="shrink-0 text-[var(--fk-accent)]" />
-          <span className="fk-display text-[18px] font-semibold leading-none">{APP_NAME}</span>
+          <span className="fk-display text-[18px] font-semibold leading-none">
+            {APP_NAME}
+          </span>
         </div>
         <div
           className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-[6px]"

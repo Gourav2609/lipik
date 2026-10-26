@@ -8,10 +8,10 @@ local English model cannot do.
 
 ## Settings
 
-| Field | Values | Default |
-|---|---|---|
-| `speech_engine` | `"parakeet"`, `"apple"`, `"auto"` | `"auto"` |
-| `apple_locale` | any locale Apple dictation supports, e.g. `"en-IN"`, `"en-US"` | `"en-IN"` |
+| Field           | Values                                                         | Default   |
+| --------------- | -------------------------------------------------------------- | --------- |
+| `speech_engine` | `"parakeet"`, `"apple"`, `"auto"`                              | `"auto"`  |
+| `apple_locale`  | any locale Apple dictation supports, e.g. `"en-IN"`, `"en-US"` | `"en-IN"` |
 
 - `parakeet`: only the selected local model, as before. (The value is named
   after the default model but means whichever local model is selected.)
@@ -22,8 +22,8 @@ local English model cannot do.
   then one result is kept (rule below).
 
 Apple is skipped, and the local model used alone, when:
-the Mac is older than macOS 26 or the helper is not bundled; *Translate to
-English* is on; or, in `auto` only, the selected local model is not English-only
+the Mac is older than macOS 26 or the helper is not bundled; _Translate to
+English_ is on; or, in `auto` only, the selected local model is not English-only
 (Parakeet V3, Whisper, Canary and other multilingual models write other
 languages correctly, and the rule below would replace them with Apple's
 English) or the dictation language is set to something other than
@@ -63,11 +63,11 @@ Same 160 `say` clips as `training/bench/RESULTS.md`. Apple went through the
 bundled helper with the app's request format; the auto column uses the Rust
 `pick.rs` rule on the stored Parakeet outputs. WER in %, strict scoring.
 
-| Engine | English (80 clips) | Hinglish (80 clips) | Hinglish, loose |
-|---|---|---|---|
-| Parakeet (local) | **2.4** | 61.3 | 57.7 |
-| Apple en-IN | 10.9 | **31.0** | **29.4** |
-| auto | **2.4** | 33.0 | 31.2 |
+| Engine           | English (80 clips) | Hinglish (80 clips) | Hinglish, loose |
+| ---------------- | ------------------ | ------------------- | --------------- |
+| Parakeet (local) | **2.4**            | 61.3                | 57.7            |
+| Apple en-IN      | 10.9               | **31.0**            | **29.4**        |
+| auto             | **2.4**            | 33.0                | 31.2            |
 
 - auto kept the local text on 80 of 80 English clips and switched to Apple on
   75 of 80 Hinglish clips (77 before the shared-word change; that cost 0.2

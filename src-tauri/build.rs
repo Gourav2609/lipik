@@ -119,7 +119,10 @@ fn build_apple_speech_helper() {
          while let line = readLine() { _ = line }\n",
     )
     .expect("write apple speech stub");
-    assert!(compile(&stub), "swiftc failed to build the Apple speech stub");
+    assert!(
+        compile(&stub),
+        "swiftc failed to build the Apple speech stub"
+    );
 }
 
 /// Link clang's compiler runtime, which provides `__isPlatformVersionAtLeast`.

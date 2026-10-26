@@ -6,7 +6,7 @@ Lipik (लिपिक, "scribe") is a desktop dictation app: hold a key, speak,
 
 **A scribe with a ruled page.** Lipik listens, then writes in clean ink: quiet paper, one indigo ink, hairline rules like an exercise book, and a single ink line in the margin for the thing that matters.
 
-Calm and precise rather than playful. Made in India without the usual signs (no saffron, paisley, mandalas or flags): the Indian part is in the name, in the type (both faces carry Devanagari) and in the *shirorekha*, the headline stroke that Devanagari letters hang from, which is the basis of the logo and of the recording waveform.
+Calm and precise rather than playful. Made in India without the usual signs (no saffron, paisley, mandalas or flags): the Indian part is in the name, in the type (both faces carry Devanagari) and in the _shirorekha_, the headline stroke that Devanagari letters hang from, which is the basis of the logo and of the recording waveform.
 
 Rules that follow from the concept:
 
@@ -19,29 +19,29 @@ Rules that follow from the concept:
 
 All colours are CSS custom properties on `.fk` (main window). Use the token, never the hex value.
 
-| Token | Light | Dark | Use |
-|---|---|---|---|
-| `--fk-bg` | `#eceff4` | `#0f121a` | Window and sidebar ground |
-| `--fk-panel` | `#fbfcfd` | `#151923` | Page (content area) |
-| `--fk-surface` | `#f2f4f8` | `#1b202c` | Flat cards, inputs, row hover |
-| `--fk-surface-2` | `#e8ebf1` | `#222836` | Secondary buttons, tab track, hint card |
-| `--fk-menu-bg` | `#ffffff` | `#212634` | Raised sheets: menus, dialogs, active nav item, active tab |
-| `--fk-border` | `#dadfe7` | `#2a3040` | Hairlines and rules |
-| `--fk-border-strong` | `#c3c9d5` | `#3a4256` | Key caps, scrollbars, input borders on hover |
-| `--fk-hover` | `#e6e9f0` | `#222838` | Hover on transparent controls |
-| `--fk-active` | `#dfe4f6` | `#262e4e` | Pressed/selected (ink tint) |
-| `--fk-text` | `#141826` | `#e7eaf3` | Body text (blue-black ink) |
-| `--fk-text-muted` | `#596175` | `#9aa2b6` | Secondary text, icons at rest |
-| `--fk-text-faint` | `#646c80` | `#868ea4` | Placeholders, timestamps, counts |
-| `--fk-accent` | `#3245c4` | `#8d9cff` | Ink: primary buttons, links, active marks, focus |
-| `--fk-accent-hover` | `#2a3aa8` | `#a5b1ff` | Primary button hover |
-| `--fk-accent-soft` | `#e3e7fb` | `#232a4d` | Margin notes, soft buttons, progress track |
-| `--fk-accent-text` | `#ffffff` | `#0d1024` | Text on ink |
-| `--fk-live` / `--fk-live-soft` | `#c23346` / `#fbe5e8` | `#ff6b7d` / `#3a1c25` | Recording, destructive |
-| `--fk-ok` / `--fk-ok-soft` | `#276b44` / `#e1f1e7` | `#6fcf97` / `#173326` | Success, "connected" |
-| `--fk-toggle-off` | `#7f879b` | `#646d86` | Toggle track when off (knob `#ffffff` / `#e7eaf3`) |
-| `--fk-inverse-bg` / `--fk-inverse-text` | `#141826` / `#f4f6fb` | `#eef1f8` / `#141826` | Tooltips, toasts, small badges |
-| `--fk-scrim` | `rgba(20,24,38,.32)` | `rgba(5,7,12,.6)` | Behind dialogs |
+| Token                                   | Light                 | Dark                  | Use                                                        |
+| --------------------------------------- | --------------------- | --------------------- | ---------------------------------------------------------- |
+| `--fk-bg`                               | `#eceff4`             | `#0f121a`             | Window and sidebar ground                                  |
+| `--fk-panel`                            | `#fbfcfd`             | `#151923`             | Page (content area)                                        |
+| `--fk-surface`                          | `#f2f4f8`             | `#1b202c`             | Flat cards, inputs, row hover                              |
+| `--fk-surface-2`                        | `#e8ebf1`             | `#222836`             | Secondary buttons, tab track, hint card                    |
+| `--fk-menu-bg`                          | `#ffffff`             | `#212634`             | Raised sheets: menus, dialogs, active nav item, active tab |
+| `--fk-border`                           | `#dadfe7`             | `#2a3040`             | Hairlines and rules                                        |
+| `--fk-border-strong`                    | `#c3c9d5`             | `#3a4256`             | Key caps, scrollbars, input borders on hover               |
+| `--fk-hover`                            | `#e6e9f0`             | `#222838`             | Hover on transparent controls                              |
+| `--fk-active`                           | `#dfe4f6`             | `#262e4e`             | Pressed/selected (ink tint)                                |
+| `--fk-text`                             | `#141826`             | `#e7eaf3`             | Body text (blue-black ink)                                 |
+| `--fk-text-muted`                       | `#596175`             | `#9aa2b6`             | Secondary text, icons at rest                              |
+| `--fk-text-faint`                       | `#646c80`             | `#868ea4`             | Placeholders, timestamps, counts                           |
+| `--fk-accent`                           | `#3245c4`             | `#8d9cff`             | Ink: primary buttons, links, active marks, focus           |
+| `--fk-accent-hover`                     | `#2a3aa8`             | `#a5b1ff`             | Primary button hover                                       |
+| `--fk-accent-soft`                      | `#e3e7fb`             | `#232a4d`             | Margin notes, soft buttons, progress track                 |
+| `--fk-accent-text`                      | `#ffffff`             | `#0d1024`             | Text on ink                                                |
+| `--fk-live` / `--fk-live-soft`          | `#c23346` / `#fbe5e8` | `#ff6b7d` / `#3a1c25` | Recording, destructive                                     |
+| `--fk-ok` / `--fk-ok-soft`              | `#276b44` / `#e1f1e7` | `#6fcf97` / `#173326` | Success, "connected"                                       |
+| `--fk-toggle-off`                       | `#7f879b`             | `#646d86`             | Toggle track when off (knob `#ffffff` / `#e7eaf3`)         |
+| `--fk-inverse-bg` / `--fk-inverse-text` | `#141826` / `#f4f6fb` | `#eef1f8` / `#141826` | Tooltips, toasts, small badges                             |
+| `--fk-scrim`                            | `rgba(20,24,38,.32)`  | `rgba(5,7,12,.6)`     | Behind dialogs                                             |
 
 Older names (`--fk-checklist-bg`, `--fk-check-*`, `--fk-progress-*`, `--fk-toggle-*`, `--fk-btn-secondary*`, `--fk-modal-*`, `--fk-shadow`) still exist as aliases of the tokens above so existing code keeps working. New code uses the names in the table.
 
@@ -51,17 +51,17 @@ Contrast: text, muted and faint text meet WCAG AA (4.5:1) on `--fk-panel`, `--fk
 
 ## 3. Type
 
-| Role | Face | Size / line | Weight |
-|---|---|---|---|
-| Display: page title | Martel | 28 / 38 | 400 |
-| Display: margin note, dialog title | Martel | 22 / 30 | 400 |
-| Display: big numbers (stats) | Martel | 32 / 36 | 400, `fk-num` |
-| Wordmark | Martel | 18 | 600 |
-| Section title | Mukta | 16 / 22 | 600 |
-| Body | Mukta | 15 / 22 | 400 |
-| Controls (nav, buttons, tabs) | Mukta | 14–14.5 / 1 | 500 (nav, tabs), 600 (buttons) |
-| Small | Mukta | 13 / 18 | 400 |
-| Label (`fk-eyebrow`) | Mukta | 12 / 16, +0.02em | 600, muted, sentence case |
+| Role                               | Face   | Size / line      | Weight                         |
+| ---------------------------------- | ------ | ---------------- | ------------------------------ |
+| Display: page title                | Martel | 28 / 38          | 400                            |
+| Display: margin note, dialog title | Martel | 22 / 30          | 400                            |
+| Display: big numbers (stats)       | Martel | 32 / 36          | 400, `fk-num`                  |
+| Wordmark                           | Martel | 18               | 600                            |
+| Section title                      | Mukta  | 16 / 22          | 600                            |
+| Body                               | Mukta  | 15 / 22          | 400                            |
+| Controls (nav, buttons, tabs)      | Mukta  | 14–14.5 / 1      | 500 (nav, tabs), 600 (buttons) |
+| Small                              | Mukta  | 13 / 18          | 400                            |
+| Label (`fk-eyebrow`)               | Mukta  | 12 / 16, +0.02em | 600, muted, sentence case      |
 
 - **Mukta** (UI sans, Ek Type, Mumbai) and **Martel** (display serif, Dan Reynolds) are both SIL Open Font License, loaded from Fontsource (`@fontsource/mukta`, `@fontsource/martel`). Both include Devanagari, so Hindi text never falls back to a system font.
 - Use `.fk-display` for Martel (`.fk-serif` is an alias kept for old code). Display text is never italic and never tracked tighter than `-0.005em`.
@@ -131,15 +131,15 @@ Flat areas (`--fk-surface`) carry no shadow and no border.
 
 Motion is the movement of a pen: it settles, it does not bounce.
 
-| Token | Value | Use |
-|---|---|---|
-| `--fk-ease` | `cubic-bezier(0.22, 1, 0.36, 1)` | Everything that appears or settles |
-| `--fk-ease-move` | `cubic-bezier(0.65, 0, 0.35, 1)` | Layout moves (sidebar width) |
-| `--fk-t-quick` | 120 ms | Hover, press, menu exit |
-| `--fk-t-base` | 180 ms | Menus, toggles, tab switch, active ink line |
-| `--fk-t-size` | 240 ms | Size changes (pill, expanding rows) |
-| `--fk-t-layout` | 300 ms | Sidebar ↔ rail |
-| `--fk-t-ink` | 600 ms | One-off "ink" moments: progress fills, the done stroke |
+| Token            | Value                            | Use                                                    |
+| ---------------- | -------------------------------- | ------------------------------------------------------ |
+| `--fk-ease`      | `cubic-bezier(0.22, 1, 0.36, 1)` | Everything that appears or settles                     |
+| `--fk-ease-move` | `cubic-bezier(0.65, 0, 0.35, 1)` | Layout moves (sidebar width)                           |
+| `--fk-t-quick`   | 120 ms                           | Hover, press, menu exit                                |
+| `--fk-t-base`    | 180 ms                           | Menus, toggles, tab switch, active ink line            |
+| `--fk-t-size`    | 240 ms                           | Size changes (pill, expanding rows)                    |
+| `--fk-t-layout`  | 300 ms                           | Sidebar ↔ rail                                        |
+| `--fk-t-ink`     | 600 ms                           | One-off "ink" moments: progress fills, the done stroke |
 
 - Menus enter with opacity and scale 0.97 → 1 from their anchor corner (`fk-menu`), exit with opacity only.
 - The active nav ink line draws downward (`scaleY` 0 → 1) when the page changes.
@@ -152,28 +152,28 @@ The pill is a small ink tile at the **bottom centre** of the screen that has the
 
 Pill colours (CSS variables on the pill root, values from `BRAND`):
 
-| Token | Value | Use |
-|---|---|---|
-| `--pill-night` | `#141a33` | Tile fill |
-| `--pill-rim` | `rgba(141,156,255,0.28)` | 1 px border |
-| `--pill-paper` | `#eef0ff` | Text, waveform |
-| `--pill-muted` | `#9aa3c7` | Secondary text, the rule |
-| `--pill-ink` | `#8d9cff` | Processing stroke, focus |
-| `--pill-live` | `#ff6b7d` | Live dot, errors |
-| shadow | `0 8px 24px -6px rgba(8,10,24,0.45)` | All states except idle |
+| Token          | Value                                | Use                      |
+| -------------- | ------------------------------------ | ------------------------ |
+| `--pill-night` | `#141a33`                            | Tile fill                |
+| `--pill-rim`   | `rgba(141,156,255,0.28)`             | 1 px border              |
+| `--pill-paper` | `#eef0ff`                            | Text, waveform           |
+| `--pill-muted` | `#9aa3c7`                            | Secondary text, the rule |
+| `--pill-ink`   | `#8d9cff`                            | Processing stroke, focus |
+| `--pill-live`  | `#ff6b7d`                            | Live dot, errors         |
+| shadow         | `0 8px 24px -6px rgba(8,10,24,0.45)` | All states except idle   |
 
 States (sizes in pt; all size changes animate width and height over 240 ms with `--fk-ease`, never a scale):
 
-| State | Size / shape | Contents |
-|---|---|---|
-| Idle | 48 × 6 line, radius 3, fill `rgba(20,26,51,0.55)`, 1 px rim `rgba(238,240,255,0.5)`, no shadow. Invisible hit area 72 × 24. | Nothing. |
-| Hover | 184 × 34 tile, radius 10 | Left: mic button 26 × 26 (radius 8). Centre: "Hold fn to write" (Mukta 13/500, fn as a small key cap). Right, after a 1 px divider: meeting-notes button 26 × 26. |
-| Recording | 152 × 36 tile, radius 10 | 6 px live dot at x 12 (opacity pulse 1 → 0.4, 1.2 s, ease in-out). A 1 px rule (`--pill-muted` at 50%) 11 pt from the top; 13 bars, 2 pt wide on a 5 pt pitch, **hanging down from the rule** (the shirorekha), length 2–16 pt from the mic level (attack 40 ms, release 140 ms). Right: elapsed `m:ss`, 12 px tabular, muted; on hover it becomes a × cancel button. |
-| Processing | 112 × 36 tile | Bars retract up into the rule (180 ms). A 16 × 2 pt ink stroke runs along the rule left to right, 900 ms ease in-out, repeating. |
-| Done | back to idle | The rule flashes ink once (180 ms) as the text lands, then the tile shrinks to the idle line. |
-| Error | 36 tall, width fits text (max 320), radius 10 | 2 px live-red rule down the left edge, one short sentence in paper text. Leaves after 4 s or on click. |
-| Toast | 32 tall, radius 10, sits 8 pt above the pill | Ink tile, paper text 13 px, at most one line. Rises 6 pt + fades in over 220 ms, stays 3.2 s, fades out over 120 ms. |
-| Popup (meeting card, menu, word learned, permission) | 300 wide, radius 14, 8 pt above the pill | Follows the system theme: light `#ffffff` / dark `#1b202c`, `--fk-elev-2`, 14 px padding, Mukta. Enters with opacity + 6 pt rise over 220 ms, exits with opacity over 120 ms. |
+| State                                                | Size / shape                                                                                                                | Contents                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Idle                                                 | 48 × 6 line, radius 3, fill `rgba(20,26,51,0.55)`, 1 px rim `rgba(238,240,255,0.5)`, no shadow. Invisible hit area 72 × 24. | Nothing.                                                                                                                                                                                                                                                                                                                                                              |
+| Hover                                                | 184 × 34 tile, radius 10                                                                                                    | Left: mic button 26 × 26 (radius 8). Centre: "Hold fn to write" (Mukta 13/500, fn as a small key cap). Right, after a 1 px divider: meeting-notes button 26 × 26.                                                                                                                                                                                                     |
+| Recording                                            | 152 × 36 tile, radius 10                                                                                                    | 6 px live dot at x 12 (opacity pulse 1 → 0.4, 1.2 s, ease in-out). A 1 px rule (`--pill-muted` at 50%) 11 pt from the top; 13 bars, 2 pt wide on a 5 pt pitch, **hanging down from the rule** (the shirorekha), length 2–16 pt from the mic level (attack 40 ms, release 140 ms). Right: elapsed `m:ss`, 12 px tabular, muted; on hover it becomes a × cancel button. |
+| Processing                                           | 112 × 36 tile                                                                                                               | Bars retract up into the rule (180 ms). A 16 × 2 pt ink stroke runs along the rule left to right, 900 ms ease in-out, repeating.                                                                                                                                                                                                                                      |
+| Done                                                 | back to idle                                                                                                                | The rule flashes ink once (180 ms) as the text lands, then the tile shrinks to the idle line.                                                                                                                                                                                                                                                                         |
+| Error                                                | 36 tall, width fits text (max 320), radius 10                                                                               | 2 px live-red rule down the left edge, one short sentence in paper text. Leaves after 4 s or on click.                                                                                                                                                                                                                                                                |
+| Toast                                                | 32 tall, radius 10, sits 8 pt above the pill                                                                                | Ink tile, paper text 13 px, at most one line. Rises 6 pt + fades in over 220 ms, stays 3.2 s, fades out over 120 ms.                                                                                                                                                                                                                                                  |
+| Popup (meeting card, menu, word learned, permission) | 300 wide, radius 14, 8 pt above the pill                                                                                    | Follows the system theme: light `#ffffff` / dark `#1b202c`, `--fk-elev-2`, 14 px padding, Mukta. Enters with opacity + 6 pt rise over 220 ms, exits with opacity over 120 ms.                                                                                                                                                                                         |
 
 The idle line can be dragged left or right along the bottom edge; it never moves vertically.
 
@@ -200,16 +200,16 @@ Lipik writes like a careful scribe: plain, short, calm. It says what happened an
 
 ### Names of things
 
-| Page id | Nav label and page title | One-line description |
-|---|---|---|
-| `dictation` | Home | (greeting instead) |
-| `notetaker` | Meetings | Notes from your calls, written as you talk. |
-| `scratchpad` | Drafts | Think out loud. Keep what's worth keeping. |
-| `dictionary` | Vocabulary | Names and terms Lipik should always spell right. |
-| `snippets` | Snippets | Say a short cue, get the full text. |
-| `style` | Tone | How your words are cleaned up in each app. |
-| `transforms` | Rewrite | Select text, then press a shortcut to rewrite it. |
-| `insights` | Stats | How much you write, and how fast. |
+| Page id      | Nav label and page title | One-line description                              |
+| ------------ | ------------------------ | ------------------------------------------------- |
+| `dictation`  | Home                     | (greeting instead)                                |
+| `notetaker`  | Meetings                 | Notes from your calls, written as you talk.       |
+| `scratchpad` | Drafts                   | Think out loud. Keep what's worth keeping.        |
+| `dictionary` | Vocabulary               | Names and terms Lipik should always spell right.  |
+| `snippets`   | Snippets                 | Say a short cue, get the full text.               |
+| `style`      | Tone                     | How your words are cleaned up in each app.        |
+| `transforms` | Rewrite                  | Select text, then press a shortcut to rewrite it. |
+| `insights`   | Stats                    | How much you write, and how fast.                 |
 
 Settings sections by tab id, in nav order: `general` Dictation, `notetaker` Meetings, `vibe-coding` Code editors, `connectors` Connections, `mcp` AI tools; a hairline; `system` App, `privacy` Privacy, `account` Profile; About (`billing`) at the bottom. No group headings. There is no team tab. Paid-plan, billing, referral and "invite" surfaces are removed: Lipik is free and open source. About shows the version, the MIT licence and the credit "Built on Handy by CJ Pais".
 
@@ -217,39 +217,39 @@ The pill is "the pill" in help text. Recording is "dictation"; cleaned text is "
 
 ### Rewrite rules by category
 
-| Category | Rule | Lipik examples |
-|---|---|---|
-| Greeting (Home) | Time of day + first name; second line is the shortcut. | "Good morning, Asha" / "Hold fn to write anywhere." |
-| Page description | One sentence, what the page is for. | See table above. |
-| Margin note (first-run explainer) | Title says the benefit in ≤ 6 words; body says how in one sentence; one action. | "Spell names your way" / "Add a word once and every dictation uses it." / Add word |
-| Buttons | Verb first, 1–2 words. | Add word, New snippet, Import, Start, Save, Cancel, Delete, Try again |
-| Destructive confirm | Name the thing and the result. | "Delete this snippet? This can't be undone." / Delete / Keep |
-| Empty state | What will appear here, and how to make it appear. | "No drafts yet. Start one with New draft." |
-| Errors | What happened, then what to do. No blame, no codes in the main line. | "Lipik can't hear your microphone. Allow it in System Settings › Privacy › Microphone." |
-| Pill messages | Under 5 words. | Hover: "Hold fn to write". Error: "Didn't catch that", "Microphone is off", "Couldn't paste. Copied instead." |
-| Toasts | Past tense, under 6 words. | Copied, Word added, Saved to Drafts, Settings saved |
-| Permissions | Why, then the one step. | "Lipik needs Accessibility to type for you. Open System Settings and turn on Lipik." |
-| Onboarding steps | Plain imperatives. | Let Lipik hear you · Let Lipik type for you · Choose your key · Try it once |
-| Stats | Plain nouns, numbers big. | Words written · Days in a row · Words per minute · Words cleaned up |
-| Labels, dates | Sentence case, relative where natural. Times follow the system's clock style (`toLocaleTimeString` with hour and minute) everywhere: Home, Meetings, Drafts, the pill and the notepad. | Today, Yesterday, Mon 21 Oct, 10:12 or 10:12 AM |
-| Tooltips | The control's name, no full stop. | Copy, Play recording, Show sidebar, Appearance |
-| Notifications | One line, past tense, links to the thing. | "Meeting notes ready: Weekly sync" |
-| Tray / menu bar | Commands as verbs. | Start dictation, Open Lipik, Check for updates, Quit Lipik |
+| Category                          | Rule                                                                                                                                                                                   | Lipik examples                                                                                                |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Greeting (Home)                   | Time of day + first name; second line is the shortcut.                                                                                                                                 | "Good morning, Asha" / "Hold fn to write anywhere."                                                           |
+| Page description                  | One sentence, what the page is for.                                                                                                                                                    | See table above.                                                                                              |
+| Margin note (first-run explainer) | Title says the benefit in ≤ 6 words; body says how in one sentence; one action.                                                                                                        | "Spell names your way" / "Add a word once and every dictation uses it." / Add word                            |
+| Buttons                           | Verb first, 1–2 words.                                                                                                                                                                 | Add word, New snippet, Import, Start, Save, Cancel, Delete, Try again                                         |
+| Destructive confirm               | Name the thing and the result.                                                                                                                                                         | "Delete this snippet? This can't be undone." / Delete / Keep                                                  |
+| Empty state                       | What will appear here, and how to make it appear.                                                                                                                                      | "No drafts yet. Start one with New draft."                                                                    |
+| Errors                            | What happened, then what to do. No blame, no codes in the main line.                                                                                                                   | "Lipik can't hear your microphone. Allow it in System Settings › Privacy › Microphone."                       |
+| Pill messages                     | Under 5 words.                                                                                                                                                                         | Hover: "Hold fn to write". Error: "Didn't catch that", "Microphone is off", "Couldn't paste. Copied instead." |
+| Toasts                            | Past tense, under 6 words.                                                                                                                                                             | Copied, Word added, Saved to Drafts, Settings saved                                                           |
+| Permissions                       | Why, then the one step.                                                                                                                                                                | "Lipik needs Accessibility to type for you. Open System Settings and turn on Lipik."                          |
+| Onboarding steps                  | Plain imperatives.                                                                                                                                                                     | Let Lipik hear you · Let Lipik type for you · Choose your key · Try it once                                   |
+| Stats                             | Plain nouns, numbers big.                                                                                                                                                              | Words written · Days in a row · Words per minute · Words cleaned up                                           |
+| Labels, dates                     | Sentence case, relative where natural. Times follow the system's clock style (`toLocaleTimeString` with hour and minute) everywhere: Home, Meetings, Drafts, the pill and the notepad. | Today, Yesterday, Mon 21 Oct, 10:12 or 10:12 AM                                                               |
+| Tooltips                          | The control's name, no full stop.                                                                                                                                                      | Copy, Play recording, Show sidebar, Appearance                                                                |
+| Notifications                     | One line, past tense, links to the thing.                                                                                                                                              | "Meeting notes ready: Weekly sync"                                                                            |
+| Tray / menu bar                   | Commands as verbs.                                                                                                                                                                     | Start dictation, Open Lipik, Check for updates, Quit Lipik                                                    |
 
 ## 12. Components (`src/flow/ui`)
 
-| Component | Notes |
-|---|---|
-| `Button` | `primary` (ink), `secondary` (surface-2), `accent` (soft ink), `ghost`, `danger` (soft red). `md` 36 px, `sm` 30 px. |
-| `IconButton` | 30 × 30, radius 8, muted icon, ink when `active`. |
-| `Toggle` | 36 × 20. |
-| `TextInput` | 38 px, optional leading icon. |
-| `Card` | `tone="panel"` raised sheet, `tone="surface"` flat tint. |
-| `SectionTabs` | Segmented control with optional actions on the right. |
-| `ListGroup` / `ListRow` / `RowAction` | Ruled list. |
-| `HeroBanner` / `HeroButton` | Margin note. |
-| `PageHeader` | Ruled page head. |
-| `Kbd` | Key cap. |
-| `LipikMark` | Logo mark; `tile` draws the app-icon tile. |
+| Component                             | Notes                                                                                                                |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `Button`                              | `primary` (ink), `secondary` (surface-2), `accent` (soft ink), `ghost`, `danger` (soft red). `md` 36 px, `sm` 30 px. |
+| `IconButton`                          | 30 × 30, radius 8, muted icon, ink when `active`.                                                                    |
+| `Toggle`                              | 36 × 20.                                                                                                             |
+| `TextInput`                           | 38 px, optional leading icon.                                                                                        |
+| `Card`                                | `tone="panel"` raised sheet, `tone="surface"` flat tint.                                                             |
+| `SectionTabs`                         | Segmented control with optional actions on the right.                                                                |
+| `ListGroup` / `ListRow` / `RowAction` | Ruled list.                                                                                                          |
+| `HeroBanner` / `HeroButton`           | Margin note.                                                                                                         |
+| `PageHeader`                          | Ruled page head.                                                                                                     |
+| `Kbd`                                 | Key cap.                                                                                                             |
+| `LipikMark`                           | Logo mark; `tile` draws the app-icon tile.                                                                           |
 
 Before adding a new pattern to a page, check whether one of these covers it. A new shared pattern goes into `src/flow/ui` and into this document.

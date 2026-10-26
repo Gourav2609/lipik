@@ -142,8 +142,7 @@ const Transcript = ({
   useEffect(() => {
     if (focusMs == null || !segments.length) return;
     const target =
-      [...segments].reverse().find((s) => s.start_ms <= focusMs) ??
-      segments[0];
+      [...segments].reverse().find((s) => s.start_ms <= focusMs) ?? segments[0];
     setFlash(target.start_ms);
     list.current
       ?.querySelector(`[data-start="${target.start_ms}"]`)
@@ -271,7 +270,11 @@ const Bullets = ({
   </div>
 );
 
-const STEPS = ["Saving the audio", "Writing the final transcript", "Finding decisions and next steps"];
+const STEPS = [
+  "Saving the audio",
+  "Writing the final transcript",
+  "Finding decisions and next steps",
+];
 
 const ProgressCard = ({ processing }: { processing: Processing | null }) => {
   const transcribing = processing?.stage === "transcribing";
@@ -284,11 +287,15 @@ const ProgressCard = ({ processing }: { processing: Processing | null }) => {
     <div>
       <div className="rounded-[14px] bg-[var(--fk-surface)] px-[20px] py-[16px]">
         <div className="flex items-baseline gap-[12px]">
-          <span key={step} className="nt-fade min-w-0 flex-1 text-[15px] leading-[22px]">
+          <span
+            key={step}
+            className="nt-fade min-w-0 flex-1 text-[15px] leading-[22px]"
+          >
             {STEPS[step]}
           </span>
           <span className="fk-num shrink-0 text-[13px] text-[var(--fk-text-muted)]">
-            {percent !== null && `${percent}% · `}Step {step + 1} of {STEPS.length}
+            {percent !== null && `${percent}% · `}Step {step + 1} of{" "}
+            {STEPS.length}
           </span>
         </div>
         <div
@@ -447,7 +454,9 @@ const Thoughts = ({
       if (unsaved.current != null || saving.current > 0) return;
       void commands.notetakerGet(id).then((r) => {
         if (unsaved.current != null || saving.current > 0) return;
-        setText(r.status === "ok" && r.data ? r.data.thoughts : detail.thoughts);
+        setText(
+          r.status === "ok" && r.data ? r.data.thoughts : detail.thoughts,
+        );
       });
     };
     load();
@@ -497,7 +506,9 @@ const Thoughts = ({
         onBlur={save}
         rows={8}
         placeholder={
-          live ? "" : "Write your own notes. They stay separate from the summary."
+          live
+            ? ""
+            : "Write your own notes. They stay separate from the summary."
         }
         aria-label="My notes"
         className="nt-ruled-paper w-full resize-none bg-transparent pt-[1px] text-[15px] outline-none placeholder:text-[var(--fk-text-faint)]"
@@ -529,9 +540,10 @@ export const NoteView = ({
   const { detail, loading, processing, reload } = useMeetingDetail(id);
   const [tab, setTab] = useState<NoteTab | null>(initialTab);
   const [title, setTitle] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ rect: DOMRect; mode: NoteMenuMode } | null>(
-    null,
-  );
+  const [menu, setMenu] = useState<{
+    rect: DOMRect;
+    mode: NoteMenuMode;
+  } | null>(null);
 
   useEffect(() => {
     if (initialTab) setTab(initialTab);
@@ -594,7 +606,10 @@ export const NoteView = ({
               setMenu(
                 menu
                   ? null
-                  : { rect: e.currentTarget.getBoundingClientRect(), mode: "main" },
+                  : {
+                      rect: e.currentTarget.getBoundingClientRect(),
+                      mode: "main",
+                    },
               )
             }
           >

@@ -72,7 +72,7 @@ In this order:
    number in digits ("four, no, five" -> "5"). Numbers are digits or zero..ninety
    ("oh" is not one), and the kept number is never "one" ("no one").
 3. **Emails and web addresses**: pieces joined by spoken `dot underscore dash at
-   slash` (or `/path`) are joined and lowercased when the result ends in a known
+slash` (or `/path`) are joined and lowercased when the result ends in a known
    domain (com org net io dev ai app co in uk me so xyz gg tech), has at most one
    `@` and not both `@` and `/`. Not when the span follows a determiner or starts
    with one. An ending that is also an English word (in so me co app ai it is us at
@@ -92,9 +92,9 @@ In this order:
 8. **Question mark** on a one-sentence text that starts like a question after
    openers (hey, hi, hello, okay, ok, so, a capitalised name): `what's ... aren't`;
    a question word + helper verb ("what time is", "how much does"); a question word
-   + one word + helper verb, unless that word is a subject pronoun ("which one
-   should" yes, "when you have", "what we do" no); `can could ... has` + a pronoun.
-   A final `.` or `!` becomes `?`; nothing changes after `...`.
+   - one word + helper verb, unless that word is a subject pronoun ("which one
+     should" yes, "when you have", "what we do" no); `can could ... has` + a pronoun.
+     A final `.` or `!` becomes `?`; nothing changes after `...`.
 9. An address at the very start keeps its lowercase first letter.
 
 ## 4. Measured effect

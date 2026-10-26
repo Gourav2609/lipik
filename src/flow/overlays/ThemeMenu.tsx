@@ -39,11 +39,19 @@ export default function ThemeMenu({ onClose }: OverlayProps) {
             <Icon
               size={16}
               strokeWidth={1.75}
-              className={selected ? "text-[var(--fk-accent)]" : "text-[var(--fk-text-muted)]"}
+              className={
+                selected
+                  ? "text-[var(--fk-accent)]"
+                  : "text-[var(--fk-text-muted)]"
+              }
             />
             <span className="flex-1 text-left">{label}</span>
             {selected && (
-              <Check size={16} strokeWidth={1.75} className="text-[var(--fk-accent)]" />
+              <Check
+                size={16}
+                strokeWidth={1.75}
+                className="text-[var(--fk-accent)]"
+              />
             )}
           </button>
         );

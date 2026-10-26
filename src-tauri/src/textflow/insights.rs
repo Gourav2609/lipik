@@ -36,10 +36,11 @@ pub struct Insights {
 
 pub fn compute(rows: &[DictationStatRow], today: NaiveDate) -> Insights {
     let mut by_day: BTreeMap<NaiveDate, i64> = BTreeMap::new();
-    let mut by_category: HashMap<String, i64> = ["ai", "email", "work", "personal", "document", "other"]
-        .iter()
-        .map(|k| (k.to_string(), 0))
-        .collect();
+    let mut by_category: HashMap<String, i64> =
+        ["ai", "email", "work", "personal", "document", "other"]
+            .iter()
+            .map(|k| (k.to_string(), 0))
+            .collect();
     let mut apps = HashSet::new();
     let (mut total_words, mut timed_words, mut timed_ms) = (0i64, 0i64, 0i64);
     let (mut words_corrected, mut dictionary_fixes) = (0i64, 0i64);
@@ -53,7 +54,9 @@ pub fn compute(rows: &[DictationStatRow], today: NaiveDate) -> Insights {
         }
         total_words += words;
         if let Some(day) = DateTime::from_timestamp(row.timestamp, 0) {
-            *by_day.entry(day.with_timezone(&Local).date_naive()).or_default() += words;
+            *by_day
+                .entry(day.with_timezone(&Local).date_naive())
+                .or_default() += words;
         }
         if let Some(ms) = row.duration_ms.filter(|ms| *ms > 0) {
             timed_words += words;

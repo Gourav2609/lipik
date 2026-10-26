@@ -35,7 +35,12 @@ export const handlers: Record<string, MockHandler> = {
   get_note: ({ id }) => notes.find((n) => n.id === id) ?? null,
   save_note: ({ id, title, body }) => {
     const noteId = typeof id === "string" && id ? id : `note-${Date.now()}`;
-    const note = { id: noteId, title: String(title), body: String(body), updated_at: Date.now() };
+    const note = {
+      id: noteId,
+      title: String(title),
+      body: String(body),
+      updated_at: Date.now(),
+    };
     notes = [note, ...notes.filter((n) => n.id !== noteId)];
     return noteId;
   },

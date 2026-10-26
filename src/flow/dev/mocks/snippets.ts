@@ -18,14 +18,20 @@ export const handlers: Record<string, MockHandler> = {
   get_snippets: () => snippets,
   add_snippet: ({ trigger, expansion }) => {
     snippets = [
-      { id: String(nextId++), trigger: String(trigger), expansion: String(expansion) },
+      {
+        id: String(nextId++),
+        trigger: String(trigger),
+        expansion: String(expansion),
+      },
       ...snippets,
     ];
     return ok();
   },
   update_snippet: ({ id, trigger, expansion }) => {
     snippets = snippets.map((s) =>
-      s.id === id ? { ...s, trigger: String(trigger), expansion: String(expansion) } : s,
+      s.id === id
+        ? { ...s, trigger: String(trigger), expansion: String(expansion) }
+        : s,
     );
     return ok();
   },

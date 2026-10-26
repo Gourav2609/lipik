@@ -32,8 +32,25 @@ const TOO_LONG_EXTRA: usize = 40;
 const MAX_JOINED_NUMBERS: usize = 12;
 
 const UNITS: [&str; 20] = [
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
     "nineteen",
 ];
 /// 20, 30, ... 90.
@@ -42,9 +59,25 @@ const TENS: [&str; 8] = [
 ];
 /// 1st to 19th.
 const ORDINAL_UNITS: [&str; 19] = [
-    "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
-    "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth",
-    "eighteenth", "nineteenth",
+    "first",
+    "second",
+    "third",
+    "fourth",
+    "fifth",
+    "sixth",
+    "seventh",
+    "eighth",
+    "ninth",
+    "tenth",
+    "eleventh",
+    "twelfth",
+    "thirteenth",
+    "fourteenth",
+    "fifteenth",
+    "sixteenth",
+    "seventeenth",
+    "eighteenth",
+    "nineteenth",
 ];
 /// 20th, 30th.
 const ORDINAL_TENS: [&str; 2] = ["twentieth", "thirtieth"];
@@ -98,17 +131,69 @@ const WORD_TLDS: &[&str] = &[
 /// Words a good clean-up may remove besides fillers: spoken punctuation and
 /// address words, number words (written as digits) and list cue words.
 const DROPPABLE: &[&str] = &[
-    "like", "you", "know", "comma", "period", "full", "stop", "question", "mark", "exclamation",
-    "point", "new", "line", "newline", "paragraph", "colon", "dot", "at", "underscore", "dash",
-    "slash", "number", "bullet", "and", "hundred", "thousand", "lakh", "dollars", "rupees",
-    "percent", "a", "p", "m",
+    "like",
+    "you",
+    "know",
+    "comma",
+    "period",
+    "full",
+    "stop",
+    "question",
+    "mark",
+    "exclamation",
+    "point",
+    "new",
+    "line",
+    "newline",
+    "paragraph",
+    "colon",
+    "dot",
+    "at",
+    "underscore",
+    "dash",
+    "slash",
+    "number",
+    "bullet",
+    "and",
+    "hundred",
+    "thousand",
+    "lakh",
+    "dollars",
+    "rupees",
+    "percent",
+    "a",
+    "p",
+    "m",
 ];
 
 /// The word before a spoken "at" that makes it a plain "at", not an email's
 /// "@" ("the docs are at docs dot ...").
 const NOT_A_USER: &[&str] = &[
-    "is", "are", "am", "was", "were", "be", "me", "us", "him", "her", "them", "it", "you", "look",
-    "here", "there", "go", "meet", "available", "live", "find", "docs", "page", "site", "online",
+    "is",
+    "are",
+    "am",
+    "was",
+    "were",
+    "be",
+    "me",
+    "us",
+    "him",
+    "her",
+    "them",
+    "it",
+    "you",
+    "look",
+    "here",
+    "there",
+    "go",
+    "meet",
+    "available",
+    "live",
+    "find",
+    "docs",
+    "page",
+    "site",
+    "online",
 ];
 
 /// After these, spoken punctuation and address words are ordinary words
@@ -120,7 +205,15 @@ const DETERMINERS: &[&str] = &[
 
 /// "colon" before one of these is the organ.
 const COLON_NOUNS: &[&str] = &[
-    "cancer", "surgery", "screening", "polyp", "polyps", "cleanse", "health", "exam", "biopsy",
+    "cancer",
+    "surgery",
+    "screening",
+    "polyp",
+    "polyps",
+    "cleanse",
+    "health",
+    "exam",
+    "biopsy",
 ];
 
 /// "What we do is ...", "When you have time, ...": a statement, not a question.
@@ -128,9 +221,25 @@ const SUBJECT_PRONOUNS: &[&str] = &["i", "you", "we", "they", "he", "she", "it"]
 
 /// Scripts a reply may not bring in when the transcript has none of them.
 const SCRIPTS: &[&str] = &[
-    "Latin", "Devanagari", "Bengali", "Gurmukhi", "Gujarati", "Oriya", "Tamil", "Telugu",
-    "Kannada", "Malayalam", "Arabic", "Hebrew", "Cyrillic", "Greek", "Han", "Hiragana",
-    "Katakana", "Hangul", "Thai",
+    "Latin",
+    "Devanagari",
+    "Bengali",
+    "Gurmukhi",
+    "Gujarati",
+    "Oriya",
+    "Tamil",
+    "Telugu",
+    "Kannada",
+    "Malayalam",
+    "Arabic",
+    "Hebrew",
+    "Cyrillic",
+    "Greek",
+    "Han",
+    "Hiragana",
+    "Katakana",
+    "Hangul",
+    "Thai",
 ];
 
 fn lookup(table: &[(&str, u64)], word: &str) -> Option<u64> {
@@ -461,7 +570,11 @@ fn replace_checked(
             out.push_str(&text[copied..m.start()]);
             out.push_str(&rep(m));
             copied = m.end();
-            pos = if m.end() > m.start() { m.end() } else { next(m.end()) };
+            pos = if m.end() > m.start() {
+                m.end()
+            } else {
+                next(m.end())
+            };
         } else {
             pos = next(m.start());
         }
@@ -525,9 +638,8 @@ static SPOKEN_PERIOD: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)[\s,]*\bperiod
 fn spoken_punctuation(text: &str) -> String {
     let mut text = text.to_string();
     for (re, mark) in SPOKEN_MARKS.iter() {
-        let organ = |m: Match| {
-            *mark == ":" && COLON_NOUNS.contains(&word_after(&text, m.end()).as_str())
-        };
+        let organ =
+            |m: Match| *mark == ":" && COLON_NOUNS.contains(&word_after(&text, m.end()).as_str());
         let replaced = replace_checked(
             re,
             &text,
@@ -641,7 +753,10 @@ static NUMBER_CORRECTION: Lazy<Regex> = Lazy::new(|| {
 /// correction ("I asked two, no one replied").
 fn number_corrections(text: &str) -> String {
     fn kept(m: Match<'_>) -> &str {
-        m.as_str().rsplit(char::is_whitespace).next().unwrap_or_default()
+        m.as_str()
+            .rsplit(char::is_whitespace)
+            .next()
+            .unwrap_or_default()
     }
     replace_checked(
         &NUMBER_CORRECTION,
@@ -666,7 +781,9 @@ fn times(text: &str) -> String {
         format!("{}:{} {}M", &c[1], &c[2], c[3].to_uppercase())
     });
     HOUR_TIME
-        .replace_all(&t, |c: &regex::Captures| format!("{} {}M", &c[1], c[2].to_uppercase()))
+        .replace_all(&t, |c: &regex::Captures| {
+            format!("{} {}M", &c[1], c[2].to_uppercase())
+        })
         .into_owned()
 }
 
@@ -677,7 +794,11 @@ fn vocab_case(text: &str, vocab: &[String]) -> String {
     let mut text = text.to_string();
     for entry in vocab.iter().filter(|e| !e.is_empty()) {
         // Most entries are not in the text; skip building their regex.
-        if entry.is_ascii() && !text.to_ascii_lowercase().contains(&entry.to_ascii_lowercase()) {
+        if entry.is_ascii()
+            && !text
+                .to_ascii_lowercase()
+                .contains(&entry.to_ascii_lowercase())
+        {
             continue;
         }
         let Ok(re) = RegexBuilder::new(&regex::escape(entry))
@@ -756,10 +877,8 @@ static MARK_BEFORE_LETTER: Lazy<Regex> = Lazy::new(|| Regex::new(r"[,?!][A-Za-z]
 static COMMA_BEFORE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r",([.?!])").unwrap());
 static SPACES_AROUND_BREAK: Lazy<Regex> = Lazy::new(|| Regex::new(r"[ \t]*\n[ \t]*").unwrap());
 static DOUBLE_SPACE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[ \t]{2,}").unwrap());
-static SENTENCE_START: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?:^|\n|[.?!]\s)[a-z]").unwrap());
-static WEB_ADDRESS_PART: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"[/@]|\.[A-Za-z]{2,}").unwrap());
+static SENTENCE_START: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?:^|\n|[.?!]\s)[a-z]").unwrap());
+static WEB_ADDRESS_PART: Lazy<Regex> = Lazy::new(|| Regex::new(r"[/@]|\.[A-Za-z]{2,}").unwrap());
 
 /// One space after ",", "?" and "!" when a letter follows, but not inside a
 /// web address ("search?q=shoes").
@@ -906,7 +1025,12 @@ pub(super) mod tests {
     #[test]
     fn dropped_words_examples() {
         for e in examples("dropped") {
-            assert_eq!(dropped_words(text(&e[0]), text(&e[1])), list(&e[2]), "{:?}", e[0]);
+            assert_eq!(
+                dropped_words(text(&e[0]), text(&e[1])),
+                list(&e[2]),
+                "{:?}",
+                e[0]
+            );
         }
     }
 

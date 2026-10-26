@@ -8,11 +8,7 @@ import { useProfile, type Profile } from "./profile";
 import { APP_NAME } from "@/flow/brand";
 
 const Row = ({ label, children }: { label: string; children: ReactNode }) => (
-  <SettingRow
-    title={label}
-    control={children}
-    className="py-[12px]"
-  />
+  <SettingRow title={label} control={children} className="py-[12px]" />
 );
 
 const confirmDelete = (message: string) =>

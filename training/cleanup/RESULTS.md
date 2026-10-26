@@ -62,7 +62,7 @@ The installed Lipik.app and its data folder were not touched.
   `run.py` reads the prompt and the style lines from
   `src-tauri/src/textflow/pipeline.rs` at run time, so it always matches the
   code. Same request as `llm.rs`: `/api/chat`, `think: false`, `keep_alive:
-  1h`, `temperature 0.2`, `num_ctx` 2048 (the size the warm-up loads), the
+1h`, `temperature 0.2`, `num_ctx` 2048 (the size the warm-up loads), the
   same `<transcript>` wrapping, the same warm-up call, the same output
   checks (strip `<think>`, tags and quotes; reject empty or longer than
   1.5x + 40 characters). Style = Formal for every app (the default); the app
@@ -102,20 +102,20 @@ The installed Lipik.app and its data folder were not touched.
 
 ## Results: Lipik today (Parakeet + qwen3:8b, current prompt)
 
-| Category | Clips | Pass: clean-up off | Pass: clean-up on (as the app pastes) | Pass: model on every clip | WER off | WER on |
-|---|---|---|---|---|---|---|
-| filler | 12 | 6/12 (50%) | 4/12 (33%) | 4/12 (33%) | 9.7 | 14.6 |
-| correction | 16 | 0/16 (0%) | 13/16 (81%) | 13/16 (81%) | 51.8 | 6.1 |
-| spoken punctuation | 10 | 0/10 (0%) | 2/10 (20%) | 4/10 (40%) | 37.5 | 12.5 |
-| numbers | 14 | 10/14 (71%) | 10/14 (71%) | 11/14 (79%) | 8.8 | 8.8 |
-| email / URL | 10 | 0/10 (0%) | 0/10 (0%) | 1/10 (10%) | 17.0 | 24.5 |
-| list | 8 | 0/8 (0%) | 0/8 (0%) | 0/8 (0%) | 22.0 | 22.0 |
-| vocab names | 10 | 5/10 (50%) | 5/10 (50%) | 5/10 (50%) | 6.0 | 6.0 |
-| tech terms | 10 | 6/10 (60%) | 7/10 (70%) | 7/10 (70%) | 5.9 | 10.2 |
-| question | 8 | 7/8 (88%) | 4/8 (50%) | 4/8 (50%) | 1.2 | 7.3 |
-| run-on | 8 | 2/8 (25%) | 1/8 (12%) | 1/8 (12%) | 1.7 | 17.2 |
-| Hinglish | 20 | 0/20 (0%) | 0/20 (0%) | 0/20 (0%) | 61.7 | 68.2 |
-| **All** | 126 | **36/126 (29%)** | **46/126 (37%)** | 50/126 (40%) | 20.5 | 21.5 |
+| Category           | Clips | Pass: clean-up off | Pass: clean-up on (as the app pastes) | Pass: model on every clip | WER off | WER on |
+| ------------------ | ----- | ------------------ | ------------------------------------- | ------------------------- | ------- | ------ |
+| filler             | 12    | 6/12 (50%)         | 4/12 (33%)                            | 4/12 (33%)                | 9.7     | 14.6   |
+| correction         | 16    | 0/16 (0%)          | 13/16 (81%)                           | 13/16 (81%)               | 51.8    | 6.1    |
+| spoken punctuation | 10    | 0/10 (0%)          | 2/10 (20%)                            | 4/10 (40%)                | 37.5    | 12.5   |
+| numbers            | 14    | 10/14 (71%)        | 10/14 (71%)                           | 11/14 (79%)               | 8.8     | 8.8    |
+| email / URL        | 10    | 0/10 (0%)          | 0/10 (0%)                             | 1/10 (10%)                | 17.0    | 24.5   |
+| list               | 8     | 0/8 (0%)           | 0/8 (0%)                              | 0/8 (0%)                  | 22.0    | 22.0   |
+| vocab names        | 10    | 5/10 (50%)         | 5/10 (50%)                            | 5/10 (50%)                | 6.0     | 6.0    |
+| tech terms         | 10    | 6/10 (60%)         | 7/10 (70%)                            | 7/10 (70%)                | 5.9     | 10.2   |
+| question           | 8     | 7/8 (88%)          | 4/8 (50%)                             | 4/8 (50%)                 | 1.2     | 7.3    |
+| run-on             | 8     | 2/8 (25%)          | 1/8 (12%)                             | 1/8 (12%)                 | 1.7     | 17.2   |
+| Hinglish           | 20    | 0/20 (0%)          | 0/20 (0%)                             | 0/20 (0%)                 | 61.7    | 68.2   |
+| **All**            | 126   | **36/126 (29%)**   | **46/126 (37%)**                      | 50/126 (40%)              | 20.5    | 21.5   |
 
 Of the 102 clips the app would clean: clean-up turned 20 fails into passes
 and 10 passes into fails; WER went down on 30 and up on 28.
@@ -139,20 +139,20 @@ Notes per category:
 To separate clean-up mistakes from transcription mistakes, the spoken line
 itself (with its "um", "uh" and commas) was cleaned (`--input spoken`).
 
-| Category | Cases | Pass: spoken line | Pass: cleaned | WER spoken line | WER cleaned |
-|---|---|---|---|---|---|
-| filler | 6 | 0/6 | 3/6 | 19.4 | 15.3 |
-| correction | 8 | 0/8 | 5/8 | 50.9 | 3.5 |
-| spoken punctuation | 5 | 0/5 | 2/5 | 38.9 | 25.0 |
-| numbers | 7 | 0/7 | 0/7 | 11.8 | 13.2 |
-| email / URL | 5 | 0/5 | 1/5 | 0.0 | 7.5 |
-| list | 4 | 0/4 | 0/4 | 18.6 | 18.6 |
-| vocab names | 5 | 4/5 | 5/5 | 0.0 | 0.0 |
-| tech terms | 5 | 0/5 | 1/5 | 28.8 | 15.3 |
-| question | 4 | 0/4 | 1/4 | 7.3 | 4.9 |
-| run-on | 4 | 0/4 | 1/4 | 2.0 | 14.9 |
-| Hinglish | 10 | 3/10 | 2/10 | 9.3 | **46.7** |
-| **All** | 63 | 7/63 (11%) | 21/63 (33%) | 14.5 | 17.2 |
+| Category           | Cases | Pass: spoken line | Pass: cleaned | WER spoken line | WER cleaned |
+| ------------------ | ----- | ----------------- | ------------- | --------------- | ----------- |
+| filler             | 6     | 0/6               | 3/6           | 19.4            | 15.3        |
+| correction         | 8     | 0/8               | 5/8           | 50.9            | 3.5         |
+| spoken punctuation | 5     | 0/5               | 2/5           | 38.9            | 25.0        |
+| numbers            | 7     | 0/7               | 0/7           | 11.8            | 13.2        |
+| email / URL        | 5     | 0/5               | 1/5           | 0.0             | 7.5         |
+| list               | 4     | 0/4               | 0/4           | 18.6            | 18.6        |
+| vocab names        | 5     | 4/5               | 5/5           | 0.0             | 0.0         |
+| tech terms         | 5     | 0/5               | 1/5           | 28.8            | 15.3        |
+| question           | 4     | 0/4               | 1/4           | 7.3             | 4.9         |
+| run-on             | 4     | 0/4               | 1/4           | 2.0             | 14.9        |
+| Hinglish           | 10    | 3/10              | 2/10          | 9.3             | **46.7**    |
+| **All**            | 63    | 7/63 (11%)        | 21/63 (33%)   | 14.5            | 17.2        |
 
 With a perfect transcript the prompt still never writes numbers in digits
 ("seven", "twelve lakh", "eight fifteen"), never joins "Next J S" or "graph
@@ -160,32 +160,32 @@ Q L", and makes Hinglish five times worse by translating it.
 
 ## Latency
 
-| Step | Median | p90 | Worst |
-|---|---|---|---|
-| Parakeet, per clip (model loaded, best of 3; audio median 4.5 s) | 52 ms | 70 ms | 129 ms |
-| Parakeet model load (each headless run) | 237 ms | | |
-| Clean-up, every call (n=126) | 477 ms | 826 ms | 1,779 ms |
-| Clean-up, clips the app cleans (8+ words, n=102) | 501 ms | 879 ms | 1,779 ms |
-| Clean-up by length: 8-15 words / 16-30 / 31+ | 473 / 877 / 1,522 ms | | |
-| Clean-up with prompt_v2 + vocabulary (n=102) | 625 ms | 999 ms | 1,948 ms |
+| Step                                                             | Median               | p90    | Worst    |
+| ---------------------------------------------------------------- | -------------------- | ------ | -------- |
+| Parakeet, per clip (model loaded, best of 3; audio median 4.5 s) | 52 ms                | 70 ms  | 129 ms   |
+| Parakeet model load (each headless run)                          | 237 ms               |        |          |
+| Clean-up, every call (n=126)                                     | 477 ms               | 826 ms | 1,779 ms |
+| Clean-up, clips the app cleans (8+ words, n=102)                 | 501 ms               | 879 ms | 1,779 ms |
+| Clean-up by length: 8-15 words / 16-30 / 31+                     | 473 / 877 / 1,522 ms |        |          |
+| Clean-up with prompt_v2 + vocabulary (n=102)                     | 625 ms               | 999 ms | 1,948 ms |
 
 No call came near the 4 s limit. Time grows with output length because the
 model writes the whole text back: about 1.5 s for a 40-word dictation.
 
 ## The 10 worst failures (clean-up on, current prompt)
 
-| # | Case (voice, app) | Raw (clean-up off) | Cleaned (what Lipik pastes) | Expected |
-|---|---|---|---|---|
-| 1 | run01 (Rishi, Slack) | So quick update on the migration we moved about half the tables last night and the rest should be done by Thursday but the reporting jobs … | **Here's the cleaned text:** A quick update on the migration. We moved … **However**, the reporting jobs … | So, quick update on the migration: we moved about half the tables last night and the rest should be done by Thursday, but the reporting jobs … |
-| 2 | run03 (both, Claude Code) | Okay so I want you to refactor the auth module so that it uses the new token service and make sure the old tests still pass and then also add a test for the expired token case. | Refactor the auth module to use the new token service. Ensure the old tests still pass and add a test for the expired token case. | Okay, so I want you to refactor the auth module so that it uses the new token service and make sure the old tests still pass, and then also add a test for the expired token case. |
-| 3 | hng06 (Aman, Slack) | Client ke email aya kya abhi tak muje kuch nahi mila. | Kuch nahi mila. | Client ka email aaya kya abhi tak? Mujhe kuch nahi mila. |
-| 4 | hng02 (Aman, Slack) | Yar build pierce fail hogaya, a large check karo. | Your build pierce failed, check it thoroughly. | Yaar, build phir se fail ho gaya, logs check karo. |
-| 5 | hng08 (Lekha, Messages) | Bhaiwa PR merge cardi please test sports hogehain | Bhaiwa, please test the PR merge card. Sports are happening. | Bhai, woh PR merge kar de please, tests pass ho gaye hain. |
-| 6 | eml03 (both, Mail) | My email is Rivaan underscore m at quavia.com | Rivaan m at quavia.com | My email is rivaan_m@quorvia.com. |
-| 7 | cor01 launch line (Aman, Slack) | Hey can we, move the call to 4 no 5 | Can we move the call to 4, no, 5. | Hey, can we move the call to 5? |
-| 8 | run02 (Aman, Mail) | Hi Oshin Dastur sending the draft I went through it … | Hi Oshin Dastur, **I sent the draft**. … | Hi Oshin, thanks for sending the draft. … |
-| 9 | fil05 (Aman, Messages) | I think that the numbers look fine to me honestly. | The numbers look fine to me. | I think the numbers look fine to me, honestly. |
-| 10 | tec05 (Rishi, Claude Code) | The TypeScript build fails because of a missing env variable in superbase | The TypeScript build fails due to a missing environment variable in Superbase. | The TypeScript build fails because of a missing env variable in Supabase. |
+| #   | Case (voice, app)               | Raw (clean-up off)                                                                                                                                                               | Cleaned (what Lipik pastes)                                                                                                       | Expected                                                                                                                                                                           |
+| --- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | run01 (Rishi, Slack)            | So quick update on the migration we moved about half the tables last night and the rest should be done by Thursday but the reporting jobs …                                      | **Here's the cleaned text:** A quick update on the migration. We moved … **However**, the reporting jobs …                        | So, quick update on the migration: we moved about half the tables last night and the rest should be done by Thursday, but the reporting jobs …                                     |
+| 2   | run03 (both, Claude Code)       | Okay so I want you to refactor the auth module so that it uses the new token service and make sure the old tests still pass and then also add a test for the expired token case. | Refactor the auth module to use the new token service. Ensure the old tests still pass and add a test for the expired token case. | Okay, so I want you to refactor the auth module so that it uses the new token service and make sure the old tests still pass, and then also add a test for the expired token case. |
+| 3   | hng06 (Aman, Slack)             | Client ke email aya kya abhi tak muje kuch nahi mila.                                                                                                                            | Kuch nahi mila.                                                                                                                   | Client ka email aaya kya abhi tak? Mujhe kuch nahi mila.                                                                                                                           |
+| 4   | hng02 (Aman, Slack)             | Yar build pierce fail hogaya, a large check karo.                                                                                                                                | Your build pierce failed, check it thoroughly.                                                                                    | Yaar, build phir se fail ho gaya, logs check karo.                                                                                                                                 |
+| 5   | hng08 (Lekha, Messages)         | Bhaiwa PR merge cardi please test sports hogehain                                                                                                                                | Bhaiwa, please test the PR merge card. Sports are happening.                                                                      | Bhai, woh PR merge kar de please, tests pass ho gaye hain.                                                                                                                         |
+| 6   | eml03 (both, Mail)              | My email is Rivaan underscore m at quavia.com                                                                                                                                    | Rivaan m at quavia.com                                                                                                            | My email is rivaan_m@quorvia.com.                                                                                                                                                  |
+| 7   | cor01 launch line (Aman, Slack) | Hey can we, move the call to 4 no 5                                                                                                                                              | Can we move the call to 4, no, 5.                                                                                                 | Hey, can we move the call to 5?                                                                                                                                                    |
+| 8   | run02 (Aman, Mail)              | Hi Oshin Dastur sending the draft I went through it …                                                                                                                            | Hi Oshin Dastur, **I sent the draft**. …                                                                                          | Hi Oshin, thanks for sending the draft. …                                                                                                                                          |
+| 9   | fil05 (Aman, Messages)          | I think that the numbers look fine to me honestly.                                                                                                                               | The numbers look fine to me.                                                                                                      | I think the numbers look fine to me, honestly.                                                                                                                                     |
+| 10  | tec05 (Rishi, Claude Code)      | The TypeScript build fails because of a missing env variable in superbase                                                                                                        | The TypeScript build fails due to a missing environment variable in Superbase.                                                    | The TypeScript build fails because of a missing env variable in Supabase.                                                                                                          |
 
 Also seen: "Thanks" -> "Thank you", "congrats" -> "Congratulations", "Hey"
 -> "Hi", "Hey do you know" -> "Did you know", and on a perfect transcript
@@ -198,11 +198,11 @@ The dictionary's word correction (`apply_custom_words`, threshold 0.18)
 replaces several spoken words with a multi-word dictionary entry. Checked by
 running the same clips with the dictionary empty:
 
-| Clip | Dictionary empty | With the 16 words |
-|---|---|---|
+| Clip         | Dictionary empty                          | With the 16 words                     |
+| ------------ | ----------------------------------------- | ------------------------------------- |
 | run02 (Aman) | Hi **Oshin thanks for** sending the draft | Hi **Oshin Dastur** sending the draft |
-| cor06 (Aman) | ping **Ishita about the** contract? | ping **Ishita Venkatraman** contract? |
-| hng04 (Aman) | **Meher ko boloki** invoice | **Meher Kapadia** invoice |
+| cor06 (Aman) | ping **Ishita about the** contract?       | ping **Ishita Venkatraman** contract? |
+| hng04 (Aman) | **Meher ko boloki** invoice               | **Meher Kapadia** invoice             |
 
 Saying a first name next to a saved full name loses the next one or two
 words. The dictionary also helped ("Ishitha" -> "Ishita", "riven" ->
@@ -218,17 +218,17 @@ in written form, with examples that are not from the test set; "no notes
 about what you did"; "no synonyms"; stronger Hinglish rule; and the
 dictionary appended (`--vocab-in-prompt`).
 
-| | Current prompt | prompt_v2 + vocabulary |
-|---|---|---|
-| Pass, as the app pastes | 46/126 (37%) | **64/126 (51%)** |
-| WER | 21.5 | 18.8 |
-| Clips clean-up broke / fixed | 10 / 20 | 6 / 34 |
-| Fillers / vocab / run-on pass | 33% / 50% / 12% | 67% / 100% / 50% |
-| Corrections pass | 81% | 62% (added "₹" to "lakh", expanded "Ishitar" to "Ishita Venkatraman") |
-| Lists | 0/8 | 2/8 |
-| Hinglish clips translated to English | 3 of 20 | 7 of 20 |
-| Median latency (cleaned clips) | 501 ms | 625 ms |
-| Launch line | "Can we move the call to five." / "… to 4, no, 5." | "Hey can we move the call to 5." / "Hey can we move the call to 4 no 5" |
+|                                      | Current prompt                                     | prompt_v2 + vocabulary                                                  |
+| ------------------------------------ | -------------------------------------------------- | ----------------------------------------------------------------------- |
+| Pass, as the app pastes              | 46/126 (37%)                                       | **64/126 (51%)**                                                        |
+| WER                                  | 21.5                                               | 18.8                                                                    |
+| Clips clean-up broke / fixed         | 10 / 20                                            | 6 / 34                                                                  |
+| Fillers / vocab / run-on pass        | 33% / 50% / 12%                                    | 67% / 100% / 50%                                                        |
+| Corrections pass                     | 81%                                                | 62% (added "₹" to "lakh", expanded "Ishitar" to "Ishita Venkatraman")   |
+| Lists                                | 0/8                                                | 2/8                                                                     |
+| Hinglish clips translated to English | 3 of 20                                            | 7 of 20                                                                 |
+| Median latency (cleaned clips)       | 501 ms                                             | 625 ms                                                                  |
+| Launch line                          | "Can we move the call to five." / "… to 4, no, 5." | "Hey can we move the call to 5." / "Hey can we move the call to 4 no 5" |
 
 ## What looks most promising to fix
 
@@ -362,15 +362,15 @@ its data folder were not touched.
 
 Prompt versions tried (qwen3:8b, real clips, English pass with the new pipeline):
 
-| Version | Change | English pass | Median / p90 (8+ words) |
-|---|---|---|---|
-| Lipik today | – | 46/106 (43%) | 501 / 879 ms |
-| v2 (Round 1) | rules rewrite + vocabulary | 75/106 (71%) * | 625 / 999 ms |
-| v3 | 7 rules + 11 examples, app + vocabulary in user message | 76/106 (72%) | 604 / 1025 ms |
-| v4 | + rules pass before the model, list and correction examples | 84/106 (79%) | 602 / 1019 ms |
-| v5 | + inline correction examples, request -> "?" rule | 87/106 (82%) | 699 / 1149 ms |
-| v6 | 12 examples (one Claude Code request replaces two) | 88/106 (83%) | 582 / 1015 ms |
-| **v7 = best** | + Hinglish question and "nahi nahi" correction | **89/106 (84%)** | **584 / 999 ms** |
+| Version       | Change                                                      | English pass     | Median / p90 (8+ words) |
+| ------------- | ----------------------------------------------------------- | ---------------- | ----------------------- |
+| Lipik today   | –                                                           | 46/106 (43%)     | 501 / 879 ms            |
+| v2 (Round 1)  | rules rewrite + vocabulary                                  | 75/106 (71%) \*  | 625 / 999 ms            |
+| v3            | 7 rules + 11 examples, app + vocabulary in user message     | 76/106 (72%)     | 604 / 1025 ms           |
+| v4            | + rules pass before the model, list and correction examples | 84/106 (79%)     | 602 / 1019 ms           |
+| v5            | + inline correction examples, request -> "?" rule           | 87/106 (82%)     | 699 / 1149 ms           |
+| v6            | 12 examples (one Claude Code request replaces two)          | 88/106 (83%)     | 582 / 1015 ms           |
+| **v7 = best** | + Hinglish question and "nahi nahi" correction              | **89/106 (84%)** | **584 / 999 ms**        |
 
 \* v2 scored with today's checks and rules; Round 1 reported 60% without them.
 Pass counts for older versions are re-scored with the final `guards.py`;
@@ -381,39 +381,39 @@ version-to-version differences of 1-2 clips are noise. Latency moves about
 
 Real transcripts (Parakeet, 2 voices):
 
-| Category | Clips | Raw (clean-up off) | Lipik today | New setup | WER raw / today / new |
-|---|---|---|---|---|---|
-| filler | 12 | 6/12 (50%) | 4/12 (33%) | 8/12 (67%) | 9.7 / 14.6 / 6.9 |
-| correction | 16 | 0/16 (0%) | 13/16 (81%) | 16/16 (100%) | 51.8 / 6.1 / 1.8 |
-| spoken punctuation | 10 | 0/10 (0%) | 2/10 (20%) | 9/10 (90%) | 37.5 / 12.5 / 1.4 |
-| numbers | 14 | 10/14 (71%) | 10/14 (71%) | 12/14 (86%) | 8.8 / 8.8 / 6.6 |
-| email / URL | 10 | 0/10 (0%) | 0/10 (0%) | 4/10 (40%) | 17.0 / 24.5 / 14.2 |
-| list | 8 | 0/8 (0%) | 0/8 (0%) | 8/8 (100%) | 22.0 / 22.0 / 2.5 |
-| vocab names | 10 | 5/10 (50%) | 5/10 (50%) | 8/10 (80%) | 6.0 / 6.0 / 2.0 |
-| tech terms | 10 | 6/10 (60%) | 7/10 (70%) | 8/10 (80%) | 5.9 / 10.2 / 2.5 |
-| question | 8 | 7/8 (88%) | 4/8 (50%) | 8/8 (100%) | 1.2 / 7.3 / 1.2 |
-| run-on | 8 | 2/8 (25%) | 1/8 (12%) | 8/8 (100%) | 1.7 / 17.2 / 2.0 |
-| Hinglish | 20 | 0/20 (0%) | 0/20 (0%) | 1/20 (5%) | 61.7 / 68.2 / 60.3 |
-| **English (all but Hinglish)** | 106 | 36/106 (34%) | 46/106 (43%) | **89/106 (84%)** | 13.6 / 13.7 / 4.0 |
-| **All** | 126 | 36/126 (29%) | 46/126 (37%) | 90/126 (71%) | 20.5 / 21.5 / 12.1 |
+| Category                       | Clips | Raw (clean-up off) | Lipik today  | New setup        | WER raw / today / new |
+| ------------------------------ | ----- | ------------------ | ------------ | ---------------- | --------------------- |
+| filler                         | 12    | 6/12 (50%)         | 4/12 (33%)   | 8/12 (67%)       | 9.7 / 14.6 / 6.9      |
+| correction                     | 16    | 0/16 (0%)          | 13/16 (81%)  | 16/16 (100%)     | 51.8 / 6.1 / 1.8      |
+| spoken punctuation             | 10    | 0/10 (0%)          | 2/10 (20%)   | 9/10 (90%)       | 37.5 / 12.5 / 1.4     |
+| numbers                        | 14    | 10/14 (71%)        | 10/14 (71%)  | 12/14 (86%)      | 8.8 / 8.8 / 6.6       |
+| email / URL                    | 10    | 0/10 (0%)          | 0/10 (0%)    | 4/10 (40%)       | 17.0 / 24.5 / 14.2    |
+| list                           | 8     | 0/8 (0%)           | 0/8 (0%)     | 8/8 (100%)       | 22.0 / 22.0 / 2.5     |
+| vocab names                    | 10    | 5/10 (50%)         | 5/10 (50%)   | 8/10 (80%)       | 6.0 / 6.0 / 2.0       |
+| tech terms                     | 10    | 6/10 (60%)         | 7/10 (70%)   | 8/10 (80%)       | 5.9 / 10.2 / 2.5      |
+| question                       | 8     | 7/8 (88%)          | 4/8 (50%)    | 8/8 (100%)       | 1.2 / 7.3 / 1.2       |
+| run-on                         | 8     | 2/8 (25%)          | 1/8 (12%)    | 8/8 (100%)       | 1.7 / 17.2 / 2.0      |
+| Hinglish                       | 20    | 0/20 (0%)          | 0/20 (0%)    | 1/20 (5%)        | 61.7 / 68.2 / 60.3    |
+| **English (all but Hinglish)** | 106   | 36/106 (34%)       | 46/106 (43%) | **89/106 (84%)** | 13.6 / 13.7 / 4.0     |
+| **All**                        | 126   | 36/126 (29%)       | 46/126 (37%) | 90/126 (71%)     | 20.5 / 21.5 / 12.1    |
 
 Perfect transcripts (the spoken line as text):
 
-| Category | Cases | Raw | Lipik today | New setup | WER raw / today / new |
-|---|---|---|---|---|---|
-| filler | 6 | 0/6 | 3/6 | 5/6 | 19.4 / 15.3 / 2.8 |
-| correction | 8 | 0/8 | 5/8 | 8/8 | 50.9 / 3.5 / 0.0 |
-| spoken punctuation | 5 | 0/5 | 2/5 | 5/5 | 38.9 / 25.0 / 0.0 |
-| numbers | 7 | 0/7 | 0/7 | 7/7 | 11.8 / 13.2 / 0.0 |
-| email / URL | 5 | 0/5 | 1/5 | 5/5 | 0.0 / 7.5 / 0.0 |
-| list | 4 | 0/4 | 0/4 | 4/4 | 18.6 / 18.6 / 0.0 |
-| vocab names | 5 | 4/5 | 5/5 | 5/5 | 0.0 / 0.0 / 0.0 |
-| tech terms | 5 | 0/5 | 1/5 | 4/5 | 28.8 / 15.3 / 1.7 |
-| question | 4 | 0/4 | 1/4 | 4/4 | 7.3 / 4.9 / 0.0 |
-| run-on | 4 | 0/4 | 1/4 | 4/4 | 2.0 / 14.9 / 0.7 |
-| Hinglish | 10 | 3/10 | 2/10 | **8/10** | 9.3 / 46.7 / 3.7 |
-| **English** | 53 | 4/53 (8%) | 19/53 (36%) | **51/53 (96%)** | 15.4 / 12.3 / 0.6 |
-| **All** | 63 | 7/63 (11%) | 21/63 (33%) | 59/63 (94%) | 14.5 / 17.2 / 1.1 |
+| Category           | Cases | Raw        | Lipik today | New setup       | WER raw / today / new |
+| ------------------ | ----- | ---------- | ----------- | --------------- | --------------------- |
+| filler             | 6     | 0/6        | 3/6         | 5/6             | 19.4 / 15.3 / 2.8     |
+| correction         | 8     | 0/8        | 5/8         | 8/8             | 50.9 / 3.5 / 0.0      |
+| spoken punctuation | 5     | 0/5        | 2/5         | 5/5             | 38.9 / 25.0 / 0.0     |
+| numbers            | 7     | 0/7        | 0/7         | 7/7             | 11.8 / 13.2 / 0.0     |
+| email / URL        | 5     | 0/5        | 1/5         | 5/5             | 0.0 / 7.5 / 0.0       |
+| list               | 4     | 0/4        | 0/4         | 4/4             | 18.6 / 18.6 / 0.0     |
+| vocab names        | 5     | 4/5        | 5/5         | 5/5             | 0.0 / 0.0 / 0.0       |
+| tech terms         | 5     | 0/5        | 1/5         | 4/5             | 28.8 / 15.3 / 1.7     |
+| question           | 4     | 0/4        | 1/4         | 4/4             | 7.3 / 4.9 / 0.0       |
+| run-on             | 4     | 0/4        | 1/4         | 4/4             | 2.0 / 14.9 / 0.7      |
+| Hinglish           | 10    | 3/10       | 2/10        | **8/10**        | 9.3 / 46.7 / 3.7      |
+| **English**        | 53    | 4/53 (8%)  | 19/53 (36%) | **51/53 (96%)** | 15.4 / 12.3 / 0.6     |
+| **All**            | 63    | 7/63 (11%) | 21/63 (33%) | 59/63 (94%)     | 14.5 / 17.2 / 1.1     |
 
 Held-out lines (24, perfect transcripts, vocabulary Kabir / Priya / Lumora):
 English 20/21 (95%), Hinglish 2/3, all 22/24 (92%); median 484 ms. The two
@@ -447,17 +447,18 @@ pasted as said, none answered or followed.
 Pulled one at a time; every run warm (one warm-up and one thrown-away call).
 English pass = what would be pasted (`best`). Latency = clips of 8+ words.
 
-| Model | Size | Real clips: English pass | Perfect text: English / Hinglish | Held-out English | Median / p90 | Checks fired (real clips) |
-|---|---|---|---|---|---|---|
-| **qwen3:8b** | 5.2 GB | **89/106 (84%)** | **51/53 (96%) / 8/10** | **20/21** | 584 / 999 ms | 0 |
-| qwen3:4b-instruct (2507) | 2.5 GB | 83/106 (78%) | 49/53 (92%) / 5/10 | 19/21 | 350 / 624 ms | 3 |
-| llama3.2:3b | 2.0 GB | 86/106 (81%) | 43/53 (81%) / 5/10 | 19/21 | 253 / 470 ms | 15 |
-| gemma3:4b | 3.4 GB | 78/106 (74%) | 45/53 (85%) / 8/10 | 19/21 | 339 / 596 ms | 15 |
-| qwen3:1.7b | 1.4 GB | 65/106 (61%) | 42/53 (79%) / 4/10 | 17/21 | 179 / 312 ms | 1 |
-| phi4-mini | 2.5 GB | 81/106 (76%) | 45/53 (85%) / 5/10 | 20/21 | 334 / 760 ms; 5 calls over 4 s (up to 10.4 s) | 14 |
-| gemma3n:e4b | 7.5 GB | not tested: the download runs at ~1 MB/s here (2 h), and at 7.5 GB it is no faster than qwen3:8b to load | | | | |
+| Model                    | Size   | Real clips: English pass                                                                                 | Perfect text: English / Hinglish | Held-out English | Median / p90                                  | Checks fired (real clips) |
+| ------------------------ | ------ | -------------------------------------------------------------------------------------------------------- | -------------------------------- | ---------------- | --------------------------------------------- | ------------------------- |
+| **qwen3:8b**             | 5.2 GB | **89/106 (84%)**                                                                                         | **51/53 (96%) / 8/10**           | **20/21**        | 584 / 999 ms                                  | 0                         |
+| qwen3:4b-instruct (2507) | 2.5 GB | 83/106 (78%)                                                                                             | 49/53 (92%) / 5/10               | 19/21            | 350 / 624 ms                                  | 3                         |
+| llama3.2:3b              | 2.0 GB | 86/106 (81%)                                                                                             | 43/53 (81%) / 5/10               | 19/21            | 253 / 470 ms                                  | 15                        |
+| gemma3:4b                | 3.4 GB | 78/106 (74%)                                                                                             | 45/53 (85%) / 8/10               | 19/21            | 339 / 596 ms                                  | 15                        |
+| qwen3:1.7b               | 1.4 GB | 65/106 (61%)                                                                                             | 42/53 (79%) / 4/10               | 17/21            | 179 / 312 ms                                  | 1                         |
+| phi4-mini                | 2.5 GB | 81/106 (76%)                                                                                             | 45/53 (85%) / 5/10               | 20/21            | 334 / 760 ms; 5 calls over 4 s (up to 10.4 s) | 14                        |
+| gemma3n:e4b              | 7.5 GB | not tested: the download runs at ~1 MB/s here (2 h), and at 7.5 GB it is no faster than qwen3:8b to load |                                  |                  |                                               |                           |
 
 Notes:
+
 - **`qwen3:4b` on Ollama is now the 2507 "Thinking" model.** It ignores
   `think: false` and writes its reasoning into the answer: 40-110 s per call,
   output starting "We are given: App: Slack ...". The run was stopped and the
@@ -553,16 +554,17 @@ new script is rejected; "When you have time, ..." gets no "?"; a reply that
 ends with "." keeps it; only dictionary words that sound like the dictation
 are sent (at most 40).
 
-| | Round 2 | Round 3 |
-|---|---|---|
-| Real transcripts, English | 89/106 (84%) | 83/106 (78%) |
-| Perfect transcripts, English | 51/53 (96%) | 51/53 (96%) |
-| Perfect transcripts, Hinglish | 8/10 | 8/10 |
-| Held-out English | 20/21 | 20/21 |
-| Median / p90 (8+ words) | 584 / 999 ms | 509 / 843 ms |
-| Launch line | "Hey, can we move the call to 5?" | same, all three transcripts |
+|                               | Round 2                           | Round 3                     |
+| ----------------------------- | --------------------------------- | --------------------------- |
+| Real transcripts, English     | 89/106 (84%)                      | 83/106 (78%)                |
+| Perfect transcripts, English  | 51/53 (96%)                       | 51/53 (96%)                 |
+| Perfect transcripts, Hinglish | 8/10                              | 8/10                        |
+| Held-out English              | 20/21                             | 20/21                       |
+| Median / p90 (8+ words)       | 584 / 999 ms                      | 509 / 843 ms                |
+| Launch line                   | "Hey, can we move the call to 5?" | same, all three transcripts |
 
 The 6 real clips lost (7 lost, 1 gained):
+
 - By design, 2: cor06_Rishi (the model wrote "Can you ping Ishita about the
   contract." and the period is now kept); run04_Rishi ("reach by 8.15" is no
   longer made "8:15" by the rules, and the model left it).

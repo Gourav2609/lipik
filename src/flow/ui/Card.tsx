@@ -5,7 +5,11 @@ export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   tone?: "panel" | "surface";
 }
 
-export const Card = ({ tone = "panel", className = "", ...rest }: CardProps) => (
+export const Card = ({
+  tone = "panel",
+  className = "",
+  ...rest
+}: CardProps) => (
   <div
     className={`rounded-[14px] ${tone === "panel" ? "bg-[var(--fk-menu-bg)] shadow-[var(--fk-elev-1)]" : "bg-[var(--fk-surface)]"} ${className}`}
     {...rest}

@@ -14,10 +14,7 @@ export default function System() {
   const [notifyTips, setNotifyTips] = useLocalSetting("notifyTips", true);
 
   const backendToggle = (
-    key:
-      | "autostart_enabled"
-      | "audio_feedback"
-      | "mute_while_recording",
+    key: "autostart_enabled" | "audio_feedback" | "mute_while_recording",
     label: string,
   ) => (
     <Toggle
@@ -33,7 +30,10 @@ export default function System() {
   );
 
   return (
-    <SettingsPage title="App" intro="The pill, the Dock, sounds and notifications.">
+    <SettingsPage
+      title="App"
+      intro="The pill, the Dock, sounds and notifications."
+    >
       <Section title="Start up">
         <SettingsCard>
           {row(
@@ -62,10 +62,7 @@ export default function System() {
         <SettingsCard>
           {row(
             "Sounds for dictation and alerts",
-            backendToggle(
-              "audio_feedback",
-              "Sounds for dictation and alerts",
-            ),
+            backendToggle("audio_feedback", "Sounds for dictation and alerts"),
           )}
           {row(
             "Mute other audio while you speak",

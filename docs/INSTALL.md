@@ -44,12 +44,12 @@ xattr -dr com.apple.quarantine /Applications/Lipik.app
 Lipik asks for these when it first needs them. You can also turn them on in
 **System Settings → Privacy & Security**.
 
-| Permission | Why |
-| --- | --- |
-| **Microphone** | To hear you while you hold `fn`. |
-| **Accessibility** | To type the text into the app you are using and to read the `fn` key. |
-| **Screen & System Audio Recording** (shown as *System Audio Recording Only* on recent macOS) | Notetaker only: to record the other people in a call from your Mac's audio. |
-| **Calendars** | Notetaker only: to show upcoming meetings, name notes and list who attended. |
+| Permission                                                                                   | Why                                                                          |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Microphone**                                                                               | To hear you while you hold `fn`.                                             |
+| **Accessibility**                                                                            | To type the text into the app you are using and to read the `fn` key.        |
+| **Screen & System Audio Recording** (shown as _System Audio Recording Only_ on recent macOS) | Notetaker only: to record the other people in a call from your Mac's audio.  |
+| **Calendars**                                                                                | Notetaker only: to show upcoming meetings, name notes and list who attended. |
 
 If dictation stops typing after an update, remove Lipik from the
 Accessibility list with the **−** button and add it again.
@@ -62,11 +62,11 @@ on your Mac and runs offline. You can switch models later in Settings.
 On macOS 26 or later, **Settings → General → Speech engine** can also use
 Apple's on-device dictation:
 
-| Choice | What it does |
-| --- | --- |
+| Choice                                | What it does                                                                                                                                                                                       |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Auto (Hinglish mode)**, the default | Runs both. Keeps the local model's text when it reads as English, otherwise uses Apple's. Only works with an English-only local model; with a multilingual model Lipik uses the local model alone. |
-| **Local model only** | Never uses Apple. |
-| **Apple dictation** | Uses Apple's text, and the local model's if Apple returns nothing. |
+| **Local model only**                  | Never uses Apple.                                                                                                                                                                                  |
+| **Apple dictation**                   | Uses Apple's text, and the local model's if Apple returns nothing.                                                                                                                                 |
 
 Apple's speech files are per language (English (India) by default). If they
 are not on your Mac yet, the setting shows a **Download** button; this is the

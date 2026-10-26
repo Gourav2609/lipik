@@ -6,7 +6,9 @@ import { APP_NAME } from "@/flow/brand";
 
 const Label = ({ children, hint }: { children: string; hint: string }) => (
   <span className="mb-[8px] flex items-baseline justify-between text-[13px] leading-[18px]">
-    <span className="font-semibold text-[var(--fk-text-muted)]">{children}</span>
+    <span className="font-semibold text-[var(--fk-text-muted)]">
+      {children}
+    </span>
     <span className="text-[var(--fk-text-faint)]">{hint}</span>
   </span>
 );

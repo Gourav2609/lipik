@@ -66,7 +66,10 @@ impl Message {
 /// for a reply 1.5 times the last (user) message.
 pub fn messages_context(messages: &[Message]) -> u32 {
     let (user, earlier) = messages.split_last().map_or((0, 0), |(last, earlier)| {
-        (last.content.len(), earlier.iter().map(|m| m.content.len()).sum())
+        (
+            last.content.len(),
+            earlier.iter().map(|m| m.content.len()).sum(),
+        )
     });
     let estimate = (earlier + user * 5 / 2) / 3 + 64;
     if estimate <= SMALL_CONTEXT as usize {

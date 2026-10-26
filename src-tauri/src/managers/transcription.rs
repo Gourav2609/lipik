@@ -1097,12 +1097,19 @@ impl TranscriptionManager {
     ) -> Result<RunOutcome> {
         let Some(job) = job else { return local };
         let local = match local {
-            Ok(outcome) if pick::local_text_looks_english(&outcome.text, &settings.custom_words) => {
+            Ok(outcome)
+                if pick::local_text_looks_english(&outcome.text, &settings.custom_words) =>
+            {
                 debug!("Auto engine: kept the local model's text");
                 return Ok(outcome);
             }
             Ok(outcome) => Ok(outcome),
-            Err(e) if matches!(e.downcast_ref::<EngineError>(), Some(EngineError::Cancelled)) => {
+            Err(e)
+                if matches!(
+                    e.downcast_ref::<EngineError>(),
+                    Some(EngineError::Cancelled)
+                ) =>
+            {
                 return Err(e)
             }
             Err(e) => Err(e),

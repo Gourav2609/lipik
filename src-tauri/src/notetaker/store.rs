@@ -11,7 +11,7 @@ use super::{
 
 static MIGRATIONS: &[M] = &[
     M::up(
-    "CREATE TABLE meetings (
+        "CREATE TABLE meetings (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         title_auto INTEGER NOT NULL DEFAULT 0,
@@ -188,7 +188,12 @@ impl Store {
             args.push(Box::new(folder.clone()));
             sql.push_str(&format!(" AND folder = ?{}", args.len()));
         }
-        if let Some(query) = filter.query.as_deref().map(str::trim).filter(|q| !q.is_empty()) {
+        if let Some(query) = filter
+            .query
+            .as_deref()
+            .map(str::trim)
+            .filter(|q| !q.is_empty())
+        {
             args.push(Box::new(format!("%{query}%")));
             let n = args.len();
             sql.push_str(&format!(
@@ -274,7 +279,10 @@ impl Store {
     pub fn replace_final_segments(&self, meeting_id: &str, segments: &[Segment]) -> Result<()> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
-        tx.execute("DELETE FROM segments WHERE meeting_id = ?1", params![meeting_id])?;
+        tx.execute(
+            "DELETE FROM segments WHERE meeting_id = ?1",
+            params![meeting_id],
+        )?;
         for s in segments {
             tx.execute(
                 "INSERT INTO segments (meeting_id, pass, source, speaker, start_ms, end_ms, text)
@@ -449,12 +457,16 @@ impl Store {
         tx.execute("DELETE FROM segments WHERE meeting_id = ?1", params![id])?;
         tx.execute("DELETE FROM my_thoughts WHERE meeting_id = ?1", params![id])?;
         tx.execute("DELETE FROM summaries WHERE meeting_id = ?1", params![id])?;
-        tx.execute("DELETE FROM chat_messages WHERE meeting_id = ?1", params![id])?;
+        tx.execute(
+            "DELETE FROM chat_messages WHERE meeting_id = ?1",
+            params![id],
+        )?;
         let cited: Vec<(i64, String)> = {
             let mut stmt = tx.prepare(
                 "SELECT id, citations_json FROM chat_messages WHERE meeting_id IS NULL AND instr(citations_json, ?1) > 0",
             )?;
-            let rows = stmt.query_map(params![format!("\"{id}\"")], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            let rows =
+                stmt.query_map(params![format!("\"{id}\"")], |r| Ok((r.get(0)?, r.get(1)?)))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()?
         };
         for (message_id, json) in cited {

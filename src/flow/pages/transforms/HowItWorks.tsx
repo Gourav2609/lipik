@@ -17,13 +17,11 @@ const STEPS: ReactNode[] = [
 ];
 
 export const HowItWorks = ({ onClose }: { onClose: () => void }) => (
-  <ModalShell
-    onClose={onClose}
-    width={480}
-    className="p-[24px]"
-  >
+  <ModalShell onClose={onClose} width={480} className="p-[24px]">
     <div className="flex items-center justify-between">
-      <h2 className="fk-display text-[22px] leading-[30px]">How rewrite works</h2>
+      <h2 className="fk-display text-[22px] leading-[30px]">
+        How rewrite works
+      </h2>
       <IconButton label="Close" onClick={onClose}>
         <X size={18} strokeWidth={1.75} />
       </IconButton>
@@ -42,7 +40,8 @@ export const HowItWorks = ({ onClose }: { onClose: () => void }) => (
       ))}
     </ol>
     <p className="mt-[16px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
-      Turn on Rewrite every dictation to run one rewrite on everything you dictate.
+      Turn on Rewrite every dictation to run one rewrite on everything you
+      dictate.
     </p>
     <div className="mt-[24px] flex justify-end">
       <Button onClick={onClose}>Done</Button>

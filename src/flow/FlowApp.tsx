@@ -9,7 +9,12 @@ import { SettingsModal } from "./SettingsModal";
 import { SecureInputNotice } from "./SecureInputNotice";
 import { Sidebar } from "./Sidebar";
 import { type OverlayId, type PageId, useFlowStore } from "./state";
-import { FakeTrafficLights, MENU_EXIT_MS, TopBar, useLingering } from "./TopBar";
+import {
+  FakeTrafficLights,
+  MENU_EXIT_MS,
+  TopBar,
+  useLingering,
+} from "./TopBar";
 import { useResolvedTheme } from "./useResolvedTheme";
 
 const MENUS: OverlayId[] = ["account-menu", "theme-menu"];
@@ -74,7 +79,8 @@ export const FlowApp = () => {
   useEffect(() => {
     const unlisten = listen<string>("flow-open-page", (e) => {
       if (e.payload === "settings") openSettings();
-      else if (e.payload === "connect-calendar") openOverlay("connect-calendar");
+      else if (e.payload === "connect-calendar")
+        openOverlay("connect-calendar");
       else if (e.payload in PAGES) setPage(e.payload as PageId);
     });
     return () => {

@@ -54,7 +54,11 @@ export default function AccountMenu({ onClose }: OverlayProps) {
             onClick={() => openSettings(tab)}
             className="flex h-[34px] w-full items-center gap-[10px] rounded-[var(--fk-r-sm)] px-[12px] text-[14.5px] transition-colors duration-[var(--fk-t-quick)] hover:bg-[var(--fk-hover)] focus-visible:bg-[var(--fk-hover)]"
           >
-            <Icon size={16} strokeWidth={1.75} className="text-[var(--fk-text-muted)]" />
+            <Icon
+              size={16}
+              strokeWidth={1.75}
+              className="text-[var(--fk-text-muted)]"
+            />
             {label}
           </button>
         ))}

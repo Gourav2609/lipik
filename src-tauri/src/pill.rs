@@ -71,9 +71,10 @@ pub fn strip_frame(app: &AppHandle) -> Option<(f64, f64, f64, f64)> {
 
 /// Moves and sizes the panel to `strip_frame`.
 pub fn place(app: &AppHandle) {
-    if let (Some(win), Some((x, y, width, height))) =
-        (app.get_webview_window("recording_overlay"), strip_frame(app))
-    {
+    if let (Some(win), Some((x, y, width, height))) = (
+        app.get_webview_window("recording_overlay"),
+        strip_frame(app),
+    ) {
         let _ = win.set_size(tauri::LogicalSize::new(width, height));
         let _ = win.set_position(tauri::LogicalPosition::new(x, y));
     }
@@ -231,9 +232,11 @@ pub fn start(app: &AppHandle) {
             let Some(win) = app.get_webview_window("recording_overlay") else {
                 continue;
             };
-            let (Ok(cursor), Ok(origin), Ok(scale)) =
-                (win.cursor_position(), win.outer_position(), win.scale_factor())
-            else {
+            let (Ok(cursor), Ok(origin), Ok(scale)) = (
+                win.cursor_position(),
+                win.outer_position(),
+                win.scale_factor(),
+            ) else {
                 continue;
             };
             let x = (cursor.x - origin.x as f64) / scale;
@@ -380,7 +383,11 @@ mod ax {
             if CFStringGetCString(value.0, buffer.as_mut_ptr(), buffer.len() as isize, UTF8) == 0 {
                 return None;
             }
-            Some(CStr::from_ptr(buffer.as_ptr()).to_string_lossy().into_owned())
+            Some(
+                CStr::from_ptr(buffer.as_ptr())
+                    .to_string_lossy()
+                    .into_owned(),
+            )
         }
     }
 
@@ -421,7 +428,9 @@ mod ax {
         if copy(&focused, "AXEditableAncestor").is_ok() {
             return Some(true);
         }
-        let role = copy(&focused, "AXRole").ok().and_then(|role| string(&role))?;
+        let role = copy(&focused, "AXRole")
+            .ok()
+            .and_then(|role| string(&role))?;
         let editable = if EDITABLE_ROLES.contains(&role.as_str()) {
             Some(true)
         } else if NON_TEXT_ROLES.contains(&role.as_str()) {

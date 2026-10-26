@@ -23,7 +23,8 @@ const ENGINE_OPTIONS = [
 const ENGINE_TEXT: Record<Engine, string> = {
   auto: "Uses the local model for English and switches to Apple dictation when you mix in Hindi.",
   parakeet: "Uses only the model above.",
-  apple: "Uses Apple's on-device dictation. The model above takes over if it fails.",
+  apple:
+    "Uses Apple's on-device dictation. The model above takes over if it fails.",
 };
 
 const LOCALE_OPTIONS = [

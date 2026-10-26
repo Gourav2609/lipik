@@ -8,7 +8,11 @@ export interface LipikMarkProps extends SVGProps<SVGSVGElement> {
 
 const STROKES = "M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3";
 
-export const LipikMark = ({ size = 22, tile = false, ...rest }: LipikMarkProps) => (
+export const LipikMark = ({
+  size = 22,
+  tile = false,
+  ...rest
+}: LipikMarkProps) => (
   <svg
     width={size}
     height={size}

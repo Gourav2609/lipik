@@ -15,7 +15,9 @@ import { useInsightsStats } from "./insights/useInsightsStats";
 const params = new URLSearchParams(window.location.search);
 const previewScroll = isFlowPreview ? Number(params.get("scroll") ?? 0) : 0;
 const previewHover =
-  isFlowPreview && params.has("hover") ? Number(params.get("hover")) : undefined;
+  isFlowPreview && params.has("hover")
+    ? Number(params.get("hover"))
+    : undefined;
 const previewEdit =
   isFlowPreview && params.has("edit") ? Number(params.get("edit")) : undefined;
 const previewMenu =
@@ -52,7 +54,8 @@ const ShortcutKeys = ({ binding }: { binding: string }) => (
 
 export default function Dictation() {
   const setPage = useFlowStore((s) => s.setPage);
-  const { entries, loading, toggleSaved, remove, retry, updateText } = useHistory();
+  const { entries, loading, toggleSaved, remove, retry, updateText } =
+    useHistory();
   const { stats, wpm } = useInsightsStats();
   const rootRef = useRef<HTMLDivElement>(null);
   const [noteHidden, setNoteHidden] = useState(readDismissed);

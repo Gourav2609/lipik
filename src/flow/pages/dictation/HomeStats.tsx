@@ -28,9 +28,15 @@ export const HomeStats = ({
     title="Open stats"
     className="group flex items-center gap-[16px] rounded-[10px] py-[4px] pl-[12px] pr-[8px] text-[var(--fk-text-muted)] transition-colors duration-[var(--fk-t-quick)] hover:bg-[var(--fk-hover)]"
   >
-    <Figure value={formatCount(totalWords)} label={totalWords === 1 ? "word" : "words"} />
+    <Figure
+      value={formatCount(totalWords)}
+      label={totalWords === 1 ? "word" : "words"}
+    />
     <Figure value={wpm === null ? "—" : String(wpm)} label="words a minute" />
-    <Figure value={String(streak)} label={streak === 1 ? "day in a row" : "days in a row"} />
+    <Figure
+      value={String(streak)}
+      label={streak === 1 ? "day in a row" : "days in a row"}
+    />
     <ChevronRight
       size={16}
       strokeWidth={1.75}

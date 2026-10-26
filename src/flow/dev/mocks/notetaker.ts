@@ -120,14 +120,36 @@ type Sample = {
 
 const records: Sample[] = [
   {
-    meeting: meeting("n1", "Storage Costs and Backup Planning", at(-1, 18, 17), 24, {
-      folder: "Infrastructure",
-    }),
+    meeting: meeting(
+      "n1",
+      "Storage Costs and Backup Planning",
+      at(-1, 18, 17),
+      24,
+      {
+        folder: "Infrastructure",
+      },
+    ),
     segments: lines([
-      ["Me", 4, "Okay, let's start with the storage bill. It doubled since last quarter."],
-      ["Ritu Nair", 12, "Most of that is logs. We keep every request log in the main database for ninety days."],
-      ["Ritu Nair", 21, "Moving them to cheaper storage would cut the cost a lot, but search gets slower."],
-      ["Kabir Shah", 33, "We also need to decide how often backups run. Right now it's once a night."],
+      [
+        "Me",
+        4,
+        "Okay, let's start with the storage bill. It doubled since last quarter.",
+      ],
+      [
+        "Ritu Nair",
+        12,
+        "Most of that is logs. We keep every request log in the main database for ninety days.",
+      ],
+      [
+        "Ritu Nair",
+        21,
+        "Moving them to cheaper storage would cut the cost a lot, but search gets slower.",
+      ],
+      [
+        "Kabir Shah",
+        33,
+        "We also need to decide how often backups run. Right now it's once a night.",
+      ],
       ["Me", 45, "Let's look at both and come back next week with numbers."],
     ]),
     thoughts: "Check how long we really need request logs.",
@@ -146,13 +168,19 @@ const records: Sample[] = [
         },
         {
           heading: "Backups",
-          bullets: ["Backups run once a night; the team will review how often they should run."],
+          bullets: [
+            "Backups run once a night; the team will review how often they should run.",
+          ],
         },
       ],
       key_points: [],
       decisions: [],
       action_items: [
-        { text: "Bring cost numbers for both storage options", owner: "Ritu Nair", due: "Next week" },
+        {
+          text: "Bring cost numbers for both storage options",
+          owner: "Ritu Nair",
+          due: "Next week",
+        },
         { text: "Propose a backup schedule", owner: "Kabir Shah", due: null },
       ],
     },
@@ -165,7 +193,11 @@ const records: Sample[] = [
       ["Dev Patel", 3, "We got forty new survey answers this week."],
       ["Me", 11, "What was the most common request?"],
       ["Dev Patel", 16, "Faster search, then a dark theme for the mobile app."],
-      ["Naveen Iyer", 27, "The dark theme is almost done. Search needs more work."],
+      [
+        "Naveen Iyer",
+        27,
+        "The dark theme is almost done. Search needs more work.",
+      ],
     ]),
     thoughts: "",
     summary: {
@@ -175,12 +207,21 @@ const records: Sample[] = [
       sections: [
         {
           heading: "Survey results",
-          bullets: ["Forty new answers this week.", "Top requests: faster search, then a mobile dark theme."],
+          bullets: [
+            "Forty new answers this week.",
+            "Top requests: faster search, then a mobile dark theme.",
+          ],
         },
       ],
       key_points: ["Search speed is the most requested change."],
       decisions: ["Ship the dark theme first."],
-      action_items: [{ text: "Share the survey summary with the team", owner: "Dev Patel", due: "Friday" }],
+      action_items: [
+        {
+          text: "Share the survey summary with the team",
+          owner: "Dev Patel",
+          due: "Friday",
+        },
+      ],
     },
   },
   {
@@ -189,8 +230,16 @@ const records: Sample[] = [
       summary_error: "Ollama isn't running. Start it, then choose Try again.",
     }),
     segments: lines([
-      ["Me", 2, "Three goals for next quarter: faster onboarding, fewer support tickets, and the new pricing page."],
-      ["Them", 14, "The pricing page depends on the billing change, so it should come last."],
+      [
+        "Me",
+        2,
+        "Three goals for next quarter: faster onboarding, fewer support tickets, and the new pricing page.",
+      ],
+      [
+        "Them",
+        14,
+        "The pricing page depends on the billing change, so it should come last.",
+      ],
     ]),
     thoughts: "",
     summary: null,
@@ -206,8 +255,14 @@ const records: Sample[] = [
     thoughts: "",
     summary: {
       title: null,
-      overview: "Uma walked through the first-day checklist; the second section still links to the old setup guide.",
-      sections: [{ heading: "Checklist", bullets: ["Update the setup guide link in section two."] }],
+      overview:
+        "Uma walked through the first-day checklist; the second section still links to the old setup guide.",
+      sections: [
+        {
+          heading: "Checklist",
+          bullets: ["Update the setup guide link in section two."],
+        },
+      ],
       key_points: [],
       decisions: [],
       action_items: [],
@@ -235,7 +290,12 @@ let library = params.get("ntEmpty") === "1" ? [] : records;
 const find = (id: unknown) => library.find((r) => r.meeting.id === id);
 
 const matches = (r: Sample, query: string) =>
-  [r.meeting.title, r.thoughts, r.summary?.overview ?? "", ...r.segments.map((s) => s.text)]
+  [
+    r.meeting.title,
+    r.thoughts,
+    r.summary?.overview ?? "",
+    ...r.segments.map((s) => s.text),
+  ]
     .join("\n")
     .toLowerCase()
     .includes(query.toLowerCase());
@@ -243,8 +303,12 @@ const matches = (r: Sample, query: string) =>
 const chats: ChatMessage[] = [];
 let nextMessage = 1;
 
-const answerFor = (meetingId: string | null): { content: string; citations: Citation[] } => {
-  const cited = meetingId ? library.filter((r) => r.meeting.id === meetingId) : library.slice(0, 3);
+const answerFor = (
+  meetingId: string | null,
+): { content: string; citations: Citation[] } => {
+  const cited = meetingId
+    ? library.filter((r) => r.meeting.id === meetingId)
+    : library.slice(0, 3);
   const citations = cited.map(
     (r, i): Citation => ({
       marker: i + 1,
@@ -255,7 +319,10 @@ const answerFor = (meetingId: string | null): { content: string; citations: Cita
     }),
   );
   if (!citations.length)
-    return { content: "I couldn't find any meetings to answer from yet.", citations };
+    return {
+      content: "I couldn't find any meetings to answer from yet.",
+      citations,
+    };
   const content = [
     "Here's what came up in your recent meetings:",
     "",
@@ -298,12 +365,20 @@ export const handlers: Record<string, MockHandler> = {
   },
   notetaker_get: ({ id }): MeetingDetail | null => {
     const r = find(id);
-    return r ? { meeting: r.meeting, segments: r.segments, thoughts: r.thoughts, summary: r.summary } : null;
+    return r
+      ? {
+          meeting: r.meeting,
+          segments: r.segments,
+          thoughts: r.thoughts,
+          summary: r.summary,
+        }
+      : null;
   },
   notetaker_folders: () => {
     const counts = new Map<string, number>();
     for (const r of library)
-      if (r.meeting.folder) counts.set(r.meeting.folder, (counts.get(r.meeting.folder) ?? 0) + 1);
+      if (r.meeting.folder)
+        counts.set(r.meeting.folder, (counts.get(r.meeting.folder) ?? 0) + 1);
     return [...counts].sort().map(([name, count]) => ({ name, count }));
   },
   notetaker_save_thoughts: ({ id, markdown }) => {
@@ -316,7 +391,11 @@ export const handlers: Record<string, MockHandler> = {
     const r = find(id);
     if (!r) throw "No such meeting";
     if (!String(title).trim()) throw "The title can't be empty";
-    r.meeting = { ...r.meeting, title: String(title).trim(), title_auto: false };
+    r.meeting = {
+      ...r.meeting,
+      title: String(title).trim(),
+      title_auto: false,
+    };
     return null;
   },
   notetaker_move_to_folder: ({ id, folder }) => {
@@ -380,6 +459,7 @@ export const handlers: Record<string, MockHandler> = {
       }))
       .reverse();
   },
-  notetaker_chat: ({ threadId }) => chats.filter((m) => m.thread_id === threadId),
+  notetaker_chat: ({ threadId }) =>
+    chats.filter((m) => m.thread_id === threadId),
   notepad_open: () => null,
 };

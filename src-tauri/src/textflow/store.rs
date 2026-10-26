@@ -258,10 +258,8 @@ impl TextFlow {
                 (data, true)
             }
             Some(Err(e)) => {
-                let backup = path.with_extension(format!(
-                    "json.bad-{}",
-                    chrono::Utc::now().timestamp()
-                ));
+                let backup =
+                    path.with_extension(format!("json.bad-{}", chrono::Utc::now().timestamp()));
                 log::error!("textflow: could not load {path:?} ({e}); moved it to {backup:?}");
                 if let Err(e) = std::fs::rename(&path, &backup) {
                     log::error!("textflow: could not move the bad file ({e})");

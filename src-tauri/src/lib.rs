@@ -28,9 +28,9 @@ mod settings;
 mod shortcut;
 mod signal_handle;
 mod textflow;
-mod transcription_coordinator;
 #[cfg(target_os = "macos")]
 mod traffic_lights;
+mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
 mod utils;

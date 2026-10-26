@@ -27,8 +27,10 @@
   --np-inverse: #ede8de;
   --np-inverse-text: #1d1b17;
   --np-focus: 0 0 0 3px rgba(156, 200, 174, 0.38);
-  --np-elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --np-elev-2: 0 12px 32px -8px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --np-elev-1:
+    0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --np-elev-2:
+    0 12px 32px -8px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
   --np-sans: "Inter Variable", "Mukta", -apple-system, system-ui, sans-serif;
   --np-display: "Instrument Serif", "Martel", Georgia, serif;
   --np-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -73,8 +75,10 @@
   --np-inverse: #1d1b17;
   --np-inverse-text: #f6f2ea;
   --np-focus: 0 0 0 3px rgba(40, 90, 68, 0.28);
-  --np-elev-1: 0 1px 2px rgba(36, 28, 14, 0.06), 0 0 0 1px rgba(36, 28, 14, 0.05);
-  --np-elev-2: 0 10px 28px -8px rgba(36, 28, 14, 0.2), 0 0 0 1px rgba(36, 28, 14, 0.07);
+  --np-elev-1:
+    0 1px 2px rgba(36, 28, 14, 0.06), 0 0 0 1px rgba(36, 28, 14, 0.05);
+  --np-elev-2:
+    0 10px 28px -8px rgba(36, 28, 14, 0.2), 0 0 0 1px rgba(36, 28, 14, 0.07);
   color-scheme: light;
 }
 
@@ -879,7 +883,11 @@ mark.np-hit.now {
   user-select: text;
   cursor: text;
   caret-color: var(--np-ink);
-  background-image: linear-gradient(to bottom, transparent 25px, var(--np-line) 25px);
+  background-image: linear-gradient(
+    to bottom,
+    transparent 25px,
+    var(--np-line) 25px
+  );
   background-size: 100% 26px;
   background-attachment: local;
 }

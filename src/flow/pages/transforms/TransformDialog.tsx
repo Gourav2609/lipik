@@ -6,7 +6,8 @@ import type { Transform, TransformDraft } from "./store";
 import { confirmAction } from "./confirm";
 import { APP_NAME } from "@/flow/brand";
 
-const LABEL = "block text-[13px] font-semibold leading-[18px] text-[var(--fk-text-muted)]";
+const LABEL =
+  "block text-[13px] font-semibold leading-[18px] text-[var(--fk-text-muted)]";
 
 export const TransformDialog = ({
   initial,
@@ -38,11 +39,7 @@ export const TransformDialog = ({
   };
 
   return (
-    <ModalShell
-      onClose={dismiss}
-      width={520}
-      className="p-[24px]"
-    >
+    <ModalShell onClose={dismiss} width={520} className="p-[24px]">
       <form
         onSubmit={(e) => {
           e.preventDefault();

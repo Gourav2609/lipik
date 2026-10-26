@@ -20,13 +20,19 @@ const INTERNET_ACCOUNTS =
 const PRIVACY_CALENDARS =
   "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars";
 
-const ACCOUNT_KINDS: CalendarSourceKind[] = ["google", "exchange", "icloud", "caldav"];
+const ACCOUNT_KINDS: CalendarSourceKind[] = [
+  "google",
+  "exchange",
+  "icloud",
+  "caldav",
+];
 const LISTED_KINDS: CalendarSourceKind[] = [...ACCOUNT_KINDS, "local"];
 
 const BLOCKED_TEXT: Partial<Record<CalendarAccess, string>> = {
   denied: `Turn on ${APP_NAME} in System Settings › Privacy & Security › Calendars, then check again.`,
   write_only: `${APP_NAME} can only add events. Allow full access in System Settings › Privacy & Security › Calendars, then check again.`,
-  restricted: "Calendar access is blocked on this Mac, for example by a device profile.",
+  restricted:
+    "Calendar access is blocked on this Mac, for example by a device profile.",
   unsupported: "Calendar access isn't available on this computer.",
 };
 
@@ -38,7 +44,11 @@ const sourceIcon = (kind: CalendarSourceKind) =>
   );
 
 const sourceName = (s: CalendarSource) =>
-  s.kind === "local" ? "On My Mac" : s.kind === "exchange" && !s.title ? "Outlook" : s.title;
+  s.kind === "local"
+    ? "On My Mac"
+    : s.kind === "exchange" && !s.title
+      ? "Outlook"
+      : s.title;
 
 /** A sample meeting reminder, drawn as the popup Lipik shows above the pill. */
 const Preview = () => (
@@ -49,7 +59,9 @@ const Preview = () => (
     >
       <LipikMark size={28} tile />
       <div className="min-w-0 flex-1">
-        <div className="text-[14.5px] font-semibold leading-[20px]">Weekly sync</div>
+        <div className="text-[14.5px] font-semibold leading-[20px]">
+          Weekly sync
+        </div>
         <div className="fk-num text-[12.5px] leading-[17px] text-[var(--fk-text-muted)]">
           Starts in 2 min
         </div>
@@ -108,7 +120,11 @@ export default function ConnectCalendar({ onClose }: OverlayProps) {
   };
 
   const checkAgain = async () =>
-    show(await commands.notetakerCalendarAccess().catch(() => "unsupported" as const));
+    show(
+      await commands
+        .notetakerCalendarAccess()
+        .catch(() => "unsupported" as const),
+    );
 
   const busy = view.kind === "choose" && view.busy;
   const title =
@@ -144,7 +160,8 @@ export default function ConnectCalendar({ onClose }: OverlayProps) {
     actions = <Button onClick={onClose}>Done</Button>;
   } else {
     const canOpen =
-      view.kind === "none" || (view.access !== "unsupported" && view.access !== "restricted");
+      view.kind === "none" ||
+      (view.access !== "unsupported" && view.access !== "restricted");
     actions = (
       <>
         <Button variant="secondary" onClick={() => void checkAgain()}>
@@ -153,9 +170,9 @@ export default function ConnectCalendar({ onClose }: OverlayProps) {
         {canOpen && (
           <Button
             onClick={() =>
-              void openUrl(view.kind === "none" ? INTERNET_ACCOUNTS : PRIVACY_CALENDARS).catch(
-                () => {},
-              )
+              void openUrl(
+                view.kind === "none" ? INTERNET_ACCOUNTS : PRIVACY_CALENDARS,
+              ).catch(() => {})
             }
           >
             Open settings
@@ -167,19 +184,26 @@ export default function ConnectCalendar({ onClose }: OverlayProps) {
 
   return (
     <ModalShell onClose={onClose} width={460} className="relative p-[24px]">
-      <IconButton label="Close" onClick={onClose} className="absolute right-[12px] top-[12px]">
+      <IconButton
+        label="Close"
+        onClick={onClose}
+        className="absolute right-[12px] top-[12px]"
+      >
         <X size={18} strokeWidth={1.75} />
       </IconButton>
       <div className="mt-[24px]">
         <Preview />
       </div>
-      <h2 className="fk-display mt-[24px] text-[22px] leading-[30px]">{title}</h2>
+      <h2 className="fk-display mt-[24px] text-[22px] leading-[30px]">
+        {title}
+      </h2>
       <p className="mt-[4px] text-[14.5px] leading-[21px] text-[var(--fk-text-muted)]">
         {subtitle}
       </p>
       {view.kind === "choose" && (
         <p className="mt-[8px] text-[13px] leading-[18px] text-[var(--fk-text-faint)]">
-          Google, Outlook and iCloud accounts work once they're in the Calendar app.
+          Google, Outlook and iCloud accounts work once they're in the Calendar
+          app.
         </p>
       )}
       {view.kind === "found" && (
@@ -189,8 +213,12 @@ export default function ConnectCalendar({ onClose }: OverlayProps) {
               key={s.id}
               className="flex h-[44px] items-center gap-[10px] border-b border-[var(--fk-border)] text-[14.5px]"
             >
-              <span className="flex text-[var(--fk-text-muted)]">{sourceIcon(s.kind)}</span>
-              <span className="min-w-0 flex-1 truncate font-medium">{sourceName(s)}</span>
+              <span className="flex text-[var(--fk-text-muted)]">
+                {sourceIcon(s.kind)}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {sourceName(s)}
+              </span>
               <span
                 className="max-w-[200px] truncate text-[13px] text-[var(--fk-text-muted)]"
                 title={s.calendars.join(", ")}

@@ -56,7 +56,8 @@ struct Hit {
     reason: Reason,
 }
 
-const CUES: &str = "no|nope|sorry|actually|wait|i mean|i meant|meant|scratch that|nahi|rather|make that";
+const CUES: &str =
+    "no|nope|sorry|actually|wait|i mean|i meant|meant|scratch that|nahi|rather|make that";
 static CUE: Lazy<Regex> = Lazy::new(|| Regex::new(&format!(r"(?i)\b({CUES})\b")).unwrap());
 static OPENING_CUE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)^\W*(no|nope|sorry|actually|wait|i mean|i meant|scratch that|nahi|rather|make that)\b").unwrap()
@@ -212,7 +213,10 @@ fn hits(sentence: &str, vocab: &[String]) -> Vec<Hit> {
     if !rules::hindi_words(sentence).is_empty() {
         out.push(whole(Reason::Hinglish));
     }
-    if sentence.split([',', ';', ':']).any(|c| c.split_whitespace().count() > RUN_ON_WORDS) {
+    if sentence
+        .split([',', ';', ':'])
+        .any(|c| c.split_whitespace().count() > RUN_ON_WORDS)
+    {
         out.push(whole(Reason::RunOn));
     }
     if !sentence.ends_with('?')
@@ -222,7 +226,9 @@ fn hits(sentence: &str, vocab: &[String]) -> Vec<Hit> {
         out.push(whole(Reason::Question));
     }
     let local = |spans: Vec<(usize, usize)>, reason| {
-        spans.into_iter().map(move |(start, end)| Hit { start, end, reason })
+        spans
+            .into_iter()
+            .map(move |(start, end)| Hit { start, end, reason })
     };
     let you_know = YOU_KNOW
         .captures_iter(sentence)
@@ -309,7 +315,10 @@ pub fn parts(text: &str, vocab: &[String]) -> Vec<Part> {
         let words = s.split_whitespace().count();
         if local && words > NARROW_MIN_WORDS {
             let pieces = windows(s, &hits);
-            let sent: usize = pieces.iter().map(|&(x, y)| s[x..y].split_whitespace().count()).sum();
+            let sent: usize = pieces
+                .iter()
+                .map(|&(x, y)| s[x..y].split_whitespace().count())
+                .sum();
             if (sent as f64) < WHOLE_SHARE * words as f64 {
                 for (x, y) in pieces {
                     let (x, y) = trimmed(s, x, y);
@@ -340,7 +349,12 @@ pub fn parts(text: &str, vocab: &[String]) -> Vec<Part> {
         if joins {
             let prev = parts.pop().unwrap();
             let mut all = prev.reasons;
-            all.extend(reasons.into_iter().filter(|r| !all.contains(r)).collect::<Vec<_>>());
+            all.extend(
+                reasons
+                    .into_iter()
+                    .filter(|r| !all.contains(r))
+                    .collect::<Vec<_>>(),
+            );
             parts.push(Part {
                 start: prev.start.min(start),
                 end,
@@ -391,7 +405,10 @@ mod tests {
     use crate::textflow::rules::tests::{examples, vocab};
 
     fn shown(text: &str, parts: &[Part]) -> Vec<(String, bool)> {
-        parts.iter().map(|p| (text[p.start..p.end].to_string(), p.fragment)).collect()
+        parts
+            .iter()
+            .map(|p| (text[p.start..p.end].to_string(), p.fragment))
+            .collect()
     }
 
     /// Texts that must not call the model (no parts) and ones that must,
@@ -425,6 +442,9 @@ mod tests {
             fit_fragment("a way to export it.", "A way to export it."),
             "a way to export it."
         );
-        assert_eq!(fit_fragment("Zubin said, like, hi", "Zubin said hi."), "Zubin said hi");
+        assert_eq!(
+            fit_fragment("Zubin said, like, hi", "Zubin said hi."),
+            "Zubin said hi"
+        );
     }
 }

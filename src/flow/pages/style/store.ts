@@ -78,7 +78,8 @@ const fromBackend = (s: StyleSettings) => ({
   autoCleanup: s.auto_cleanup,
 });
 
-const preview = new URLSearchParams(window.location.search).get("flowPreview") === "1";
+const preview =
+  new URLSearchParams(window.location.search).get("flowPreview") === "1";
 
 const initial: Saved = preview ? DEFAULTS : load();
 

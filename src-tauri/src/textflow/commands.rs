@@ -26,7 +26,12 @@ fn required(value: &str, what: &str) -> Result<String, String> {
 
 fn same(a: &str, b: &str) -> bool {
     if text::has_symbols(a) || text::has_symbols(b) {
-        let exact = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+        let exact = |s: &str| {
+            s.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase()
+        };
         return exact(a) == exact(b);
     }
     text::phrase_words(a) == text::phrase_words(b)
@@ -180,7 +185,10 @@ pub fn update_replacement(
     let from = required(&from, "The word to replace")?;
     let to = to.trim().to_string();
     update_dictionary(&app, &tf, |d| {
-        if d.replacements.iter().any(|r| r.id != id && same(&r.from, &from)) {
+        if d.replacements
+            .iter()
+            .any(|r| r.id != id && same(&r.from, &from))
+        {
             return Err(format!("\"{from}\" already has a replacement"));
         }
         let entry = d
@@ -259,10 +267,7 @@ fn correction_words(text: &str) -> Vec<&str> {
 
 /// Spans where `after` replaced words of `before` (removed, added), from a
 /// word-level diff. Empty for a rewrite: more than half of an 8+ word text changed.
-fn replaced_spans<'a>(
-    before: &[&'a str],
-    after: &[&'a str],
-) -> Vec<(Vec<&'a str>, Vec<&'a str>)> {
+fn replaced_spans<'a>(before: &[&'a str], after: &[&'a str]) -> Vec<(Vec<&'a str>, Vec<&'a str>)> {
     let (n, m) = (before.len(), after.len());
     if n == 0 || m == 0 || (n + 1) * (m + 1) > MAX_DIFF_CELLS {
         return Vec::new();
@@ -336,7 +341,12 @@ fn learn(data: &mut Data, entry_id: i64, before: &str, after: &str) -> Learned {
         }
         let from = removed.join(" ");
         let to = added.join(" ");
-        if data.dictionary.replacements.iter().any(|r| same(&r.from, &from)) {
+        if data
+            .dictionary
+            .replacements
+            .iter()
+            .any(|r| same(&r.from, &from))
+        {
             continue;
         }
         let pending = match data
@@ -358,7 +368,8 @@ fn learn(data: &mut Data, entry_id: i64, before: &str, after: &str) -> Learned {
             pending.entry_ids.push(entry_id);
         }
         if pending.entry_ids.len() >= 2 {
-            data.pending_fixes.retain(|p| !(same(&p.from, &from) && p.to == to));
+            data.pending_fixes
+                .retain(|p| !(same(&p.from, &from) && p.to == to));
             learned.replacements.push((from, to));
         }
     }
@@ -394,12 +405,7 @@ fn learn(data: &mut Data, entry_id: i64, before: &str, after: &str) -> Learned {
 /// Learns from a transcript the user corrected in History: new spellings
 /// become dictionary words, and a fix seen in two dictations becomes a
 /// replacement. Logs counts only, never the words.
-pub fn learn_from_correction(
-    app: &AppHandle,
-    entry_id: i64,
-    before: &str,
-    after: &str,
-) -> Learned {
+pub fn learn_from_correction(app: &AppHandle, entry_id: i64, before: &str, after: &str) -> Learned {
     if replaced_spans(&correction_words(before), &correction_words(after)).is_empty() {
         return Learned::default();
     }
@@ -491,7 +497,10 @@ pub fn update_snippet(
         if s.iter().any(|x| x.id != id && same(&x.trigger, &trigger)) {
             return Err(format!("\"{trigger}\" is already a snippet"));
         }
-        let entry = s.iter_mut().find(|x| x.id == id).ok_or("Snippet not found")?;
+        let entry = s
+            .iter_mut()
+            .find(|x| x.id == id)
+            .ok_or("Snippet not found")?;
         entry.trigger = trigger;
         entry.expansion = expansion;
         Ok(())
@@ -781,7 +790,12 @@ mod tests {
         let l = learn(&mut d, 3, "deploy it on g c p", "deploy it on GCP");
         assert_eq!(l.words, vec!["GCP"]);
 
-        let l = learn(&mut d, 2, "Their going to the e mail", "They're going to the email");
+        let l = learn(
+            &mut d,
+            2,
+            "Their going to the e mail",
+            "They're going to the email",
+        );
         assert!(l.words.is_empty());
     }
 
@@ -793,7 +807,10 @@ mod tests {
             .replacements
             .is_empty());
         let l = learn(&mut d, 2, "is lip pick running", "is Lipik running");
-        assert_eq!(l.replacements, vec![("lip pick".to_string(), "Lipik".to_string())]);
+        assert_eq!(
+            l.replacements,
+            vec![("lip pick".to_string(), "Lipik".to_string())]
+        );
         assert!(d.dictionary.replacements[0].auto_learned);
         assert!(d.pending_fixes.is_empty());
     }

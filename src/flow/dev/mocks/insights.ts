@@ -16,10 +16,24 @@ const TEXTS = [
 
 // Share of the busiest day's words, by days before today.
 const DAY_SHARE: Record<number, number> = {
-  1: 0.3, 2: 0.55, 3: 0.2, 4: 1, 5: 0.6, 6: 0.12, 7: 0.4,
+  1: 0.3,
+  2: 0.55,
+  3: 0.2,
+  4: 1,
+  5: 0.6,
+  6: 0.12,
+  7: 0.4,
   16: 0.5,
-  30: 0.25, 31: 0.7, 32: 0.45, 33: 0.9, 34: 0.15, 35: 0.35, 36: 0.8,
-  37: 0.5, 38: 0.3, 39: 0.6,
+  30: 0.25,
+  31: 0.7,
+  32: 0.45,
+  33: 0.9,
+  34: 0.15,
+  35: 0.35,
+  36: 0.8,
+  37: 0.5,
+  38: 0.3,
+  39: 0.6,
   52: 0.2,
 };
 const BUSIEST_DAY_WORDS = 1400;
@@ -29,7 +43,12 @@ const makeEntries = (): HistoryEntry[] => {
   const entries: HistoryEntry[] = [];
   let id = 5000;
   for (const [ago, share] of Object.entries(DAY_SHARE)) {
-    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - Number(ago), 9);
+    const day = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - Number(ago),
+      9,
+    );
     let words = Math.round(BUSIEST_DAY_WORDS * share);
     let i = 0;
     while (words > 0) {
@@ -70,9 +89,14 @@ const makeInsights = (): Insights => {
   const byDay = new Map<string, number>();
   for (const e of entries) {
     const words = e.transcription_text.split(/\s+/).filter(Boolean).length;
-    byDay.set(localDate(e.timestamp), (byDay.get(localDate(e.timestamp)) ?? 0) + words);
+    byDay.set(
+      localDate(e.timestamp),
+      (byDay.get(localDate(e.timestamp)) ?? 0) + words,
+    );
   }
-  const daily_words = [...byDay].sort(([a], [b]) => a.localeCompare(b)).map(([date, words]) => ({ date, words }));
+  const daily_words = [...byDay]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, words]) => ({ date, words }));
   const total_words = daily_words.reduce((sum, d) => sum + d.words, 0);
   const sample = params.get("insightsData") === "1";
   return {
@@ -95,10 +119,16 @@ const makeInsights = (): Insights => {
 export const handlers: Record<string, MockHandler> = isInsights
   ? {
       get_history_entries: ({ cursor, limit }) => {
-        const from = typeof cursor === "number" ? entries.findIndex((e) => e.id < cursor) : 0;
+        const from =
+          typeof cursor === "number"
+            ? entries.findIndex((e) => e.id < cursor)
+            : 0;
         const size = typeof limit === "number" ? limit : entries.length;
         const page = from < 0 ? [] : entries.slice(from, from + size);
-        return { entries: page, has_more: from >= 0 && from + size < entries.length };
+        return {
+          entries: page,
+          has_more: from >= 0 && from + size < entries.length,
+        };
       },
       get_insights: makeInsights,
     }

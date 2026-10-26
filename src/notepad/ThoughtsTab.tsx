@@ -177,12 +177,15 @@ export const ThoughtsTab = ({
     <>
       {failed && (
         <div className="np-save-error" role="status">
-          <AlertCircle size={14} strokeWidth={1.75} /> Couldn't save. Trying again…
+          <AlertCircle size={14} strokeWidth={1.75} /> Couldn't save. Trying
+          again…
         </div>
       )}
       {showReady ? (
         <p className="np-soft" onClick={() => ref.current?.focus()}>
-          <span>Your summary is ready. Click here to start your own notes.</span>
+          <span>
+            Your summary is ready. Click here to start your own notes.
+          </span>
           <button
             type="button"
             className="np-btn ghost"

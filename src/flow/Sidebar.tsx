@@ -100,10 +100,11 @@ export const Sidebar = ({ fullscreen = false }: { fullscreen?: boolean }) => {
   const openSettings = useFlowStore((s) => s.openSettings);
   const openOverlay = useFlowStore((s) => s.openOverlay);
 
-  const footer: { label: string; Icon: IconComponent; onClick?: () => void }[] = [
-    { label: "Settings", Icon: Settings2, onClick: () => openSettings() },
-    { label: "Help", Icon: LifeBuoy },
-  ];
+  const footer: { label: string; Icon: IconComponent; onClick?: () => void }[] =
+    [
+      { label: "Settings", Icon: Settings2, onClick: () => openSettings() },
+      { label: "Help", Icon: LifeBuoy },
+    ];
 
   return (
     <aside className="fk-sidebar absolute inset-y-0 left-0 flex flex-col overflow-hidden bg-[var(--fk-bg)]">
@@ -127,7 +128,9 @@ export const Sidebar = ({ fullscreen = false }: { fullscreen?: boolean }) => {
             <LipikMark size={22} />
           </button>
         )}
-        <nav className={`flex flex-col ${rail ? "gap-[4px]" : "mt-[8px] gap-[2px]"}`}>
+        <nav
+          className={`flex flex-col ${rail ? "gap-[4px]" : "mt-[8px] gap-[2px]"}`}
+        >
           {NAV_ITEMS.map(({ id, label, Icon, iconSize }) => (
             <NavItem
               key={id}
@@ -142,9 +145,17 @@ export const Sidebar = ({ fullscreen = false }: { fullscreen?: boolean }) => {
         </nav>
         <div className="flex-1" />
         {!rail && <HoldHint />}
-        <div className={`flex flex-col border-t border-[var(--fk-border)] pb-[12px] pt-[8px] ${rail ? "gap-[4px]" : "gap-[2px]"}`}>
+        <div
+          className={`flex flex-col border-t border-[var(--fk-border)] pb-[12px] pt-[8px] ${rail ? "gap-[4px]" : "gap-[2px]"}`}
+        >
           {footer.map(({ label, Icon, onClick }) => (
-            <NavItem key={label} Icon={Icon} label={label} rail={rail} onClick={onClick} />
+            <NavItem
+              key={label}
+              Icon={Icon}
+              label={label}
+              rail={rail}
+              onClick={onClick}
+            />
           ))}
         </div>
       </div>
@@ -160,6 +171,8 @@ const Brand = ({ onClick }: { onClick: () => void }) => (
     className="flex items-center gap-[7px] text-[var(--fk-text)]"
   >
     <LipikMark size={20} className="shrink-0 text-[var(--fk-accent)]" />
-    <span className="fk-display text-[18px] font-semibold leading-none">{APP_NAME}</span>
+    <span className="fk-display text-[18px] font-semibold leading-none">
+      {APP_NAME}
+    </span>
   </button>
 );

@@ -33,7 +33,10 @@ export const Header = ({ meeting, onRename, onFolder }: Props) => (
         <>
           <span aria-hidden>·</span>
           <span className="np-num">
-            {Math.max(1, Math.round((meeting.end_ms - meeting.start_ms) / 60_000))}{" "}
+            {Math.max(
+              1,
+              Math.round((meeting.end_ms - meeting.start_ms) / 60_000),
+            )}{" "}
             min
           </span>
         </>

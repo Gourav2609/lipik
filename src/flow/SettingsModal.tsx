@@ -126,7 +126,11 @@ export const SettingsModal = () => {
           {GROUPS.map((group, i) => (
             <div
               key={group[0].id}
-              className={i === 0 ? "mt-[20px]" : "mt-[12px] border-t border-[var(--fk-border)] pt-[12px]"}
+              className={
+                i === 0
+                  ? "mt-[20px]"
+                  : "mt-[12px] border-t border-[var(--fk-border)] pt-[12px]"
+              }
             >
               <div className="flex flex-col gap-[2px]">
                 {group.map((entry) => (

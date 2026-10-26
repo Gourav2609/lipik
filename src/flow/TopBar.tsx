@@ -98,7 +98,11 @@ export const TopBar = () => {
 };
 
 /** Stand-in for the native macOS window buttons, drawn only in preview mode. */
-export const FakeTrafficLights = ({ barHeight = 52 }: { barHeight?: number }) => (
+export const FakeTrafficLights = ({
+  barHeight = 52,
+}: {
+  barHeight?: number;
+}) => (
   <div
     className="pointer-events-none absolute left-[16px] z-[60] flex gap-[8px]"
     style={{ top: (barHeight - 12) / 2 }}

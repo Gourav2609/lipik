@@ -35,18 +35,20 @@ export const HeroBanner = ({
     style={{ background, ...style }}
   >
     {art && (
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-[40%]">{art}</div>
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-[40%]">
+        {art}
+      </div>
     )}
     <div className={`relative max-w-[560px] ${bodyClassName}`}>
-      <h2 className={`fk-display ${titleClassName}`}>
-        {title}
-      </h2>
+      <h2 className={`fk-display ${titleClassName}`}>{title}</h2>
       {subtitle && (
         <p className="mt-[6px] text-[14.5px] leading-[21px] text-[var(--fk-text-muted)]">
           {subtitle}
         </p>
       )}
-      {actions && <div className="mt-[16px] flex flex-wrap gap-[8px]">{actions}</div>}
+      {actions && (
+        <div className="mt-[16px] flex flex-wrap gap-[8px]">{actions}</div>
+      )}
     </div>
     {onClose && (
       <button

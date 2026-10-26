@@ -53,11 +53,7 @@ export const TopBar = (p: Props) => {
     }
   }, [menu]);
 
-  const item = (
-    icon: ReactNode,
-    label: string,
-    run: () => void,
-  ) => (
+  const item = (icon: ReactNode, label: string, run: () => void) => (
     <button
       type="button"
       className="np-menu-item"
@@ -105,7 +101,11 @@ export const TopBar = (p: Props) => {
           <Ellipsis size={18} strokeWidth={1.75} />
         </button>
         {menu && (
-          <div className="np-menu" style={{ top: 34, right: 0, transformOrigin: "top right" }} role="menu">
+          <div
+            className="np-menu"
+            style={{ top: 34, right: 0, transformOrigin: "top right" }}
+            role="menu"
+          >
             {!confirm ? (
               <>
                 {item(

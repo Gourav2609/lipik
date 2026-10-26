@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import type { InsightsStats } from "./useInsightsStats";
 
 /** `null` = no dictation has recorded this value yet. */
-const fmt = (n: number | null) => (n === null ? "—" : n.toLocaleString("en-US"));
+const fmt = (n: number | null) =>
+  n === null ? "—" : n.toLocaleString("en-US");
 
 const PENDING = "Shows after your next dictation";
 
@@ -16,8 +17,12 @@ const Figure = ({
   note: ReactNode;
 }) => (
   <div className="min-w-0 border-l border-[var(--fk-border)] px-[24px] first:border-l-0 first:pl-0">
-    <div className="fk-display fk-num text-[32px] leading-[36px]">{fmt(value)}</div>
-    <div className="mt-[8px] text-[14.5px] font-medium leading-[20px]">{label}</div>
+    <div className="fk-display fk-num text-[32px] leading-[36px]">
+      {fmt(value)}
+    </div>
+    <div className="mt-[8px] text-[14.5px] font-medium leading-[20px]">
+      {label}
+    </div>
     <div className="mt-[2px] truncate text-[13px] leading-[18px] text-[var(--fk-text-muted)]">
       {note}
     </div>
@@ -67,7 +72,8 @@ export const StatStrip = ({
           PENDING
         ) : (
           <>
-            <span className="fk-num">{fmt(dictionaryFixes)}</span> spelled from your vocabulary
+            <span className="fk-num">{fmt(dictionaryFixes)}</span> spelled from
+            your vocabulary
           </>
         )
       }

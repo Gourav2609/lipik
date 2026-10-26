@@ -3,7 +3,12 @@ import { ListGroup, Toggle } from "../../ui";
 import { CLEANUP_LEVELS, CLEANUP_SPOKEN } from "./data";
 import { useStyleStore } from "./store";
 
-const STEP: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+const STEP: Record<string, number> = {
+  ArrowDown: 1,
+  ArrowRight: 1,
+  ArrowUp: -1,
+  ArrowLeft: -1,
+};
 
 export const AutoCleanup = () => {
   const enabled = useStyleStore((s) => s.autoCleanup);
@@ -25,7 +30,10 @@ export const AutoCleanup = () => {
     <section aria-labelledby="tone-cleanup">
       <div className="flex items-start gap-[16px]">
         <div className="flex-1">
-          <h2 id="tone-cleanup" className="flex items-center text-[16px] font-semibold leading-[22px]">
+          <h2
+            id="tone-cleanup"
+            className="flex items-center text-[16px] font-semibold leading-[22px]"
+          >
             Clean up as you speak
             <span className="ml-[8px] rounded-[4px] bg-[var(--fk-inverse-bg)] px-[6px] py-[4px] text-[11px] font-semibold leading-none text-[var(--fk-inverse-text)]">
               Beta
@@ -35,7 +43,11 @@ export const AutoCleanup = () => {
             Takes out filler words and false starts before the text is typed.
           </p>
         </div>
-        <Toggle checked={enabled} onChange={setEnabled} label="Clean up as you speak" />
+        <Toggle
+          checked={enabled}
+          onChange={setEnabled}
+          label="Clean up as you speak"
+        />
       </div>
 
       <div
@@ -70,10 +82,14 @@ export const AutoCleanup = () => {
                 <span
                   className={`mt-[2px] flex h-[18px] w-[18px] items-center justify-center rounded-full border transition-colors duration-[var(--fk-t-base)] ${active ? "border-[var(--fk-accent)]" : "border-[var(--fk-border-strong)]"}`}
                 >
-                  {active && <span className="h-[8px] w-[8px] rounded-full bg-[var(--fk-accent)]" />}
+                  {active && (
+                    <span className="h-[8px] w-[8px] rounded-full bg-[var(--fk-accent)]" />
+                  )}
                 </span>
                 <span>
-                  <span className="block text-[15px] font-semibold leading-[22px]">{l.name}</span>
+                  <span className="block text-[15px] font-semibold leading-[22px]">
+                    {l.name}
+                  </span>
                   <span className="mt-[2px] block text-[13px] leading-[18px] text-[var(--fk-text-muted)]">
                     {l.description}
                   </span>

@@ -220,11 +220,7 @@ export const NotesSection = ({
   const [query, setQuery] = useState("");
   const [folder, setFolder] = useState<string | null>(null);
   const inFolder = tab === "folders" ? folder : null;
-  const found = useNoteQuery(
-    query,
-    inFolder,
-    notes.data,
-  );
+  const found = useNoteQuery(query, inFolder, notes.data);
   const actions: RowActions = {
     folders: folders.data,
     selectedId,

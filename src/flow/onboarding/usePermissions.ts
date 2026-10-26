@@ -42,12 +42,13 @@ let shortcutsReady = false;
 const initShortcuts = () => {
   if (shortcutsReady || isFlowPreview) return;
   shortcutsReady = true;
-  Promise.all([commands.initializeEnigo(), commands.initializeShortcuts()]).catch(
-    (e) => {
-      shortcutsReady = false;
-      console.warn("Failed to initialize shortcuts:", e);
-    },
-  );
+  Promise.all([
+    commands.initializeEnigo(),
+    commands.initializeShortcuts(),
+  ]).catch((e) => {
+    shortcutsReady = false;
+    console.warn("Failed to initialize shortcuts:", e);
+  });
 };
 
 const PANES: Record<PermissionKind, string> = {
