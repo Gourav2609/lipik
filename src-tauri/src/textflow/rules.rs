@@ -152,7 +152,7 @@ fn ordinal(word: &str) -> Option<u64> {
 }
 
 /// Any number word; "oh" is the zero of "nine oh five".
-fn number_word(word: &str) -> Option<u64> {
+pub(super) fn number_word(word: &str) -> Option<u64> {
     cardinal(word)
         .or_else(|| (word == "oh").then_some(0))
         .or_else(|| ordinal(word))
@@ -345,7 +345,7 @@ fn dropped_words(transcript: &str, reply: &str) -> Vec<String> {
     missing
 }
 
-fn hindi_words(text: &str) -> HashSet<String> {
+pub(super) fn hindi_words(text: &str) -> HashSet<String> {
     words(text)
         .into_iter()
         .filter(|w| {
@@ -703,7 +703,7 @@ fn vocab_case(text: &str, vocab: &[String]) -> String {
 }
 
 static SENTENCE_GOES_ON: Lazy<Regex> = Lazy::new(|| Regex::new(r"[.?!]\s+\S").unwrap());
-static OPENER: Lazy<Regex> = Lazy::new(|| {
+pub(super) static OPENER: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)^((hey|hi|hello|okay|ok|so)\b[,]?\s+([A-Z][a-z]+,\s+)?)+").unwrap()
 });
 const QUESTION_AUX: &str = "(is|are|was|were|am|do|does|did|can|could|will|would|should|shall|have|has|time|much|many|long|often|far|about)";
@@ -721,7 +721,7 @@ static QUESTION_WORD_MIDDLE: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-fn starts_like_question(text: &str) -> bool {
+pub(super) fn starts_like_question(text: &str) -> bool {
     QUESTION_START.is_match(text)
         || QUESTION_WORD_MIDDLE
             .captures(text)

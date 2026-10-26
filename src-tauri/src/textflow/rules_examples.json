@@ -1,5 +1,5 @@
 {
- "_about": "Examples for the clean-up rules (rules.rs) and checks, run by the Rust tests and by training/cleanup/guards.py. vocab is the dictionary every example uses.",
+ "_about": "Examples for the clean-up rules (rules.rs), checks and the parts sent to the model (gate.rs; parts = [rules text, [[part, is a piece inside a sentence]]], [] = no model call), run by the Rust tests and by training/cleanup/guards.py. vocab is the dictionary every example uses.",
  "vocab": [
   "Quorvia",
   "Brightlane",
@@ -697,6 +697,184 @@
    "ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi",
    "\"\"",
    "Ek kaam karo Zubin ko call karo aur pucho ki budget final hua ya nahi"
+  ]
+ ],
+ "parts": [
+  [
+   "Quick update on the migration. We moved about half of the tables last night and the rest should be done by Thursday.",
+   []
+  ],
+  [
+   "I would like to see the report before the call, and I think it looks good.",
+   []
+  ],
+  [
+   "The Quorvia demo went well yesterday and Meher Kapadia signed the renewal.",
+   []
+  ],
+  [
+   "We sat there for almost two hours just talking.",
+   []
+  ],
+  [
+   "Do you know if the contract got signed?",
+   []
+  ],
+  [
+   "It looks like the build is green.",
+   []
+  ],
+  [
+   "Please keep the main branch frozen until the release is out.",
+   []
+  ],
+  [
+   "Can you check the logs?",
+   []
+  ],
+  [
+   "Can you move the call to Tuesday, actually Wednesday?",
+   [
+    [
+     "Can you move the call to Tuesday, actually Wednesday?",
+     false
+    ]
+   ]
+  ],
+  [
+   "Let's do the review call on Thursday. Actually no, Friday afternoon works better for me. Thanks.",
+   [
+    [
+     "Let's do the review call on Thursday. Actually no, Friday afternoon works better for me.",
+     false
+    ]
+   ]
+  ],
+  [
+   "The dashboard is like really slow.",
+   [
+    [
+     "The dashboard is like really slow.",
+     false
+    ]
+   ]
+  ],
+  [
+   "Hey team, the client call went well today, they liked the new onboarding flow and the pricing page, the main thing they asked for is, you know, a way to export reports as a spreadsheet. I told them we would look at it next sprint.",
+   [
+    [
+     "the main thing they asked for is, you know, a way to export reports as a spreadsheet.",
+     true
+    ]
+   ]
+  ],
+  [
+   "We should, we should probably push the release to Friday.",
+   [
+    [
+     "We should, we should probably push the release to Friday.",
+     false
+    ]
+   ]
+  ],
+  [
+   "The refund was two hundred dollars.",
+   [
+    [
+     "The refund was two hundred dollars.",
+     false
+    ]
+   ]
+  ],
+  [
+   "We use Quorvia and superbase for the app.",
+   [
+    [
+     "We use Quorvia and superbase for the app.",
+     false
+    ]
+   ]
+  ],
+  [
+   "The graph ql endpoint is slow.",
+   [
+    [
+     "The graph ql endpoint is slow.",
+     false
+    ]
+   ]
+  ],
+  [
+   "Can you check the logs.",
+   [
+    [
+     "Can you check the logs.",
+     false
+    ]
+   ]
+  ],
+  [
+   "Three things for today. Number one, finish the deck. Number two, call the vendor.",
+   [
+    [
+     "Three things for today. Number one, finish the deck. Number two, call the vendor.",
+     false
+    ]
+   ]
+  ],
+  [
+   "Thanks for the report period it looks good.",
+   [
+    [
+     "Thanks for the report period it looks good.",
+     false
+    ]
+   ]
+  ],
+  [
+   "Add an endpoint for the orders a p i.",
+   [
+    [
+     "Add an endpoint for the orders a p i.",
+     false
+    ]
+   ]
+  ],
+  [
+   "So the plan for the weekend is to finish the garden on Saturday morning and then go to the market in the afternoon to pick up the vegetables.",
+   [
+    [
+     "So the plan for the weekend is to finish the garden on Saturday morning and then go to the market in the afternoon to pick up the vegetables.",
+     false
+    ]
+   ]
+  ],
+  [
+   "Main kal aaunga, theek hai.",
+   [
+    [
+     "Main kal aaunga, theek hai.",
+     false
+    ]
+   ]
+  ],
+  [
+   "We moved half the tables. The rest is done by Thursday. Is the report ready.",
+   [
+    [
+     "Is the report ready.",
+     false
+    ]
+   ]
+  ],
+  [
+   "Let's meet at eleven.",
+   [
+    [
+     "Let's meet at eleven.",
+     false
+    ]
+   ]
   ]
  ]
 }

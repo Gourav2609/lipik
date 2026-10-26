@@ -584,6 +584,8 @@ def _sounds_like(word, heard):
 
 
 def relevant_vocabulary(vocab, text):
+    if len(vocab) <= MAX_VOCABULARY:
+        return list(vocab)
     said = _phrase_words(text)
     heard = set(said)
     for n in (2, 3):
@@ -631,6 +633,234 @@ def model_input(raw, vocab=()):
     return apply(fillers(raw), vocab)
 
 
+# ---------- which parts need the model (gate.rs) ----------
+
+GATE_CUE = re.compile(r"(?i)\b(no|nope|sorry|actually|wait|i mean|i meant|meant|scratch that|nahi|rather|make that)\b")
+GATE_OPENING_CUE = re.compile(r"(?i)^\W*(no|nope|sorry|actually|wait|i mean|i meant|scratch that|nahi|rather|make that)\b")
+GATE_YOU_KNOW = re.compile(r"(?i)(\b(do|did|don't|does|would|if)\s+)?\byou know\b")
+GATE_LIKE = re.compile(r"(?i)(^|[,;]\s*|\b(is|was|were|are|be|been|it's|that's|he's|she's|they're|we're|i'm)\s+)like\b|\blike\s*,|\blike\s+(really|so|super|totally|literally|around|about|maybe|just|kind|honestly)\b")
+GATE_FILLER = re.compile(r"(?i)\b(hum|hmm+|uh+|um+|erm)\b")
+GATE_LIST = re.compile(r"(?i)\b(bullet|number (one|1|won)|firstly|secondly|point (one|1))\b|(^|\s)(1|one)[.):]\s[\s\S]*\s(2|two)[.):]?\s|(^|\s)2[.):]?\s[\s\S]*\s3[.):]?\s|\bone,[\s\S]*\btwo,[\s\S]*\bthree\b")
+GATE_FIRST_SECOND = re.compile(r"(?i)\bfirst\b[\s\S]*\bsecond(ly)?\b,")
+GATE_SPOKEN_MARK = re.compile(r"(?i)\b(comma|period|full stop|question mark|exclamation (mark|point)|new ?line|new paragraph|colon|semicolon|open bracket|close bracket|dash|dot|slash|underscore|at the rate)\b")
+GATE_UNIT = re.compile(r"(?i)^(percent|per|dollars?|bucks|rupees?|lakhs?|crores?|hundred|thousand|million|billion|pm|am|o'clock)$")
+GATE_TIME_WORD = re.compile(r"(?i)^(at|by|around|till|until|from)$")
+GATE_LATE_QUESTION = re.compile(r"(?i),\s*(can|could|would|will|do|did)\s+(you|we|someone|anyone)\b")
+GATE_SENTENCE = re.compile(r"[^.?!\n]+(?:[.?!]+|$)")
+GATE_TOKEN = re.compile(r"[^\W_]+(?:['’][^\W_]+)*")
+GATE_CHUNK = re.compile(r"[^,;:]+")
+GATE_RUN_ON_WORDS = 20
+# A sentence longer than this whose only problems are single words or short phrases
+# (fillers, repeats, numbers, spelled letters, dictionary near misses) sends only the
+# comma-separated pieces around them.
+NARROW_MIN_WORDS = 16
+WHOLE_SHARE = 0.7
+
+
+def _tokens(text):
+    return [(m.start(), m.end(), m[0].lower().replace("’", "'")) for m in GATE_TOKEN.finditer(text)]
+
+
+def _number_hits(sentence):
+    ts = _tokens(sentence)
+    for i, (a, b, w) in enumerate(ts):
+        nxt = ts[i + 1][2] if i + 1 < len(ts) else ""
+        prev = ts[i - 1][2] if i else ""
+        n = number_word(w)
+        if n is not None:
+            if n > 10 or GATE_UNIT.match(nxt) or GATE_TIME_WORD.match(prev):
+                yield a, b
+        elif w.isdigit() and ((GATE_UNIT.match(nxt) and nxt not in ("am", "pm"))
+                              or (len(w) in (3, 4) and GATE_TIME_WORD.match(prev))):
+            yield a, b
+
+
+def _letter_hits(sentence):
+    """Spelled-out letters: "a p i", "graph q l", "n variable"."""
+    ts = [(m.start(), m.end(), m[0].lower()) for m in re.finditer(r"[^\s]+", sentence)]
+    single = [len(w.strip(".,;:!?\"()")) == 1 and w.strip(".,;:!?\"()").isalpha() for _, _, w in ts]
+    for i, (a, b, w) in enumerate(ts):
+        if single[i] and (w.strip(".,;:!?\"()") not in ("a", "i") or (i + 1 < len(ts) and single[i + 1])):
+            yield a, b
+
+
+def _repeat_hits(sentence):
+    ts = _tokens(sentence)
+    ws = [w for _, _, w in ts]
+    for n in (1, 2, 3):
+        for i in range(len(ws) - 2 * n + 1):
+            if ws[i:i + n] == ws[i + n:i + 2 * n] and not (n == 1 and ws[i].isdigit()):
+                yield ts[i][0], ts[i + 2 * n - 1][1]
+
+
+def _vocab_hits(sentence, vocab):
+    """A word that looks like a dictionary word but is not spelled as one: one change per
+    2 letters for single words (also containing it or contained in it), one per 3 letters
+    for two or three words run together, as the vocabulary match does."""
+    entry_words = {w for e in vocab for w in _phrase_words(e)}
+    ts = [t for t in _tokens(sentence) if t[2] not in entry_words]
+    uncommon = [t for t in ts if len(t[2]) >= 4 and t[2] not in COMMON_WORDS]
+    for w in entry_words:
+        if len(w) < 4:
+            continue
+        for n in (2, 3):
+            for i in range(len(ts) - n + 1):
+                if _levenshtein(w, "".join(t[2] for t in ts[i:i + n])) * 3 <= len(w):
+                    yield ts[i][0], ts[i + n - 1][1]
+        if w in COMMON_WORDS:
+            continue
+        for a, b, h in uncommon:
+            if w in h or h in w or _levenshtein(w, h) * 2 <= len(w):
+                yield a, b
+
+
+def gate_hits(sentence, vocab=()):
+    """What in this sentence (rules text) needs the model: [(start, end, reason)].
+    A hit covering the whole sentence means the sentence goes whole."""
+    whole = len(sentence)
+    hits = []
+    if GATE_CUE.search(sentence):
+        hits.append((0, whole, "correction"))
+    if GATE_SPOKEN_MARK.search(sentence):
+        hits.append((0, whole, "spoken mark"))
+    if set(words(sentence)) & HINDI_WORDS:
+        hits.append((0, whole, "hinglish"))
+    if any(len(chunk.split()) > GATE_RUN_ON_WORDS for chunk in re.split(r"[,;:]", sentence)):
+        hits.append((0, whole, "run-on"))
+    if not sentence.rstrip().endswith("?") and (
+            _starts_like_question(OPENER.sub("", sentence.strip(), count=1)) or GATE_LATE_QUESTION.search(sentence)):
+        hits.append((0, whole, "question"))
+    hits += [(m.start(), m.end(), "filler") for m in GATE_YOU_KNOW.finditer(sentence) if m[1] is None]
+    hits += [(m.start(), m.end(), "filler") for m in GATE_LIKE.finditer(sentence)]
+    hits += [(m.start(), m.end(), "filler") for m in GATE_FILLER.finditer(sentence)]
+    hits += [(a, b, "repeat") for a, b in _repeat_hits(sentence)]
+    hits += [(a, b, "number") for a, b in _number_hits(sentence)]
+    hits += [(a, b, "letters") for a, b in _letter_hits(sentence)]
+    hits += [(a, b, "vocabulary") for a, b in _vocab_hits(sentence, vocab)]
+    return hits
+
+
+def gate_reason(sentence, vocab=()):
+    """The first reason this sentence needs the model, or None."""
+    hits = gate_hits(sentence, vocab)
+    return hits[0][2] if hits else None
+
+
+def _windows(sentence, hits):
+    """(start, end) of the comma-separated pieces around each hit, one piece either side."""
+    chunks = [(m.start(), m.end()) for m in GATE_CHUNK.finditer(sentence) if m[0].strip()]
+    out = []
+    for a, b, _ in hits:
+        i = next(k for k, (s, e) in enumerate(chunks) if a < e)
+        j = next((k for k, (s, e) in enumerate(chunks) if b <= e), len(chunks) - 1)
+        lo, hi = chunks[max(0, i - 1)][0], chunks[min(len(chunks) - 1, j + 1)][1]
+        if out and lo <= out[-1][1] + 1:
+            out[-1] = (out[-1][0], max(out[-1][1], hi))
+        else:
+            out.append((lo, hi))
+    return out
+
+
+def model_parts(text, vocab=()):
+    """[(start, end, reasons, fragment)]: the parts of `text` (rules text) the model should
+    clean, in order. Empty: nothing needs the model. A list sends the whole text. A sentence
+    starting with a correction ("Actually no, ...") brings the sentence before it. A
+    fragment is a piece inside a sentence: it keeps its first letter's case and gets no
+    end mark."""
+    if GATE_LIST.search(text) or GATE_FIRST_SECOND.search(text):
+        return [(0, len(text), "list", False)]
+    sents = [(m.start(), m.end()) for m in GATE_SENTENCE.finditer(text) if m[0].strip()]
+    parts = []
+    for k, (a, b) in enumerate(sents):
+        s = text[a:b]
+        lead = len(s) - len(s.lstrip())
+        a, s = a + lead, s.strip()
+        b = a + len(s)
+        hits = gate_hits(s, vocab)
+        if not hits:
+            continue
+        reasons = "+".join(dict.fromkeys(h[2] for h in hits))
+        local = all(h[1] - h[0] < len(s) for h in hits)
+        if local and len(s.split()) > NARROW_MIN_WORDS:
+            wins = _windows(s, hits)
+            if sum(len(s[x:y].split()) for x, y in wins) < WHOLE_SHARE * len(s.split()):
+                for x, y in wins:
+                    piece = s[x:y]
+                    x += len(piece) - len(piece.lstrip())
+                    y = x + len(piece.strip())
+                    parts.append((a + x, a + y, reasons, not (x == 0 and y == len(s))))
+                continue
+        if any(h[2] == "correction" for h in hits) and GATE_OPENING_CUE.match(s) and k:
+            a = sents[k - 1][0] + len(text[sents[k - 1][0]:sents[k - 1][1]]) - len(text[sents[k - 1][0]:sents[k - 1][1]].lstrip())
+        if parts and (a < parts[-1][1] or (not parts[-1][3] and a <= parts[-1][1] + 1
+                                             and "\n" not in text[parts[-1][1]:a])):
+            pa, _, pr, _ = parts.pop()
+            parts.append((min(pa, a), b, "+".join(dict.fromkeys(pr.split("+") + reasons.split("+"))), False))
+        else:
+            parts.append((a, b, reasons, False))
+    return parts
+
+
+def model_spans(text, vocab=()):
+    return [(a, b, why) for a, b, why, _ in model_parts(text, vocab)]
+
+
+def end_mark(text):
+    """Rules text pasted without the model gets a final period when it ends in a word."""
+    t = text.rstrip()
+    return t + "." if t and (t[-1].isalnum() or t[-1] in "\"')") else text
+
+
+def fit_fragment(core, reply):
+    """A piece from inside a sentence keeps its first letter's case and gets no end mark."""
+    if core[:1].islower() and reply[:1] == core[:1].upper():
+        reply = reply[:1].lower() + reply[1:]
+    if not core.endswith((".", "!", "?")):
+        reply = reply.rstrip(".!?")
+    return reply
+
+
+def clean_up_parts(raw, vocab, call, whole_share=WHOLE_SHARE):
+    """The gated path: (text to paste, why, model calls). `call(text)` returns the model's
+    reply or None. No part needs the model: rules text with a final period. The parts
+    make up most of the words: one call with the whole text, as before. Otherwise one
+    call per part, each checked on its own."""
+    transcript = fillers(raw)
+    if not any(c.isalnum() for c in transcript):
+        return transcript, "no words", 0
+    rules_text = apply(transcript, vocab)
+    if len(transcript.split()) < MIN_MODEL_WORDS:
+        return rules_text, "short: rules", 0
+    parts = model_parts(rules_text, vocab)
+    if not parts:
+        return end_mark(rules_text), "gated: rules", 0
+    sent = sum(len(rules_text[a:b].split()) for a, b, _, _ in parts)
+    if sent >= whole_share * len(rules_text.split()):
+        reply = call(rules_text)
+        if reply is None:
+            return rules_text, "no reply: rules", 1
+        text, why = accept(transcript, reply, rules_text, vocab)
+        return text, why, 1
+    out, pos, verdicts = [], 0, []
+    for a, b, _, fragment in parts:
+        core = rules_text[a:b]
+        reply = call(core)
+        reply = strip_wrapping(reply) if reply is not None else None
+        if not reply:
+            cleaned, why = core, "no reply"
+        elif fragment:
+            reply = fit_fragment(core, reply)
+            why = check(core, reply, vocab)
+            cleaned, why = (core, "rejected: " + why) if why else (reply, "cleaned")
+        else:
+            cleaned, why = accept(core, reply, core, vocab)
+        verdicts.append(why.split(":")[0] + (" (piece)" if fragment else ""))
+        out.append(rules_text[pos:a] + cleaned)
+        pos = b
+    out.append(rules_text[pos:])
+    return end_mark("".join(out)), "parts: " + ", ".join(verdicts), len(parts)
+
+
 # ---------- the shared examples ----------
 
 def _test():
@@ -658,6 +888,8 @@ def _test():
         expect("apply", apply(t, vocab), want, t)
     for t, want in EXAMPLES["fillers"]:
         expect("fillers + apply", apply(fillers(t), vocab), want, t)
+    for t, want in EXAMPLES["parts"]:
+        expect("model_parts", [[t[a:b], f] for a, b, _, f in model_parts(t, vocab)], want, t)
     for t, r, want in EXAMPLES["paste"]:
         expect("accept", accept(t, r, apply(t, vocab), vocab)[0], want, (t, r))
     print(f"{n - bad}/{n} examples pass")

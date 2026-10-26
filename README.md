@@ -89,6 +89,14 @@ The build output is in `src-tauri/target/release/bundle/`. [BUILD.md](BUILD.md)
 has more detail, including the files the app expects next to it during
 development.
 
+## Website
+
+The site at [lipik.refflux.dev](https://lipik.refflux.dev) lives in
+[`website/`](website): plain HTML, CSS and JavaScript, no build step. Every
+change merged to `main` that touches `website/` is deployed by
+`.github/workflows/website.yml`. To preview it locally, run
+`python3 -m http.server -d website 8742` and open http://127.0.0.1:8742.
+
 ## Credits
 
 Lipik is built on [Handy](https://github.com/cjpais/Handy) by CJ Pais (MIT).

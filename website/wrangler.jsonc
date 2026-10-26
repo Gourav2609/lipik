@@ -1,0 +1,6 @@
+{
+  "name": "lipik-site",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "." },
+  "routes": [{ "pattern": "lipik.refflux.dev", "custom_domain": true }]
+}

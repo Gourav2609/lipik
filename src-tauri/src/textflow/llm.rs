@@ -99,22 +99,28 @@ pub async fn chat(
     let context = loaded_context(endpoint, needed)
         .await
         .map_or(needed, |n| n.max(needed));
-    chat_messages(endpoint, &messages, context, timeout).await
+    chat_messages(endpoint, &messages, context, timeout, None).await
 }
 
-/// One chat request with the given turns and context size.
+/// One chat request with the given turns and context size, and at most
+/// `max_tokens` in the reply when given.
 pub async fn chat_messages(
     endpoint: &Endpoint,
     messages: &[Message],
     context: u32,
     timeout: Duration,
+    max_tokens: Option<u32>,
 ) -> Result<String, String> {
+    let mut options = json!({ "temperature": 0.2, "num_ctx": context });
+    if let Some(n) = max_tokens {
+        options["num_predict"] = json!(n);
+    }
     let body = json!({
         "model": endpoint.model,
         "stream": false,
         "think": false,
         "keep_alive": KEEP_ALIVE,
-        "options": { "temperature": 0.2, "num_ctx": context },
+        "options": options,
         "messages": messages,
     });
     let request = async {
@@ -168,7 +174,7 @@ pub async fn loaded_context(endpoint: &Endpoint, needed: u32) -> Option<u32> {
 /// its prompt cache and the real clean-up only reads the new words.
 pub fn warm_up(app: &AppHandle) {
     let endpoint = endpoint(app);
-    let messages = super::pipeline::warm_up_messages();
+    let messages = super::pipeline::warm_up_messages(app);
     tauri::async_runtime::spawn(async move {
         // Keep a larger size the model already has (after a Notetaker summary
         // or a long dictation) instead of reloading it smaller.

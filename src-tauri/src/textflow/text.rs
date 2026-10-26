@@ -42,6 +42,11 @@ fn tokens(text: &str) -> Vec<Token> {
     out
 }
 
+/// Word tokens with their byte positions: (start, end, lowercased word).
+pub fn word_spans(text: &str) -> Vec<(usize, usize, String)> {
+    tokens(text).into_iter().map(|t| (t.start, t.end, t.lower)).collect()
+}
+
 /// Lowercased word tokens of a phrase, as used for matching.
 pub fn phrase_words(phrase: &str) -> Vec<String> {
     tokens(phrase).into_iter().map(|t| t.lower).collect()

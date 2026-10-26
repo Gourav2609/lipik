@@ -2,7 +2,7 @@
 //! optional clean-up and optional auto-applied transform.
 
 use super::store::{StyleCategory, StyleKind, TextFlow, Transform};
-use super::{context, llm, rules, text};
+use super::{context, gate, llm, rules, text};
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -233,9 +233,21 @@ fn cleanup_messages(
     messages
 }
 
-/// What the warm-up sends: the same fixed start as every clean-up.
-pub(super) fn warm_up_messages() -> Vec<llm::Message> {
-    cleanup_messages("Notes", StyleKind::Formal, &[], false, "ok")
+/// What the warm-up sends: the same start as this dictation's clean-up, up to
+/// the words (app, dictionary and style), so Ollama has all of it cached and
+/// the real request only reads the dictation. A dictionary too big to send
+/// whole is left out, since the words sent depend on the dictation.
+pub(super) fn warm_up_messages(app: &AppHandle) -> Vec<llm::Message> {
+    let Some(tf) = app.try_state::<TextFlow>() else {
+        return cleanup_messages("Notes", StyleKind::Formal, &[], false, "ok");
+    };
+    let target = Target::live();
+    let (kind, vocabulary) = tf.read(|d| {
+        let words: Vec<String> = d.dictionary.words.iter().map(|w| w.word.clone()).collect();
+        (d.style.for_category(target.category()), words)
+    });
+    let vocabulary = if vocabulary.len() <= MAX_VOCABULARY { vocabulary } else { Vec::new() };
+    cleanup_messages(&target.label(), kind, &vocabulary, false, "ok")
 }
 
 fn strip_wrapping(out: &str) -> &str {
@@ -264,9 +276,11 @@ fn auto_apply_transform(tf: &TextFlow) -> Option<Transform> {
 }
 
 /// Clean-up: the rules step, then for dictations of 8 or more words the
-/// local model, whose reply is kept only when it passes `rules::check`.
-/// Whenever the model is skipped, fails or is rejected, the rules text is
-/// used. `None` when clean-up is off or there are no words.
+/// local model, on the parts that need it (`gate`), whose reply is kept only
+/// when it passes `rules::check`. When nothing needs the model, the rules
+/// text is pasted with a final period. Whenever the model is skipped, fails
+/// or is rejected, the rules text is used. `None` when clean-up is off or
+/// there are no words.
 pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> Option<String> {
     let tf = app.try_state::<TextFlow>()?;
     let (style, vocabulary) = tf.read(|d| {
@@ -285,21 +299,34 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
     if text::count_words(&words_only) < MIN_MODEL_WORDS {
         return Some(fallback());
     }
+    let kind = style.for_category(target.category());
+    // Other styles change punctuation and capitals everywhere, so the whole
+    // text always goes to the model.
+    let parts = if kind == StyleKind::Formal {
+        gate::parts(&rules_text, &vocabulary)
+    } else {
+        vec![whole_part(&rules_text)]
+    };
+    if parts.is_empty() {
+        log::debug!("Clean-up used the rules only: nothing needs the model");
+        let marked = gate::end_mark(&rules_text);
+        return Some(prepared.unmask(&marked).unwrap_or_else(fallback));
+    }
+    let sent: usize = parts.iter().map(|p| text::count_words(&rules_text[p.start..p.end])).sum();
+    let whole = sent as f64 >= gate::WHOLE_SHARE * text::count_words(&rules_text) as f64;
     let relevant = relevant_vocabulary(&vocabulary, &prepared.masked);
-    let messages = cleanup_messages(
-        &target.label(),
-        style.for_category(target.category()),
-        &relevant,
-        !prepared.snippets.is_empty(),
-        &rules_text,
-    );
+    let label = target.label();
+    let has_snippets = !prepared.snippets.is_empty();
+    let request = |text: &str| {
+        cleanup_messages(&label, kind, &relevant, has_snippets && text.contains("[[S"), text)
+    };
     let endpoint = llm::endpoint(app);
     // Loading the model takes seconds; paste the rules text instead of
     // waiting. The load started with the recording, so the next one is fast.
     // With an auto-apply transform the dictation waits for the model anyway,
     // and so does a long dictation when the model is loaded at a size too
     // small for it.
-    let needed = llm::messages_context(&messages);
+    let needed = llm::messages_context(&request(&rules_text));
     let waits = auto_apply_transform(&tf).is_some();
     let (context, timeout) = match (llm::loaded_context(&endpoint, needed).await, waits) {
         (Some(n), false) if n >= needed => (n, CLEANUP_TIMEOUT),
@@ -311,17 +338,87 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
         }
     };
     let started = std::time::Instant::now();
-    let reply = llm::chat_messages(&endpoint, &messages, context, timeout).await;
-    log::debug!("Clean-up took {:?}", started.elapsed());
-    let reply = match reply {
-        Ok(reply) => reply,
-        Err(e) => {
-            log::warn!("Clean-up used the rules only: {e}");
-            return Some(fallback());
+    let ask = |text: String| {
+        let messages = request(&text);
+        let endpoint = &endpoint;
+        async move {
+            let left = timeout.saturating_sub(started.elapsed());
+            let limit = Some(reply_token_limit(&text));
+            llm::chat_messages(endpoint, &messages, context, left, limit).await
         }
     };
-    let text = accept(&prepared.masked, &reply, &rules_text, &relevant);
+    if whole {
+        let reply = ask(rules_text.clone()).await;
+        log::debug!("Clean-up took {:?} (whole text, {} words)", started.elapsed(), sent);
+        let reply = match reply {
+            Ok(reply) => reply,
+            Err(e) => {
+                log::warn!("Clean-up used the rules only: {e}");
+                return Some(fallback());
+            }
+        };
+        let text = accept(&prepared.masked, &reply, &rules_text, &relevant);
+        return Some(prepared.unmask(&text).unwrap_or_else(fallback));
+    }
+    let mut out = String::new();
+    let mut pos = 0;
+    for part in &parts {
+        let core = &rules_text[part.start..part.end];
+        let cleaned = match ask(core.to_string()).await {
+            Ok(reply) if part.fragment => accept_fragment(core, &reply, &relevant),
+            Ok(reply) => accept(core, &reply, core, &relevant),
+            Err(e) => {
+                log::warn!("Clean-up kept the rules text for a part: {e}");
+                core.to_string()
+            }
+        };
+        out.push_str(&rules_text[pos..part.start]);
+        out.push_str(&cleaned);
+        pos = part.end;
+    }
+    out.push_str(&rules_text[pos..]);
+    log::debug!(
+        "Clean-up took {:?} ({} parts, {} of {} words; {:?})",
+        started.elapsed(),
+        parts.len(),
+        sent,
+        text::count_words(&rules_text),
+        parts.iter().flat_map(|p| p.reasons.iter()).collect::<Vec<_>>()
+    );
+    let text = gate::end_mark(&out);
     Some(prepared.unmask(&text).unwrap_or_else(fallback))
+}
+
+fn whole_part(text: &str) -> gate::Part {
+    gate::Part {
+        start: 0,
+        end: text.len(),
+        fragment: false,
+        reasons: Vec::new(),
+    }
+}
+
+/// Room for a reply up to the longest the checks accept (1.5 times the text
+/// plus 40 characters) at about 3 characters per token, so a reply that runs
+/// on stops early instead of waiting for the time limit.
+fn reply_token_limit(text: &str) -> u32 {
+    ((text.chars().count() as f64 * 1.5 + 40.0) / 3.0) as u32 + 16
+}
+
+/// A piece from inside a sentence: the reply fitted back between the words
+/// around it when it passes the checks, otherwise the piece unchanged.
+fn accept_fragment(core: &str, reply: &str, vocabulary: &[String]) -> String {
+    let reply = gate::fit_fragment(core, strip_wrapping(reply));
+    if reply.is_empty() {
+        return core.to_string();
+    }
+    match rules::check(core, &reply, vocabulary) {
+        Ok(()) => reply,
+        Err(why) => {
+            log::warn!("Clean-up reply for a piece rejected: {why:?}");
+            core.to_string()
+        }
+    }
 }
 
 /// The model's reply when it passes the checks, otherwise the rules text. A
@@ -611,6 +708,7 @@ mod tests {
                 &messages,
                 context,
                 Duration::from_secs(120),
+                Some(reply_token_limit(&rules_text)),
             ))
             .expect("Ollama reply");
             let text = accept(transcript, &reply, &rules_text, &[]);
