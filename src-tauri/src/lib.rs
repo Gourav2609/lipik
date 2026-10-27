@@ -603,6 +603,12 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
         }
         times_ms.push(t.elapsed().as_millis() as u64);
     }
+    let processed = args.clean.as_deref().map(|bundle_id| {
+        let target = crate::textflow::Target::for_bundle(bundle_id);
+        tauri::async_runtime::block_on(crate::actions::process_transcription_output(
+            app, &text, false, &target,
+        ))
+    });
     let best_ms = times_ms.iter().copied().min().unwrap_or(0);
     let rtf = if best_ms > 0 {
         audio_secs / (best_ms as f64 / 1000.0)
@@ -623,6 +629,8 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
                 "best_ms": best_ms,
                 "rtf": rtf,
                 "text": text,
+                "prepared": processed.as_ref().map(|p| p.prepared_text.clone()),
+                "final": processed.as_ref().map(|p| p.final_text.clone()),
             })
         );
     } else {
@@ -637,6 +645,9 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
             rtf,
         );
         println!("text: {}", text);
+        if let Some(p) = &processed {
+            println!("final: {}", p.final_text);
+        }
     }
     0
 }
@@ -1026,6 +1037,9 @@ pub fn run(cli_args: CliArgs) {
                 managers::transcription::report_compute_devices(&transcription_manager);
                 app_handle.manage(model_manager);
                 app_handle.manage(transcription_manager);
+                if cli_args.clean.is_some() {
+                    textflow::init(&app_handle);
+                }
 
                 let handle = app_handle.clone();
                 let args = cli_args.clone();

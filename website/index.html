@@ -37,7 +37,7 @@
         </svg>
         <span>Lipik</span>
       </a>
-      <nav aria-label="Sections">
+      <nav id="nav-links" aria-label="Sections">
         <a href="#clean">Clean-up</a>
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
@@ -49,6 +49,18 @@
       <a class="btn btn-ink btn-sm" href="#download"
         >Download<span class="hide-sm">&nbsp;for Mac</span></a
       >
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-controls="nav-links"
+        aria-expanded="false"
+        aria-label="Open menu"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path class="nt-a" d="M3 7h14" />
+          <path class="nt-b" d="M3 13h14" />
+        </svg>
+      </button>
     </header>
 
     <main id="main">
@@ -1606,5 +1618,6 @@
     </footer>
 
     <script src="main.js"></script>
+    <script src="nav.js"></script>
   </body>
 </html>

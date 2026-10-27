@@ -726,6 +726,177 @@ fn join_address(span: &str) -> Option<String> {
     Some(format!("{out}{trail}"))
 }
 
+static AT_THE_RATE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)\b(?:at\s+the|at|the)\s+rate(\s*)([a-z0-9][\w-]*(?:(?:\.|\s+dot\s+)[a-z0-9][\w-]*)+)")
+        .unwrap()
+});
+
+/// "gourav at the rate keychain dot com" -> "gourav at keychain dot com": in
+/// India "at the rate" is how "@" is said. Only before an address with a known
+/// ending and after a name, so "at the rate of 7 percent" stays. Transcribers
+/// often glue it to the domain ("at the ratekeychain.com").
+fn at_the_rate(text: &str) -> String {
+    replace_checked(
+        &AT_THE_RATE,
+        text,
+        |m| {
+            let caps = AT_THE_RATE.captures(m.as_str()).expect("matched");
+            let (glued, address) = (caps[1].is_empty(), &caps[2]);
+            let first = address.split(['.', ' ']).next().unwrap_or_default();
+            let before = word_before(text, m.start());
+            let tld = address
+                .trim_end_matches('.')
+                .rsplit(['.', ' '])
+                .next()
+                .unwrap_or_default()
+                .to_lowercase();
+            TLDS.contains(&tld.as_str())
+                && !(glued && first.chars().count() < 3)
+                && !before.is_empty()
+                && !NOT_A_USER.contains(&before.as_str())
+                && !DETERMINERS.contains(&before.as_str())
+        },
+        |m| {
+            let caps = AT_THE_RATE.captures(m.as_str()).expect("matched");
+            format!("at {}", &caps[2])
+        },
+    )
+}
+
+/// Consonant sounds, with the letters transcribers mix up grouped together
+/// ("Gourav" and "Gorbai" both give "261"). "8" is usually a heard "at".
+fn sound_key(text: &str) -> String {
+    let mut key = String::new();
+    for c in text.to_lowercase().replace('8', "at").chars() {
+        let group = match c {
+            'b' | 'f' | 'p' | 'v' => '1',
+            'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => '2',
+            'd' | 't' => '3',
+            'l' => '4',
+            'm' | 'n' => '5',
+            'r' => '6',
+            _ => continue,
+        };
+        if !key.ends_with(group) {
+            key.push(group);
+        }
+    }
+    key
+}
+
+fn sound_alike(a: &str, b: &str) -> f64 {
+    let (a, b) = (sound_key(a), sound_key(b));
+    let longest = a.chars().count().max(b.chars().count());
+    if longest == 0 {
+        return 0.0;
+    }
+    1.0 - strsim::levenshtein(&a, &b) as f64 / longest as f64
+}
+
+static EMAIL: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$").unwrap());
+static HEARD_ENDING: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)(?:\.|\s+dot\s+)([a-z]{2,6})\b").unwrap());
+static HEARD_AT: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)@|\s+at\s+").unwrap());
+static HEARD_SEPARATOR: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)@|\s+at\s+|\s+dot\s+|[._-]").unwrap());
+
+/// How much of a heard address may differ from a dictionary email.
+const SAME_PART: f64 = 0.8;
+const SAME_GLUED: f64 = 0.75;
+
+/// How close `heard` (the words before an ending, "Gorbaikitchen" or
+/// "gaurav at keychain") sounds to `email`. With a clear "@" or "at" both
+/// sides must sound alike, so "support at keychain" is not
+/// "gourav@keychain.com"; glued words are compared whole.
+fn address_likeness(heard: &str, email: &str) -> f64 {
+    let (local, domain) = email.split_once('@').expect("an email");
+    let name = domain.rsplit_once('.').map_or(domain, |(n, _)| n);
+    if let Some(m) = HEARD_AT.find_iter(heard).last() {
+        let (user, host) = (&heard[..m.start()], &heard[m.end()..]);
+        let (u, h) = (sound_alike(user, local), sound_alike(host, name));
+        return if u >= SAME_PART && h >= SAME_PART { u.min(h) } else { 0.0 };
+    }
+    let flat = HEARD_SEPARATOR.replace_all(heard, " ");
+    [
+        format!("{local}{name}"),
+        format!("{local} at {name}"),
+        format!("{local} at the rate {name}"),
+    ]
+    .iter()
+    .map(|form| sound_alike(&flat, form))
+    .fold(0.0, f64::max)
+}
+
+/// A misheard address that sounds like an email in the dictionary becomes
+/// that email ("Gorbaikitchen dot com" -> "gourav@keychain.com"). It must end
+/// in the same ending. When two emails fit, the closer spelling wins.
+fn known_addresses(text: &str, vocab: &[String]) -> String {
+    let emails: Vec<&str> = vocab
+        .iter()
+        .map(|w| w.trim())
+        .filter(|w| EMAIL.is_match(w))
+        .collect();
+    if emails.is_empty() {
+        return text.to_string();
+    }
+    let mut out = String::new();
+    let mut copied = 0;
+    for ending in HEARD_ENDING.captures_iter(text) {
+        let whole = ending.get(0).expect("group 0");
+        if whole.start() < copied {
+            continue;
+        }
+        let tld = ending[1].to_lowercase();
+        let before = &text[copied..whole.start()];
+        let mut starts: Vec<usize> = before
+            .match_indices(char::is_whitespace)
+            .map(|(i, _)| i + 1)
+            .chain([0])
+            .filter(|&i| {
+                let span = &before[i..];
+                !span.contains([',', '!', '?', ';', ':', '\n']) && !span.contains(". ")
+            })
+            .collect();
+        starts.sort_unstable_by(|a, b| b.cmp(a));
+        let mut best: Option<(f64, usize, usize, &str)> = None;
+        for &start in starts.iter().take(6) {
+            let heard = before[start..].trim();
+            if heard.is_empty() {
+                continue;
+            }
+            for &email in &emails {
+                if !email.to_lowercase().ends_with(&format!(".{tld}")) {
+                    continue;
+                }
+                let score = address_likeness(heard, email);
+                let spelling = strsim::levenshtein(&heard.to_lowercase(), email);
+                let better = best.is_none_or(|(s, len, sp, _)| {
+                    score > s
+                        || (score == s && heard.len() < len)
+                        || (score == s && heard.len() == len && spelling < sp)
+                });
+                let enough = if heard.contains('@') || heard.to_lowercase().contains(" at ") {
+                    SAME_PART
+                } else {
+                    SAME_GLUED
+                };
+                if score >= enough && better {
+                    best = Some((score, heard.len(), spelling, email));
+                }
+            }
+        }
+        if let Some((_, len, _, email)) = best {
+            let start = copied + before.trim_end().len() - len;
+            out.push_str(&text[copied..start]);
+            out.push_str(email);
+            copied = whole.end();
+        }
+    }
+    out.push_str(&text[copied..]);
+    out
+}
+
 /// Spoken emails and web addresses become real ones, in lowercase.
 fn emails_and_urls(text: &str) -> String {
     replace_checked(
@@ -960,6 +1131,8 @@ fn lowercase_leading_address(text: &str) -> String {
 pub fn apply(text: &str, vocab: &[String]) -> String {
     let t = spoken_punctuation(text.trim());
     let t = number_corrections(&t);
+    let t = at_the_rate(&t);
+    let t = known_addresses(&t, vocab);
     let t = emails_and_urls(&t);
     let t = times(&t);
     let t = vocab_case(&t, vocab);
@@ -1062,6 +1235,53 @@ pub(super) mod tests {
             };
             assert_eq!(got, text(&e[3]), "{:?} -> {:?}", e[0], e[1]);
         }
+    }
+
+    #[test]
+    fn at_the_rate_is_at_only_inside_an_address() {
+        let none: Vec<String> = Vec::new();
+        for (heard, want) in [
+            ("gourav at the rate keychain dot com", "gourav@keychain.com"),
+            ("gaurav at the ratekeychain.com", "gaurav@keychain.com"),
+            ("My email is gora at the rate gmail dot com", "My email is gora@gmail.com"),
+            ("Interest is charged at the rate of 7 percent", "Interest is charged at the rate of 7 percent"),
+            ("We grew at the rate we planned", "We grew at the rate we planned"),
+            ("At the rate it is going we will finish today", "At the rate it is going we will finish today"),
+            ("Look at the rate card dot pdf", "Look at the rate card dot pdf"),
+            ("Check the rates.com page", "Check the rates.com page"),
+            ("gourav at ratekeychain.com", "gourav@keychain.com"),
+        ] {
+            assert_eq!(apply(heard, &none), want, "{heard:?}");
+        }
+    }
+
+    #[test]
+    fn misheard_addresses_become_dictionary_emails() {
+        let vocab = vec!["Keychain".to_string(), "gourav@keychain.com".to_string()];
+        for (heard, want) in [
+            ("Gorbaikitchen dot com", "gourav@keychain.com"),
+            ("Gaurav birthday kitchen.com", "gourav@keychain.com"),
+            ("Grab a keychain.com", "gourav@keychain.com"),
+            ("GuravidKeychain.com", "gourav@keychain.com"),
+            ("Gourav at ratekean.com", "gourav@keychain.com"),
+            ("gaurav at the ratekien.com", "gourav@keychain.com"),
+            ("My email is gaurav at the ratekeychain.com", "My email is gourav@keychain.com"),
+            ("Mail gaurika at keychain dot com", "Mail gaurika@keychain.com"),
+            ("Mail support at keychain dot com", "Mail support@keychain.com"),
+            ("Write to gourav.k at keychain dot com", "Write to gourav.k@keychain.com"),
+            ("Send it to rivaan_m@quavia.com", "Send it to rivaan_m@quavia.com"),
+            ("Open keychain.com and the kitchen.com site", "Open keychain.com and the kitchen.com site"),
+            ("Gaurav at keychain dot io", "gaurav@keychain.io"),
+        ] {
+            assert_eq!(apply(heard, &vocab), want, "{heard:?}");
+        }
+    }
+
+    #[test]
+    fn closest_spelling_wins_between_two_dictionary_emails() {
+        let vocab = vec!["gourav@keychain.com".to_string(), "gaurav@keychain.com".to_string()];
+        assert_eq!(apply("gaurav at keychain dot com", &vocab), "gaurav@keychain.com");
+        assert_eq!(apply("gourav at keychain dot com", &vocab), "gourav@keychain.com");
     }
 
     #[test]

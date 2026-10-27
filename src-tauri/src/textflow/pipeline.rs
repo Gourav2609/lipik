@@ -37,6 +37,15 @@ impl Target {
         Self::from_context(context::front_app())
     }
 
+    /// The app with this bundle id, for headless runs.
+    pub fn for_bundle(bundle_id: &str) -> Self {
+        Self::from_context(context::AppContext {
+            bundle_id: (!bundle_id.is_empty()).then(|| bundle_id.to_string()),
+            name: None,
+            title: None,
+        })
+    }
+
     fn from_context(context: context::AppContext) -> Self {
         Self {
             app_type: context::app_type(&context).to_string(),

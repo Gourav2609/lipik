@@ -61,4 +61,10 @@ pub struct CliArgs {
     /// Emit --transcribe-file results as JSON.
     #[arg(long)]
     pub json: bool,
+
+    /// With --transcribe-file, also run the text steps a dictation runs
+    /// (dictionary, rules, clean-up), as if typed into the app with this
+    /// bundle id. Pass no value for an unknown app.
+    #[arg(long, value_name = "BUNDLE_ID", num_args = 0..=1, default_missing_value = "")]
+    pub clean: Option<String>,
 }
