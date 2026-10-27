@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Lipik stats</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:opsz,wght@14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --paper: #fbf9f4;
+        --card: #fffefb;
+        --ink: #1d1b17;
+        --muted: #6b665c;
+        --line: rgba(29, 27, 23, 0.1);
+        --green: #285a44;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          16px/1.5 Inter,
+          sans-serif;
+      }
+      main {
+        max-width: 880px;
+        margin: 0 auto;
+        padding: 48px 16px 80px;
+      }
+      h1 {
+        font:
+          400 48px/1.05 "Instrument Serif",
+          serif;
+        margin: 0 0 6px;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 32px;
+      }
+      .tiles {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 32px;
+      }
+      .tile {
+        background: var(--card);
+        border-radius: 18px;
+        box-shadow: 0 0 0 1px var(--line);
+        padding: 18px 20px;
+      }
+      .tile b {
+        display: block;
+        font:
+          400 44px/1 "Instrument Serif",
+          serif;
+        margin-top: 6px;
+      }
+      .tile span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--card);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 0 0 1px var(--line);
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--line);
+        font-variant-numeric: tabular-nums;
+      }
+      th {
+        font-size: 13px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      td.n,
+      th.n {
+        text-align: right;
+      }
+      .bar {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--green);
+        min-width: 2px;
+      }
+      a {
+        color: var(--green);
+      }
+      .note {
+        color: var(--muted);
+        font-size: 14px;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Lipik stats</h1>
+      <p class="sub" id="updated">Loading from GitHub…</p>
+      <div class="tiles">
+        <div class="tile">
+          <span>Downloads, all releases</span><b id="total">–</b>
+        </div>
+        <div class="tile"><span>GitHub stars</span><b id="stars">–</b></div>
+        <div class="tile"><span>Forks</span><b id="forks">–</b></div>
+        <div class="tile"><span>Open issues</span><b id="issues">–</b></div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Release</th>
+            <th>Published</th>
+            <th class="n">Downloads</th>
+            <th style="width: 34%"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="note">
+        Downloads count the .dmg from GitHub Releases. Website visits are in the
+        Cloudflare dashboard under Web Analytics. This page isn't linked from
+        the site and asks search engines not to list it.
+      </p>
+    </main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const fmt = (n) => n.toLocaleString("en-IN");
+      Promise.all([
+        fetch("https://api.github.com/repos/Gourav2609/lipik").then((r) =>
+          r.json(),
+        ),
+        fetch(
+          "https://api.github.com/repos/Gourav2609/lipik/releases?per_page=100",
+        ).then((r) => r.json()),
+      ])
+        .then(([repo, releases]) => {
+          $("stars").textContent = fmt(repo.stargazers_count ?? 0);
+          $("forks").textContent = fmt(repo.forks_count ?? 0);
+          $("issues").textContent = fmt(repo.open_issues_count ?? 0);
+          const list = (Array.isArray(releases) ? releases : []).map((r) => ({
+            tag: r.tag_name,
+            date: new Date(r.published_at),
+            n: r.assets.reduce((s, a) => s + a.download_count, 0),
+          }));
+          const total = list.reduce((s, r) => s + r.n, 0);
+          const max = Math.max(1, ...list.map((r) => r.n));
+          $("total").textContent = fmt(total);
+          $("rows").innerHTML = list
+            .map(
+              (r) =>
+                `<tr><td>${r.tag}</td><td>${r.date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td><td class="n">${fmt(r.n)}</td><td><div class="bar" style="width:${(r.n / max) * 100}%"></div></td></tr>`,
+            )
+            .join("");
+          $("updated").textContent =
+            `Live from GitHub, ${new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`;
+        })
+        .catch(() => {
+          $("updated").textContent =
+            "Couldn't reach GitHub. Try again in a minute.";
+        });
+    </script>
+  </body>
+</html>
