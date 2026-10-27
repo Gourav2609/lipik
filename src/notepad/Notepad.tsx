@@ -146,6 +146,12 @@ export const Notepad = () => {
         onCopyMarkdown={() =>
           copy(noteMarkdown(detail, true), "Note copied as Markdown")
         }
+        onCopyLink={() =>
+          copy(
+            `lipik://meeting/${meeting.id}`,
+            "Link copied. Paste it into an AI app connected to Lipik.",
+          )
+        }
         onCopySummary={() =>
           detail.summary
             ? copy(summaryMarkdown(detail.summary), "Summary copied")

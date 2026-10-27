@@ -1,34 +1,18 @@
 import { SettingsPage } from "./SettingsPage";
-import { AppList, type AppEntry } from "./apps";
 import { Section } from "./parts";
 import { APP_NAME } from "@/flow/brand";
-
-const app = (id: string, name: string): AppEntry => ({
-  id,
-  name,
-  description: `Let ${name} read your meeting notes and transcripts.`,
-  action: "Connect",
-});
-
-const APPS = [
-  app("claude", "Claude"),
-  app("chatgpt", "ChatGPT"),
-  app("gemini", "Gemini"),
-  app("cursor", "Cursor"),
-];
+import { AiAppRows, OtherApps, useAiApps } from "../aiApps";
 
 export default function Mcp() {
+  const state = useAiApps();
   return (
     <SettingsPage
-      title="AI tools"
-      intro="Let AI apps read your meeting notes through MCP. They can't see your dictations."
+      title="AI apps"
+      intro={`Let AI apps read your ${APP_NAME} meeting notes, on this Mac, through MCP. They can't see your dictations, and they never change anything.`}
     >
-      <AppList storageKey="mcp.connected" apps={APPS} initial={["claude"]} />
+      <AiAppRows state={state} />
       <Section title="Other apps">
-        <p className="text-[14.5px] leading-[21px] text-[var(--fk-text-muted)]">
-          Any app that supports MCP can connect once the {APP_NAME} MCP server
-          is ready.
-        </p>
+        <OtherApps apps={state.apps} />
       </Section>
     </SettingsPage>
   );

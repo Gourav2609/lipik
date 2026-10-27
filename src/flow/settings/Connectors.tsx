@@ -45,7 +45,7 @@ export default function Connectors() {
           Let your AI apps read your meeting notes.
         </span>
         <Button variant="ghost" size="sm" onClick={() => openSettings("mcp")}>
-          Open AI tools
+          Open AI apps
         </Button>
       </div>
     </SettingsPage>

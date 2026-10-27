@@ -2478,6 +2478,39 @@ s.sl-g {
 .card-off {
   grid-column: span 5;
 }
+.card-ai {
+  grid-column: span 12;
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+  gap: 32px;
+}
+.card-copy .ai-apps {
+  font-size: 14px;
+  color: var(--muted);
+}
+.ai-mock {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.ai-ask b {
+  margin-right: 8px;
+  font-weight: 600;
+}
+.ai-used {
+  font-size: 13px;
+  color: var(--muted);
+}
+.ai-answer {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--line);
+}
 
 .card-dark {
   background: var(--pill);
@@ -3398,7 +3431,8 @@ s.sl-g {
     grid-template-columns: minmax(0, 1fr);
     gap: 40px;
   }
-  .card-notes {
+  .card-notes,
+  .card-ai {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -3937,4 +3971,11 @@ s.sl-g {
   .nav-toggle path {
     transition: none;
   }
+}
+
+.hero-eyebrow {
+  margin: 22px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
 }

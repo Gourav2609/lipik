@@ -442,6 +442,15 @@ mod headless_guard_tests {
     }
 }
 
+/// `lipik --mcp`: meeting notes for AI apps (see notetaker/mcp.rs).
+pub fn is_mcp_invocation() -> bool {
+    notetaker::mcp::is_invocation()
+}
+
+pub fn run_mcp() -> i32 {
+    notetaker::mcp::run()
+}
+
 /// Headless one-shot transcription for the `--transcribe-file` / `--list-devices`
 /// path. Drives the same `TranscriptionManager::transcribe` the app uses; no
 /// mic, no VAD, no download. Returns a process exit code (0 ok, 1 runtime
@@ -846,6 +855,9 @@ pub fn run(cli_args: CliArgs) {
             textflow::cleanup_model::cleanup_model_status,
             textflow::cleanup_model::pull_cleanup_model,
             textflow::cleanup_model::cancel_cleanup_model_pull,
+            notetaker::ai_apps::ai_apps_status,
+            notetaker::ai_apps::connect_ai_app,
+            notetaker::ai_apps::disconnect_ai_app,
             notetaker::commands::notetaker_start,
             notetaker::commands::notetaker_stop,
             notetaker::commands::notetaker_status,

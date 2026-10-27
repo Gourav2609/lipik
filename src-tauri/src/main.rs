@@ -33,6 +33,11 @@ fn main() {
         std::process::exit(lipik_app_lib::engine_supervisor::run_worker());
     }
 
+    // AI apps start `lipik --mcp` to read meeting notes; no window, no Tauri.
+    if lipik_app_lib::is_mcp_invocation() {
+        std::process::exit(lipik_app_lib::run_mcp());
+    }
+
     let cli_args = CliArgs::parse();
     lipik_app_lib::run(cli_args)
 }

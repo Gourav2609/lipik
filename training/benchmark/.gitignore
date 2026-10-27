@@ -1,0 +1,5 @@
+apps/
+runs/
+__pycache__/
+.venv/
+private/

@@ -3303,7 +3303,7 @@ checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
 
 [[package]]
 name = "lipik"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "block2",
@@ -3365,6 +3365,7 @@ dependencies = [
  "tauri-specta",
  "tempfile",
  "tokio",
+ "toml_edit 0.23.10+spec-1.0.0",
  "transcribe-cpp",
  "webview2-com",
  "whatlang",
@@ -5662,6 +5663,7 @@ version = "1.0.149"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
 dependencies = [
+ "indexmap 2.13.0",
  "itoa",
  "memchr",
  "serde",
@@ -7170,6 +7172,7 @@ dependencies = [
  "indexmap 2.13.0",
  "toml_datetime 0.7.5+spec-1.1.0",
  "toml_parser",
+ "toml_writer",
  "winnow 0.7.14",
 ]
 

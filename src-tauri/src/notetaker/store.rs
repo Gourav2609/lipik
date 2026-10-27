@@ -137,6 +137,15 @@ impl Store {
         })
     }
 
+    /// For a second process (the AI tools server) while the app may be
+    /// writing: no migrations, no writes.
+    pub fn open_read_only(path: &Path) -> Result<Self> {
+        let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }

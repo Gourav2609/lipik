@@ -33,12 +33,14 @@ import {
   SLOW_MODEL_TEXT,
   useCleanupModel,
 } from "../cleanupModel";
+import { AiAppRows, useAiApps } from "../aiApps";
 import { Button, Card, Kbd } from "../ui";
 import { retryDefaultModelSetup, useModelSetup } from "./defaultModel";
 import { StepLayout, type StepProps } from "./StepLayout";
 import { useMicLevel } from "./useMicLevel";
 import { usePermissions, type PermissionKind } from "./usePermissions";
 import {
+  AiAppsVisual,
   CleanupVisual,
   KeyboardVisual,
   MarkVisual,
@@ -657,6 +659,33 @@ const PillStep = ({ next, back }: StepProps) => {
   );
 };
 
+/* ---------- AI apps ---------- */
+
+const AiApps = ({ next, back }: StepProps) => {
+  const state = useAiApps();
+  const found = state.apps?.filter((a) => a.installed) ?? null;
+  return (
+    <StepLayout
+      eyebrow="AI apps"
+      title="Ask your AI about your meetings"
+      body={`Claude, Cursor, Codex and other AI apps can read your ${APP_NAME} meeting notes on this Mac. They can't see your dictations.`}
+      back={back}
+      actions={<Continue next={next} />}
+      visual={<AiAppsVisual />}
+    >
+      {found && found.length > 0 && (
+        <AiAppRows state={{ ...state, apps: found }} />
+      )}
+      {found && found.length === 0 && (
+        <p className="text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+          No AI apps found on this Mac. You can connect one later in Settings,
+          AI apps.
+        </p>
+      )}
+    </StepLayout>
+  );
+};
+
 /* ---------- privacy ---------- */
 
 const Privacy = ({ next, back }: StepProps) => (
@@ -721,6 +750,7 @@ export type StepId =
   | "cleanup"
   | "practice"
   | "bar"
+  | "ai"
   | "privacy"
   | "done";
 
@@ -736,6 +766,7 @@ export const STEPS: {
   { id: "cleanup", Component: Cleanup },
   { id: "practice", Component: Practice },
   { id: "bar", Component: PillStep, skippable: true },
+  { id: "ai", Component: AiApps, skippable: true },
   { id: "privacy", Component: Privacy },
   { id: "done", Component: Done },
 ];

@@ -33,7 +33,7 @@ const GROUPS: NavEntry[][] = [
     { id: "notetaker", label: "Meetings", Icon: CalendarClock },
     { id: "vibe-coding", label: "Code editors", Icon: SquareCode },
     { id: "connectors", label: "Connections", Icon: Link2 },
-    { id: "mcp", label: "AI tools", Icon: Workflow },
+    { id: "mcp", label: "AI apps", Icon: Workflow },
   ],
   [
     { id: "system", label: "App", Icon: PanelBottom },

@@ -535,3 +535,17 @@ if (reduced) {
     if (stepVisible) stepFn.classList.toggle("is-down");
   }, 1200);
 }
+
+/* Download box: the latest release's version and size, from GitHub */
+const dlVersion = document.getElementById("dl-version");
+if (dlVersion) {
+  fetch("https://api.github.com/repos/Gourav2609/lipik/releases/latest")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((rel) => {
+      const dmg = rel?.assets?.find((a) => a.name === "Lipik.dmg");
+      if (!rel?.tag_name || !dmg) return;
+      const mb = Math.round(dmg.size / 1e6);
+      dlVersion.textContent = `Version ${rel.tag_name.replace(/^v/, "")}, ${mb} MB.`;
+    })
+    .catch(() => {});
+}

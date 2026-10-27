@@ -9,7 +9,9 @@
     toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
   }
 
-  toggle.addEventListener("click", () => setOpen(!nav.classList.contains("is-open")));
+  toggle.addEventListener("click", () =>
+    setOpen(!nav.classList.contains("is-open")),
+  );
   links.addEventListener("click", (e) => {
     if (e.target.closest("a")) setOpen(false);
   });

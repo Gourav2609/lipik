@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FileText,
   History,
+  Link,
   Share2,
   Trash2,
 } from "lucide-react";
@@ -20,6 +21,7 @@ type Props = {
   onShare: () => void;
   onCopyMarkdown: () => void;
   onCopySummary: () => void;
+  onCopyLink: () => void;
   onToggleChats: () => void;
   onDelete: () => Promise<string | null>;
 };
@@ -122,6 +124,11 @@ export const TopBar = (p: Props) => {
                   <FileText size={16} strokeWidth={1.75} />,
                   "Copy as Markdown",
                   p.onCopyMarkdown,
+                )}
+                {item(
+                  <Link size={16} strokeWidth={1.75} />,
+                  "Copy link for AI apps",
+                  p.onCopyLink,
                 )}
                 <div className="np-menu-rule" />
                 {p.showCalendar &&

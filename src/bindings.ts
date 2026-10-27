@@ -1243,6 +1243,25 @@ async pullCleanupModel() : Promise<Result<boolean, string>> {
 async cancelCleanupModelPull() : Promise<void> {
     await TAURI_INVOKE("cancel_cleanup_model_pull");
 },
+async aiAppsStatus() : Promise<AiApp[]> {
+    return await TAURI_INVOKE("ai_apps_status");
+},
+async connectAiApp(id: string) : Promise<Result<AiApp, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("connect_ai_app", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async disconnectAiApp(id: string) : Promise<Result<AiApp, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("disconnect_ai_app", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async notetakerStart(title: string | null) : Promise<Result<Meeting, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("notetaker_start", { title }) };
@@ -1469,6 +1488,32 @@ streamTextEvent: "stream-text-event"
 /** user-defined types **/
 
 export type ActionItem = { text: string; owner: string | null; due: string | null }
+export type AiApp = { id: string; name: string; installed: boolean; connected: boolean; how: AiAppHow; 
+/**
+ * The settings file Lipik edits, shown to the user.
+ */
+file: string | null; 
+/**
+ * What to do after connecting ("Restart Claude"), or why it can't.
+ */
+note: string | null; 
+/**
+ * The same setup to paste by hand.
+ */
+manual: string }
+export type AiAppHow = 
+/**
+ * Lipik edits the app's MCP settings file.
+ */
+"file" | 
+/**
+ * Lipik runs the app's own command (`claude mcp add`).
+ */
+"command" | 
+/**
+ * The app cannot run local tools: copy a note instead.
+ */
+"copy"
 /**
  * The container-level `serde(default)` (backed by the `Default` impl below)
  * guarantees every field — including ones added in the future — falls back to

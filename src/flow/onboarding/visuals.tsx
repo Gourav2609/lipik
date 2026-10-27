@@ -275,3 +275,22 @@ export const CleanupVisual = () => (
     </div>
   </Preview>
 );
+
+export const AiAppsVisual = () => (
+  <Preview className="flex-col !items-stretch !justify-center gap-[16px] px-[32px]">
+    <div>
+      <div className="fk-eyebrow mb-[4px]">You ask Claude</div>
+      <p className="text-[15px] leading-[22px] text-[var(--fk-text-muted)]">
+        What did we decide in the Northwind launch call?
+      </p>
+    </div>
+    <div>
+      <div className="fk-eyebrow mb-[4px]">
+        Claude reads your {APP_NAME} notes
+      </div>
+      <p className="text-[15px] leading-[22px]">
+        Launch moves to Friday, 5 PM. Meera owns the release notes.
+      </p>
+    </div>
+  </Preview>
+);

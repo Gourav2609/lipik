@@ -3,12 +3,123 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Lipik: speak freely, and it writes it down</title>
+    <title>Lipik: Free, Open-Source Voice Dictation for Mac</title>
     <meta
       name="description"
-      content="Hold fn, speak, and clean text appears wherever your cursor is. Free, open-source dictation for Mac that runs entirely on your Mac."
+      content="Free offline voice dictation for Mac, open source. Hold fn, talk, let go: clean text in any app. No account, no word limit, runs on your Mac."
     />
     <meta name="theme-color" content="#fbf9f4" />
+    <link rel="canonical" href="https://lipik.refflux.dev/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lipik" />
+    <meta
+      property="og:title"
+      content="Lipik: free, open-source voice dictation for Mac"
+    />
+    <meta
+      property="og:description"
+      content="Hold fn, talk, let go. Clean text in any app. Runs on your Mac, free, no account."
+    />
+    <meta property="og:url" content="https://lipik.refflux.dev/" />
+    <meta
+      property="og:image"
+      content="https://lipik.refflux.dev/assets/og.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Lipik: speak freely, Lipik writes it down. Free, open-source voice dictation for Mac."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Lipik: free, open-source voice dictation for Mac"
+    />
+    <meta
+      name="twitter:description"
+      content="Hold fn, talk, let go. Clean text in any app. Runs on your Mac, free, no account."
+    />
+    <meta
+      name="twitter:image"
+      content="https://lipik.refflux.dev/assets/og.png"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lipik",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
+        "url": "https://lipik.refflux.dev/",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "sameAs": ["https://github.com/Gourav2609/lipik"]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What do I need to run Lipik?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A Mac with Apple silicon (M1 or later). For the clean-up step you also need the free Ollama app with the Qwen3 8B model, which is about 5 GB. Without it, Lipik still types what you said, just without the clean-up."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it cost anything?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Lipik is free, with no subscription, no account and no word limit."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is there a Windows version?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Not yet. Lipik runs on macOS only for now."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which languages does it understand?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "English works out of the box with the Parakeet model. For other languages, download one of the free Whisper models in Settings; together they cover 99 languages. Hinglish (Hindi and English mixed, written in Roman letters) works but is still in beta."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why does macOS ask for Microphone and Accessibility access?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Microphone, so Lipik can hear you. Accessibility, so it can notice when you hold fn and type the text into the app you're using. What Lipik hears stays on your Mac."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I use a different key instead of fn?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. You can pick any shortcut in Settings. Holding fn is the default because it rarely gets in the way of anything else."
+            }
+          }
+        ]
+      }
+    </script>
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -71,6 +182,7 @@
             <span class="line"></span>
             <span class="drops"><i></i><i></i><i></i><i></i></span>
           </div>
+          <p class="hero-eyebrow">Free, open-source voice dictation for Mac</p>
           <div class="hero-head">
             <h1 id="hero-h">Speak freely. Lipik writes it down.</h1>
             <div class="hero-side">
@@ -1366,6 +1478,31 @@
                 </div>
               </div>
             </article>
+
+            <!-- AI apps -->
+            <article class="card card-ai" aria-labelledby="ai-h">
+              <div class="card-copy">
+                <h3 id="ai-h">Ask your AI about your meetings</h3>
+                <p>
+                  Claude, Cursor, Codex and other AI apps can read your meeting
+                  notes on your Mac. Connect them in one click during setup.
+                </p>
+                <p class="ai-apps">
+                  Claude, Claude Code, Cursor, Codex, Windsurf, VS Code and
+                  Gemini CLI. ChatGPT gets a copy of the note instead.
+                </p>
+              </div>
+              <div class="mock ai-mock">
+                <p class="ai-ask">
+                  <b>You</b> What did we decide in the weekly sync?
+                </p>
+                <p class="ai-used">Read “Weekly sync” from Lipik</p>
+                <p class="ai-answer">
+                  Launch moves to Friday, 5 PM. Meera owns the release notes,
+                  and Arjun sends the final deck by Thursday.
+                </p>
+              </div>
+            </article>
           </div>
         </div>
       </section>
@@ -1442,12 +1579,6 @@
               word limit. The code is under the MIT licence, so anyone can read
               it, change it or build on it.
             </p>
-            <p>
-              Lipik is built on
-              <a href="https://github.com/cjpais/Handy">Handy</a>, a free
-              dictation app by CJ Pais. Lipik adds a new interface, text
-              clean-up, snippets, tone settings and meeting notes.
-            </p>
           </div>
           <dl class="facts">
             <div>
@@ -1469,12 +1600,6 @@
             <div>
               <dt>Account</dt>
               <dd>None needed</dd>
-            </div>
-            <div>
-              <dt>Built on</dt>
-              <dd>
-                <a href="https://github.com/cjpais/Handy">Handy by CJ Pais</a>
-              </dd>
             </div>
             <div>
               <dt>Code</dt>
@@ -1583,9 +1708,9 @@
             >
           </div>
           <p class="fineprint">
-            Version 0.1.0, 16 MB. The first time you open it, macOS asks you to
-            confirm: go to System Settings, then Privacy &amp; Security, and
-            click Open Anyway.
+            <span id="dl-version">Version 0.1.1, 16 MB.</span> The first time
+            you open it, macOS asks you to confirm: go to System Settings, then
+            Privacy &amp; Security, and click Open Anyway.
             <a
               href="https://github.com/Gourav2609/lipik/blob/main/docs/INSTALL.md"
               >Install help</a
@@ -1610,8 +1735,7 @@
           <span>Lipik</span>
         </a>
         <p>
-          Free and open source under the MIT licence. Built on
-          <a href="https://github.com/cjpais/Handy">Handy</a> by CJ Pais.
+          Free and open source under the MIT licence.
           <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
         </p>
       </div>

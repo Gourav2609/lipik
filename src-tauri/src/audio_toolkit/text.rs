@@ -63,6 +63,15 @@ fn is_supported_fuzzy_key(key: &str) -> bool {
     !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
+/// Soundex keeps the first letter as written, so "kwavia" and "quavia" never
+/// matched; c, k and q at the start are one sound here.
+fn same_initial(key: &str) -> String {
+    match key.chars().next() {
+        Some('c' | 'q') => format!("k{}", &key[1..]),
+        _ => key.to_string(),
+    }
+}
+
 fn supports_soundex(key: &str) -> bool {
     !key.is_empty() && key.chars().all(|c| c.is_ascii_alphabetic())
 }
@@ -124,7 +133,10 @@ fn find_best_match<'a>(
         let phonetic_match = !(candidate_words > 1 && custom_word_key.multi_word)
             && supports_soundex(candidate)
             && supports_soundex(&custom_word_key.key)
-            && soundex(candidate, &custom_word_key.key);
+            && soundex(
+                &same_initial(candidate),
+                &same_initial(&custom_word_key.key),
+            );
 
         // Combine scores: favor phonetic matches, but also consider string similarity
         let combined_score = if phonetic_match {
@@ -876,6 +888,23 @@ mod tests {
         let result = normalize_transcription_output(&filtered);
 
         assert_eq!(result, "should be removed but um should remain");
+    }
+
+    #[test]
+    fn test_apply_custom_words_initial_c_k_q_sound_alike() {
+        let custom_words = vec!["Quavia".to_string(), "Kubernetes".to_string()];
+        assert_eq!(
+            apply_custom_words("move the Kwavia sync", &custom_words, 0.18),
+            "move the Quavia sync"
+        );
+        assert_eq!(
+            apply_custom_words("deploy on Cubernetes", &custom_words, 0.18),
+            "deploy on Kubernetes"
+        );
+        assert_eq!(
+            apply_custom_words("the quality was fine", &custom_words, 0.18),
+            "the quality was fine"
+        );
     }
 
     #[test]

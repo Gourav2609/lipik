@@ -727,8 +727,10 @@ fn join_address(span: &str) -> Option<String> {
 }
 
 static AT_THE_RATE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(?:at\s+the|at|the)\s+rate(\s*)([a-z0-9][\w-]*(?:(?:\.|\s+dot\s+)[a-z0-9][\w-]*)+)")
-        .unwrap()
+    Regex::new(
+        r"(?i)\b(?:at\s+the|at|the)\s+rate(\s*)([a-z0-9][\w-]*(?:(?:\.|\s+dot\s+)[a-z0-9][\w-]*)+)",
+    )
+    .unwrap()
 });
 
 /// "gourav at the rate keychain dot com" -> "gourav at keychain dot com": in
@@ -793,8 +795,7 @@ fn sound_alike(a: &str, b: &str) -> f64 {
     1.0 - strsim::levenshtein(&a, &b) as f64 / longest as f64
 }
 
-static EMAIL: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$").unwrap());
+static EMAIL: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$").unwrap());
 static HEARD_ENDING: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)(?:\.|\s+dot\s+)([a-z]{2,6})\b").unwrap());
 static HEARD_AT: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)@|\s+at\s+").unwrap());
@@ -815,7 +816,11 @@ fn address_likeness(heard: &str, email: &str) -> f64 {
     if let Some(m) = HEARD_AT.find_iter(heard).last() {
         let (user, host) = (&heard[..m.start()], &heard[m.end()..]);
         let (u, h) = (sound_alike(user, local), sound_alike(host, name));
-        return if u >= SAME_PART && h >= SAME_PART { u.min(h) } else { 0.0 };
+        return if u >= SAME_PART && h >= SAME_PART {
+            u.min(h)
+        } else {
+            0.0
+        };
     }
     let flat = HEARD_SEPARATOR.replace_all(heard, " ");
     [
@@ -1243,11 +1248,26 @@ pub(super) mod tests {
         for (heard, want) in [
             ("gourav at the rate keychain dot com", "gourav@keychain.com"),
             ("gaurav at the ratekeychain.com", "gaurav@keychain.com"),
-            ("My email is gora at the rate gmail dot com", "My email is gora@gmail.com"),
-            ("Interest is charged at the rate of 7 percent", "Interest is charged at the rate of 7 percent"),
-            ("We grew at the rate we planned", "We grew at the rate we planned"),
-            ("At the rate it is going we will finish today", "At the rate it is going we will finish today"),
-            ("Look at the rate card dot pdf", "Look at the rate card dot pdf"),
+            (
+                "My email is gora at the rate gmail dot com",
+                "My email is gora@gmail.com",
+            ),
+            (
+                "Interest is charged at the rate of 7 percent",
+                "Interest is charged at the rate of 7 percent",
+            ),
+            (
+                "We grew at the rate we planned",
+                "We grew at the rate we planned",
+            ),
+            (
+                "At the rate it is going we will finish today",
+                "At the rate it is going we will finish today",
+            ),
+            (
+                "Look at the rate card dot pdf",
+                "Look at the rate card dot pdf",
+            ),
             ("Check the rates.com page", "Check the rates.com page"),
             ("gourav at ratekeychain.com", "gourav@keychain.com"),
         ] {
@@ -1265,12 +1285,30 @@ pub(super) mod tests {
             ("GuravidKeychain.com", "gourav@keychain.com"),
             ("Gourav at ratekean.com", "gourav@keychain.com"),
             ("gaurav at the ratekien.com", "gourav@keychain.com"),
-            ("My email is gaurav at the ratekeychain.com", "My email is gourav@keychain.com"),
-            ("Mail gaurika at keychain dot com", "Mail gaurika@keychain.com"),
-            ("Mail support at keychain dot com", "Mail support@keychain.com"),
-            ("Write to gourav.k at keychain dot com", "Write to gourav.k@keychain.com"),
-            ("Send it to rivaan_m@quavia.com", "Send it to rivaan_m@quavia.com"),
-            ("Open keychain.com and the kitchen.com site", "Open keychain.com and the kitchen.com site"),
+            (
+                "My email is gaurav at the ratekeychain.com",
+                "My email is gourav@keychain.com",
+            ),
+            (
+                "Mail gaurika at keychain dot com",
+                "Mail gaurika@keychain.com",
+            ),
+            (
+                "Mail support at keychain dot com",
+                "Mail support@keychain.com",
+            ),
+            (
+                "Write to gourav.k at keychain dot com",
+                "Write to gourav.k@keychain.com",
+            ),
+            (
+                "Send it to rivaan_m@quavia.com",
+                "Send it to rivaan_m@quavia.com",
+            ),
+            (
+                "Open keychain.com and the kitchen.com site",
+                "Open keychain.com and the kitchen.com site",
+            ),
             ("Gaurav at keychain dot io", "gaurav@keychain.io"),
         ] {
             assert_eq!(apply(heard, &vocab), want, "{heard:?}");
@@ -1279,9 +1317,18 @@ pub(super) mod tests {
 
     #[test]
     fn closest_spelling_wins_between_two_dictionary_emails() {
-        let vocab = vec!["gourav@keychain.com".to_string(), "gaurav@keychain.com".to_string()];
-        assert_eq!(apply("gaurav at keychain dot com", &vocab), "gaurav@keychain.com");
-        assert_eq!(apply("gourav at keychain dot com", &vocab), "gourav@keychain.com");
+        let vocab = vec![
+            "gourav@keychain.com".to_string(),
+            "gaurav@keychain.com".to_string(),
+        ];
+        assert_eq!(
+            apply("gaurav at keychain dot com", &vocab),
+            "gaurav@keychain.com"
+        );
+        assert_eq!(
+            apply("gourav at keychain dot com", &vocab),
+            "gourav@keychain.com"
+        );
     }
 
     #[test]

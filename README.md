@@ -19,10 +19,7 @@ you.
 - **History.** Every dictation is kept on your Mac. Copy it again, correct a
   word, or play back the recording.
 
-## What Lipik adds on top of Handy
-
-Lipik started as a fork of [Handy](https://github.com/cjpais/Handy). It keeps
-Handy's recording and transcription engine and adds:
+## More of what it does
 
 - **Local AI clean-up.** On by default. Built-in rules turn spoken
   punctuation, corrections like "four, no, five", emails and times into
@@ -42,6 +39,12 @@ Handy's recording and transcription engine and adds:
   from your Mac's audio, so no bot joins the call. Afterwards it writes a
   transcript and notes, and you can ask questions about past meetings. Needs
   macOS 14.2 or later.
+- **Your meetings in your AI apps.** Claude, Claude Code, Cursor, Codex,
+  Windsurf, VS Code and Gemini CLI can read your meeting notes through MCP,
+  on your Mac and read-only. Connect them during setup or in
+  **Settings → AI apps**. Each note has **Copy link for AI apps**
+  (`lipik://meeting/<id>`) to ask about one meeting. See
+  [AI apps](#ai-apps-mcp) below.
 - **Hinglish support.** Hindi and English mixed in one sentence, written in
   Roman script. On macOS 26 or later Lipik also runs Apple's on-device
   dictation and uses its text when the local model's text does not read as
@@ -72,6 +75,32 @@ _Coming soon._
 
 [docs/INSTALL.md](docs/INSTALL.md) has the details.
 
+## AI apps (MCP)
+
+Lipik runs as an MCP server when an AI app starts it with `--mcp`:
+
+```
+/Applications/Lipik.app/Contents/MacOS/lipik --mcp
+```
+
+It offers three read-only tools: `list_meetings`, `search_meetings` and
+`get_meeting` (summary, decisions, next steps, your own notes and the
+transcript). It reads the meeting notes on your Mac and changes nothing.
+AI apps can't see your dictations.
+
+**Settings → AI apps** adds Lipik to Claude, Claude Code, Cursor, Codex,
+Windsurf, VS Code and Gemini CLI in one click. Lipik changes only its own
+`lipik` entry in each app's settings, and keeps the file as it was before
+the first change next to it (`<file>.before-lipik`). For any other MCP app,
+use the command above. ChatGPT can't run tools on your Mac: open a note and
+use **Copy as Markdown** instead.
+
+Claude Code by hand:
+
+```
+claude mcp add --scope user lipik -- /Applications/Lipik.app/Contents/MacOS/lipik --mcp
+```
+
 ## Build from source
 
 You need [Rust](https://rustup.rs/), [Bun](https://bun.sh/) and the Xcode
@@ -99,11 +128,8 @@ change merged to `main` that touches `website/` is deployed by
 
 ## Credits
 
-Lipik is built on [Handy](https://github.com/cjpais/Handy) by CJ Pais (MIT).
-Handy's recording, voice activity detection, model management and
-transcription engine are the base of this app. Thanks to CJ and everyone who
-contributes to Handy, and to the authors of transcribe.cpp, whisper.cpp, ggml
-and Silero VAD.
+Built on [Handy](https://github.com/cjpais/Handy) by CJ Pais (MIT). Thanks
+also to the authors of transcribe.cpp, whisper.cpp, ggml and Silero VAD.
 
 ## Licence
 

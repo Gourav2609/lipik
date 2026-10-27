@@ -3,6 +3,7 @@
 //! with a local Ollama model. See CONTRACT.md for the commands and events.
 
 mod ai;
+pub mod ai_apps;
 mod audio;
 pub mod calendar;
 pub mod commands;
@@ -10,6 +11,7 @@ pub mod commands;
 mod coreaudio;
 mod detect;
 mod live;
+pub mod mcp;
 mod store;
 mod transcribe;
 

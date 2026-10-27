@@ -1,0 +1,19 @@
+# Lipik
+
+> Free, open-source (MIT) voice dictation for Mac. Hold fn, speak, let go: clean text is typed in any app. Speech to text and clean-up run on the Mac; no account, no word limit.
+
+## Facts
+
+- Platform: macOS, Apple silicon (M1 or later)
+- Price: free. Licence: MIT
+- Speech model: Parakeet Unified English 0.6B by default (one-time 731 MB download); free Whisper models cover 99 languages; Hinglish in beta
+- Clean-up: Qwen3 8B through the free Ollama app (about 5 GB), on the Mac; optional
+- Features: tone per app, dictionary, snippets, hands-free (fn + Space), meeting notes with a summary, AI apps can read meeting notes through MCP, works with Wi-Fi off once the models are downloaded
+- Network: one-time model downloads only; no account, no telemetry; cloud clean-up only if the user adds their own API key
+
+## Links
+
+- Download: https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg
+- Code: https://github.com/Gourav2609/lipik
+- Release notes: https://lipik.refflux.dev/releases
+- Pricing: https://lipik.refflux.dev/pricing
