@@ -17,15 +17,15 @@ Plus seconds per clip, model time and peak memory.
 
 ## Pipelines
 
-| Name in results | What runs |
-| --- | --- |
-| Lipik, final text | Release binary (`src-tauri/target/release/bundle/macos/Lipik.app`), Parakeet Unified en 0.6B Q8, then Lipik's text steps with an empty dictionary and clean-up through local Ollama `qwen3:8b`. `--clean=<app bundle id>` |
-| Lipik, raw Parakeet text | Same run, the `text` field before the text steps |
-| Handy upstream | cjpais/Handy `main`, release build, same Parakeet model, no clean-up |
-| Apple Dictation en-IN | Apple's on-device `DictationTranscriber` (`apple.swift`) |
-| Qwen3-ASR 1.7B, raw | Through Lipik's binary; mainly the third opinion for draft references |
-| Whisper large-v3-turbo | Only if its GGUF is already on this Mac (it was not on 2026-10-27) |
-| Lipik as typed at the time | `history.db` text, private dictations only (unpadded live audio) |
+| Name in results            | What runs                                                                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lipik, final text          | Release binary (`src-tauri/target/release/bundle/macos/Lipik.app`), Parakeet Unified en 0.6B Q8, then Lipik's text steps with an empty dictionary and clean-up through local Ollama `qwen3:8b`. `--clean=<app bundle id>` |
+| Lipik, raw Parakeet text   | Same run, the `text` field before the text steps                                                                                                                                                                          |
+| Handy upstream             | cjpais/Handy `main`, release build, same Parakeet model, no clean-up                                                                                                                                                      |
+| Apple Dictation en-IN      | Apple's on-device `DictationTranscriber` (`apple.swift`)                                                                                                                                                                  |
+| Qwen3-ASR 1.7B, raw        | Through Lipik's binary; mainly the third opinion for draft references                                                                                                                                                     |
+| Whisper large-v3-turbo     | Only if its GGUF is already on this Mac (it was not on 2026-10-27)                                                                                                                                                        |
+| Lipik as typed at the time | `history.db` text, private dictations only (unpadded live audio)                                                                                                                                                          |
 
 ## Clip sets
 
@@ -119,11 +119,11 @@ marker and links the Parakeet model from `~/.cache/huggingface/hub`.
 
 ## Files
 
-| File | What it does |
-| --- | --- |
-| `prepare_private.py` | Cuts the private clips into `private/audio/`, writes `private/clips.json` |
-| `prepare_public.py` | Fetches the Svarah subset into `public/` |
-| `run.py` | Runs one pipeline on one set; results in `runs/<set>-<pipeline>.jsonl` (`private/runs/` for the private set) |
-| `apple.swift` | Apple DictationTranscriber over a list of WAV files |
-| `make_refs.py` | Draft references + `private/review.html` |
-| `score.py` | `RESULTS.md` and `private/RESULTS.md` |
+| File                 | What it does                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `prepare_private.py` | Cuts the private clips into `private/audio/`, writes `private/clips.json`                                    |
+| `prepare_public.py`  | Fetches the Svarah subset into `public/`                                                                     |
+| `run.py`             | Runs one pipeline on one set; results in `runs/<set>-<pipeline>.jsonl` (`private/runs/` for the private set) |
+| `apple.swift`        | Apple DictationTranscriber over a list of WAV files                                                          |
+| `make_refs.py`       | Draft references + `private/review.html`                                                                     |
+| `score.py`           | `RESULTS.md` and `private/RESULTS.md`                                                                        |

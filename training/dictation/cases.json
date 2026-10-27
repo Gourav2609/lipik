@@ -1,13 +1,68 @@
 [
-  {"id": "email-plain", "say": "gourav at keychain dot com", "expect": "gourav@keychain.com", "app": ""},
-  {"id": "email-at-the-rate", "say": "gourav at the rate keychain dot com", "expect": "gourav@keychain.com", "app": ""},
-  {"id": "email-sentence", "say": "my email is gourav at the rate keychain dot com", "expect": "My email is gourav@keychain.com.", "app": "com.apple.Notes"},
-  {"id": "slack", "say": "hey can we, um, move the call to four, no, five", "expect": "Hey, can we move the call to 5?", "app": "com.tinyspeck.slackmacgap"},
-  {"id": "gmail", "say": "uh send it to rivaan underscore m at quavia dot com", "expect": "Send it to rivaan_m@quavia.com", "app": "com.apple.mail"},
-  {"id": "claude", "say": "can you, um, summarise this meeting for the team, no, for the clients in five bullet points", "expect": "Can you summarise this meeting for the clients in 5 bullet points?", "app": "com.anthropic.claudefordesktop"},
-  {"id": "wifi", "say": "notes from the train, uh, the venue is booked for the fourteenth", "expect": "Notes from the train: the venue is booked for the 14th.", "app": "com.apple.Notes"},
-  {"id": "vocab", "say": "ask rivaan to move the quavia sync to thursday", "expect": "Ask Rivaan to move the Quavia sync to Thursday.", "app": "com.tinyspeck.slackmacgap"},
-  {"id": "snippet", "say": "my address", "expect": "14 Orchard Lane, Flat 3B, Pune 411001", "app": "com.apple.Notes"},
-  {"id": "real-email-1", "wav": "private/gourav_email_1.wav", "expect": "gourav@keychain.com", "app": ""},
-  {"id": "real-email-2", "wav": "private/gourav_email_2.wav", "expect": "gourav@keychain.com", "app": ""}
+  {
+    "id": "email-plain",
+    "say": "gourav at keychain dot com",
+    "expect": "gourav@keychain.com",
+    "app": ""
+  },
+  {
+    "id": "email-at-the-rate",
+    "say": "gourav at the rate keychain dot com",
+    "expect": "gourav@keychain.com",
+    "app": ""
+  },
+  {
+    "id": "email-sentence",
+    "say": "my email is gourav at the rate keychain dot com",
+    "expect": "My email is gourav@keychain.com.",
+    "app": "com.apple.Notes"
+  },
+  {
+    "id": "slack",
+    "say": "hey can we, um, move the call to four, no, five",
+    "expect": "Hey, can we move the call to 5?",
+    "app": "com.tinyspeck.slackmacgap"
+  },
+  {
+    "id": "gmail",
+    "say": "uh send it to rivaan underscore m at quavia dot com",
+    "expect": "Send it to rivaan_m@quavia.com",
+    "app": "com.apple.mail"
+  },
+  {
+    "id": "claude",
+    "say": "can you, um, summarise this meeting for the team, no, for the clients in five bullet points",
+    "expect": "Can you summarise this meeting for the clients in 5 bullet points?",
+    "app": "com.anthropic.claudefordesktop"
+  },
+  {
+    "id": "wifi",
+    "say": "notes from the train, uh, the venue is booked for the fourteenth",
+    "expect": "Notes from the train: the venue is booked for the 14th.",
+    "app": "com.apple.Notes"
+  },
+  {
+    "id": "vocab",
+    "say": "ask rivaan to move the quavia sync to thursday",
+    "expect": "Ask Rivaan to move the Quavia sync to Thursday.",
+    "app": "com.tinyspeck.slackmacgap"
+  },
+  {
+    "id": "snippet",
+    "say": "my address",
+    "expect": "14 Orchard Lane, Flat 3B, Pune 411001",
+    "app": "com.apple.Notes"
+  },
+  {
+    "id": "real-email-1",
+    "wav": "private/gourav_email_1.wav",
+    "expect": "gourav@keychain.com",
+    "app": ""
+  },
+  {
+    "id": "real-email-2",
+    "wav": "private/gourav_email_2.wav",
+    "expect": "gourav@keychain.com",
+    "app": ""
+  }
 ]
