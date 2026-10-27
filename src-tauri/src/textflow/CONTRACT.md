@@ -193,7 +193,8 @@ stay). The research behind the steps is in `training/cleanup/`
    Other styles (casual, very casual) change punctuation and capitals
    everywhere, so the whole text always goes to the model.
 
-3. **Model**. Ollama (the Notetaker's `ollama_url` /
+3. **Model**. The built-in engine or Ollama (below, "Clean-up engine").
+   Ollama: the Notetaker's `ollama_url` /
    `ollama_model` settings, default `qwen3:8b` at `127.0.0.1:11434`,
    `think: false`, `temperature` 0.2, `keep_alive` 1 h, `num_predict`
    capped at the longest reply the checks accept: 1.5x the text + 40
@@ -280,17 +281,87 @@ the plain `qwen3:4b` tag: on Ollama it is now a thinking model that ignores
 1.4 times as fast as `qwen3:8b`, with more misses (78% against 83% of the
 benchmark's English clips, 60% against 70% of its long dictations).
 
+### Clean-up engine (`engine.rs`)
+
+The setting `cleanup_engine` (`"builtin"` or `"ollama"`, Settings →
+Meetings → Clean-up engine) picks what runs the model, for clean-up,
+transforms, meeting notes and Ask.
+
+- **Built-in** (the default for new users): llama.cpp's `llama-server`
+  (release b11935, MIT), built by `scripts/fetch-llama-server.sh` as one
+  static file (Metal shaders inside, no web page, no HTTPS) and shipped next
+  to the app binary as a tauri `externalBin`, signed with the app. It is a
+  separate process because transcribe.cpp already links its own ggml and
+  two copies in one process crash. It is offered only on macOS 13.3 or
+  later (the helper's minimum); older Macs use Ollama. The model goes by
+  the Mac's memory: 16 GB or more gets Qwen3-8B Q4_K_M
+  (`Qwen/Qwen3-8B-GGUF` at `7c41481f`, 5.0 GB), less gets
+  Qwen3-4B-Instruct-2507 Q4_K_M (`unsloth/Qwen3-4B-Instruct-2507-GGUF` at
+  `a06e946b`, 2.5 GB), never plain Qwen3-4B (it thinks out loud). Files and
+  SHA-256 are in `engine.rs`; they are saved in `models/cleanup/` in the
+  app data folder.
+  - The server starts on a free 127.0.0.1 port with `--ctx-size 4096`,
+    `--parallel 1`, `--flash-attn auto`, prompt caching on, the host-memory
+    prompt cache off, `--reasoning off`, `--offline`, `--alias
+lipik-cleanup` (so `/v1/models` and `/props` name the alias, not the
+    file path), a CORS origin no web page has, and a random API key (env
+    `LLAMA_API_KEY`, sent as a bearer token). It counts as loaded once
+    `GET /health` answers 200 (up to 120 s).
+  - A request that needs more context (a long dictation, or meeting notes
+    at 16384) restarts the server at that size. The restart cuts off a
+    request still running on the smaller server (for example a warm-up), which
+    then fails like any failed call.
+  - It starts with the warm-up when a dictation starts recording, or on the
+    first request that may wait; a request finds a dead server and starts a
+    new one. A server that does not load (it exits, or `/health` never
+    answers) is not started again for 5 minutes: requests fail at once in
+    that time. It stops after 1 h without requests (like Ollama's
+    keep-alive), when the user switches to Ollama, and when the app quits;
+    at start-up the app stops servers an earlier crash left running (same
+    binary path, parent gone).
+  - Requests: `POST /v1/chat/completions` with the same messages,
+    `temperature` 0.2, `max_tokens` = the `num_predict` cap above,
+    `cache_prompt: true` and
+    `chat_template_kwargs: {enable_thinking: false}`; a reply with
+    `finish_reason: "length"` under a cap is a failed call, and a `<think>`
+    block is removed before anything else reads the reply. Notes and Ask
+    add `response_format: {type: "json_object"}`.
+- **Ollama** (advanced): today's path, unchanged. Switching to the built-in
+  engine asks Ollama to unload its model (`keep_alive: 0`).
+- No setting yet (first start of this version): requests go to Ollama until
+  the built-in model file is there, so people who already use Ollama never
+  lose clean-up (without Ollama the request fails at once and the rules
+  text is pasted). Onboarding and Settings offer the built-in engine.
+  While the setting is unset, Ollama is asked every 30 s: Ollama with the
+  clean-up model (not plain `qwen3:4b`) and no built-in model saves Ollama
+  as the choice; a downloaded built-in model saves built-in. Nothing is
+  saved while a built-in download runs.
+
 ### Setting up the model (`cleanup_model.rs`)
 
 Onboarding (the Clean-up step) and Settings → Meetings use these:
 
-| Command                       | Returns              |
-| ----------------------------- | -------------------- |
-| `cleanup_model_status()`      | `CleanupModelStatus` |
-| `pull_cleanup_model()`        | `Result<boolean>`    |
-| `cancel_cleanup_model_pull()` | nothing              |
+| Command                                     | Returns              |
+| ------------------------------------------- | -------------------- |
+| `cleanup_model_status()`                    | `CleanupModelStatus` |
+| `pull_cleanup_model()`                      | `Result<boolean>`    |
+| `cancel_cleanup_model_pull()`               | nothing              |
+| `set_cleanup_engine(engine: CleanupEngine)` | nothing              |
 
-- Status: `downloading` while a download runs (with its progress and the
+`CleanupModelStatus` has the `engine`, whether this build has the built-in
+engine (`builtin_available`), the `state`, the `model` name, the download
+`progress` and, for the built-in engine, the download `size` in bytes.
+
+- Built-in: `downloading` while a download runs, `verifying` while its
+  SHA-256 is checked (about 10 s for 5 GB), else `ready` when the model
+  file is there, else `no_model`. The download uses the app's
+  resumable downloader (`managers/model/download.rs`) from the pinned
+  Hugging Face URL into `<file>.partial`: a cancel or a broken connection
+  keeps the partial file and the next download continues it; the size and
+  SHA-256 are checked before it is renamed. It needs the model's size plus
+  1 GB of free disk. Progress comes as the same `cleanup-model-pull`
+  events.
+- Ollama: `downloading` while a download runs (with its progress and the
   model being downloaded); otherwise `GET {ollama_url}/api/tags` with a
   1.5 s limit: no answer = `no_ollama`, plain `qwen3:4b` = `slow_model`,
   the model listed = `ready` (a name without a tag means `:latest`), else

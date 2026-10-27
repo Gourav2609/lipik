@@ -7,6 +7,7 @@ import { OVERLAYS } from "./overlays";
 import { PAGES } from "./pages";
 import { SettingsModal } from "./SettingsModal";
 import { SecureInputNotice } from "./SecureInputNotice";
+import { UpdateNotice } from "./UpdateNotice";
 import { Sidebar } from "./Sidebar";
 import { type OverlayId, type PageId, useFlowStore } from "./state";
 import {
@@ -99,6 +100,7 @@ export const FlowApp = () => {
       <main className="fk-main absolute inset-y-0 right-0 overflow-hidden border-l border-[var(--fk-border)] bg-[var(--fk-panel)]">
         <div className="fk-scroll absolute inset-x-0 bottom-0 top-[var(--fk-header-h)]">
           <SecureInputNotice />
+          <UpdateNotice />
           <Page />
         </div>
       </main>

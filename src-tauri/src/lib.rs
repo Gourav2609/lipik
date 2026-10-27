@@ -23,6 +23,7 @@ mod overlay;
 mod paste_tx;
 mod pill;
 pub mod portable;
+mod release_check;
 mod secure_input;
 mod settings;
 mod shortcut;
@@ -855,6 +856,9 @@ pub fn run(cli_args: CliArgs) {
             textflow::cleanup_model::cleanup_model_status,
             textflow::cleanup_model::pull_cleanup_model,
             textflow::cleanup_model::cancel_cleanup_model_pull,
+            textflow::cleanup_model::set_cleanup_engine,
+            release_check::check_for_new_release,
+            release_check::change_release_check_setting,
             notetaker::ai_apps::ai_apps_status,
             notetaker::ai_apps::connect_ai_app,
             notetaker::ai_apps::disconnect_ai_app,
@@ -866,6 +870,9 @@ pub fn run(cli_args: CliArgs) {
             notetaker::commands::notetaker_save_thoughts,
             notetaker::commands::notetaker_delete,
             notetaker::commands::notetaker_rename,
+            notetaker::commands::notetaker_rename_speaker,
+            notetaker::commands::notetaker_saved_voices,
+            notetaker::commands::notetaker_forget_voices,
             notetaker::commands::notetaker_move_to_folder,
             notetaker::commands::notetaker_folders,
             notetaker::commands::notetaker_regenerate,
@@ -1062,6 +1069,7 @@ pub fn run(cli_args: CliArgs) {
                     if let Some(tm) = handle.try_state::<Arc<TranscriptionManager>>() {
                         let _ = tm.unload_model();
                     }
+                    textflow::shutdown();
                     // process::exit (not app.exit, which exits 0 regardless) so the
                     // exit code propagates to the shell for CI gating. Flush first
                     // since process::exit runs no destructors / buffer flushes.
@@ -1278,6 +1286,7 @@ pub fn run(cli_args: CliArgs) {
             }
             show_main_window(app);
         }
+        tauri::RunEvent::Exit => textflow::shutdown(),
         // No transcription teardown on exit: transcribe.cpp runs only in the
         // worker process, which exits by itself as soon as this process's end
         // of its stdin closes, even if it is hung. Waiting on an unload here

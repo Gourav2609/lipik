@@ -74,7 +74,7 @@
             "name": "What do I need to run Lipik?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "A Mac with Apple silicon (M1 or later). For the clean-up step you also need the free Ollama app with the Qwen3 8B model, which is about 5 GB. Without it, Lipik still types what you said, just without the clean-up."
+              "text": "A Mac with Apple silicon (M1 or later). Clean-up is built in, with no extra app. During setup, one button downloads the clean-up model from Hugging Face: Qwen3 8B (5 GB) on Macs with 16 GB of memory or more, or Qwen3 4B Instruct (2.5 GB) on smaller Macs. Built-in clean-up needs macOS 13.3 or later. On older versions, you can use the free Ollama app for clean-up. Without a clean-up model, Lipik still types what you said, and its built-in rules fix \"um\", spoken punctuation, numbers, times and emails."
             }
           },
           {
@@ -1379,7 +1379,7 @@
                 <h3 id="notes-h">Meeting notes</h3>
                 <p>
                   Record a call. Get the transcript and a short summary, made on
-                  your Mac.
+                  your Mac. The other side is split into speakers you can name.
                 </p>
               </div>
               <div class="mock notes-mock">
@@ -1595,7 +1595,7 @@
             </div>
             <div>
               <dt>Clean-up</dt>
-              <dd>Qwen3 8B through the free Ollama app, on your Mac</dd>
+              <dd>Qwen3 8B or 4B, built in, on your Mac</dd>
             </div>
             <div>
               <dt>Account</dt>
@@ -1622,11 +1622,16 @@
               <summary>What do I need to run Lipik?</summary>
               <div class="faq-a">
                 <p>
-                  A Mac with Apple silicon (M1 or later). For the clean-up step
-                  you also need the free
-                  <a href="https://ollama.com">Ollama</a> app with the Qwen3 8B
-                  model, which is about 5 GB. Without it, Lipik still types what
-                  you said, just without the clean-up.
+                  A Mac with Apple silicon (M1 or later). Clean-up is built in,
+                  with no extra app. During setup, one button downloads the
+                  clean-up model from Hugging Face: Qwen3 8B (5 GB) on Macs with
+                  16 GB of memory or more, or Qwen3 4B Instruct (2.5 GB) on
+                  smaller Macs. Built-in clean-up needs macOS 13.3 or later. On
+                  older versions, you can use the free
+                  <a href="https://ollama.com">Ollama</a> app for clean-up.
+                  Without a clean-up model, Lipik still types what you said, and
+                  its built-in rules fix "um", spoken punctuation, numbers,
+                  times and emails.
                 </p>
               </div>
             </details>
@@ -1708,7 +1713,7 @@
             >
           </div>
           <p class="fineprint">
-            <span id="dl-version">Version 0.1.1, 16 MB.</span> The first time
+            <span id="dl-version">Version 0.1.3, 23 MB.</span> The first time
             you open it, macOS asks you to confirm: go to System Settings, then
             Privacy &amp; Security, and click Open Anyway.
             <a
@@ -1749,11 +1754,12 @@
 
     <script src="main.js"></script>
     <script src="nav.js"></script>
-      <!-- Cloudflare Web Analytics --><script
+    <!-- Cloudflare Web Analytics -->
+    <script
       type="module"
       src="https://static.cloudflareinsights.com/beacon.min.js"
       data-cf-beacon='{"token": "a15babb81e4142a0a4f64e26ec8361bf"}'
-    ></script
-    ><!-- End Cloudflare Web Analytics -->
+    ></script>
+    <!-- End Cloudflare Web Analytics -->
   </body>
 </html>

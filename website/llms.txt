@@ -7,9 +7,10 @@
 - Platform: macOS, Apple silicon (M1 or later)
 - Price: free. Licence: MIT
 - Speech model: Parakeet Unified English 0.6B by default (one-time 731 MB download); free Whisper models cover 99 languages; Hinglish in beta
-- Clean-up: Qwen3 8B through the free Ollama app (about 5 GB), on the Mac; optional
+- Clean-up: optional and built in (runs on the Mac through llama.cpp, no extra app); one button in setup or Settings → Meetings downloads Qwen3 8B (5 GB) on Macs with 16 GB of memory or more, or Qwen3 4B Instruct (2.5 GB) on smaller Macs, from Hugging Face; meeting summaries and Ask use it too; needs macOS 13.3 or later (older Macs use Ollama); Ollama stays an optional advanced choice in Settings; without a clean-up model, built-in rules still fix "um", spoken punctuation, numbers, times and emails
 - Features: tone per app, dictionary, snippets, hands-free (fn + Space), meeting notes with a summary, AI apps can read meeting notes through MCP, works with Wi-Fi off once the models are downloaded
-- Network: one-time model downloads only; no account, no telemetry; cloud clean-up only if the user adds their own API key
+- Meeting notes speakers: the mic is the user; the call audio is split into Speaker 1, Speaker 2 and so on, or names when there's clear evidence (they introduce themselves or are addressed by name); clicking a speaker's name renames them everywhere in that meeting, and Lipik recognises that voice in later meetings; saved voices stay on the Mac, are removed with their meeting, and can all be forgotten in Settings → Privacy; one-time 33 MB speaker model; calls over 3 hours keep a single "Them"
+- Network: one-time downloads from Hugging Face (speech model 731 MB, clean-up model 2.5 or 5 GB, speaker model 33 MB); Apple's English (India) speech files through macOS, for Hinglish only; once a day a request to GitHub for the latest version number, to show a "new version" notice (carries nothing about the user; can be turned off in Settings → Privacy → Updates); cloud clean-up only if the user adds their own API key; no account, no telemetry
 
 ## Links
 

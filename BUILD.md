@@ -12,6 +12,10 @@ not tested here; Handy's own BUILD.md covers those platforms.
 - For Apple's on-device dictation: the macOS 26 SDK (Xcode 26 or its Command
   Line Tools). With an older SDK the build makes a stub helper and Lipik uses
   the local speech model only.
+- [CMake](https://cmake.org/) (`brew install cmake`) and the internet on the
+  first build: `scripts/fetch-llama-server.sh` (run by the build) downloads
+  llama.cpp's pinned source and builds `llama-server`, the built-in clean-up
+  engine, once (about a minute).
 
 ## Run and build
 

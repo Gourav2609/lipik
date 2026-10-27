@@ -4,6 +4,7 @@
 pub mod cleanup_model;
 pub mod commands;
 mod context;
+pub mod engine;
 mod gate;
 pub mod hindi;
 mod insights;
@@ -22,6 +23,28 @@ pub use pipeline::{
 
 use store::{DictionaryWord, TextFlow};
 use tauri::{AppHandle, Manager};
+
+/// Dictionary words and replacements that look like email addresses (the
+/// user's own, usually).
+pub fn dictionary_emails(app: &AppHandle) -> Vec<String> {
+    let Some(tf) = app.try_state::<TextFlow>() else {
+        return Vec::new();
+    };
+    tf.read(|d| {
+        d.dictionary
+            .words
+            .iter()
+            .map(|w| w.word.trim().to_string())
+            .chain(
+                d.dictionary
+                    .replacements
+                    .iter()
+                    .map(|r| r.to.trim().to_string()),
+            )
+            .filter(|w| w.contains('@') && !w.contains(char::is_whitespace))
+            .collect()
+    })
+}
 
 pub fn init(app: &AppHandle) {
     let dir = match crate::portable::app_data_dir(app) {
@@ -56,6 +79,13 @@ pub fn init(app: &AppHandle) {
     app.manage(textflow);
     app.manage(notes::Notes::new(dir.join("scratchpad.db")));
     menu::keep_hidden_after_dictation(app);
+    engine::init();
+    cleanup_model::pick_engine(app);
+}
+
+/// Runs when the app quits: stops the built-in clean-up engine.
+pub fn shutdown() {
+    engine::ENGINE.stop();
 }
 
 /// Runs when a dictation starts recording: remembers the target app, tells

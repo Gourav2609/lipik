@@ -36,6 +36,7 @@ import {
   type Processing,
 } from "./data";
 import { meetingNames, Mentions } from "./names";
+import { SpeakerNameInput } from "@/components/notetaker/SpeakerNameInput";
 import { NoteMenu, type NoteMenuMode } from "./NoteMenu";
 
 export type NoteTab = "thoughts" | "transcript" | "summary";
@@ -105,13 +106,62 @@ const speakerLabel = (speaker: string) =>
   speaker === "Me" ? "You" : speaker === "Them" ? "Them" : speaker;
 
 const groupBySpeaker = (segments: Segment[]) => {
-  const groups: { speaker: string; items: Segment[] }[] = [];
+  const groups: { speaker: string; key: string; items: Segment[] }[] = [];
   for (const s of segments) {
+    const key = s.speaker_key || s.speaker;
     const last = groups[groups.length - 1];
-    if (last && last.speaker === s.speaker) last.items.push(s);
-    else groups.push({ speaker: s.speaker, items: [s] });
+    if (last && last.key === key) last.items.push(s);
+    else groups.push({ speaker: s.speaker, key, items: [s] });
   }
   return groups;
+};
+
+/** Click a speaker's label to name them; the name goes on all their lines. */
+const SpeakerLabel = ({
+  meetingId,
+  speaker,
+  speakerKey,
+  editable,
+  onRenamed,
+}: {
+  meetingId: string;
+  speaker: string;
+  speakerKey: string;
+  editable: boolean;
+  onRenamed: () => void;
+}) => {
+  const [editing, setEditing] = useState(false);
+  const style = `truncate text-[13px] font-semibold leading-[20px] ${speaker === "Me" ? "text-[var(--fk-accent)]" : ""}`;
+  const done = async (name: string | null) => {
+    setEditing(false);
+    if (!name) return;
+    const r = await commands
+      .notetakerRenameSpeaker(meetingId, speakerKey, name)
+      .catch(() => null);
+    if (r?.status !== "ok")
+      toast(`Couldn't rename: ${r?.error ?? "try again"}`);
+    onRenamed();
+  };
+  if (editing)
+    return (
+      <SpeakerNameInput
+        speaker={speaker}
+        placeholder={speakerLabel(speaker)}
+        onDone={(name) => void done(name)}
+        className={`${style} -mx-[4px] w-full rounded-[6px] bg-[var(--fk-surface)] px-[4px] outline-none`}
+      />
+    );
+  if (!editable) return <div className={style}>{speakerLabel(speaker)}</div>;
+  return (
+    <button
+      type="button"
+      title="Name this speaker"
+      onClick={() => setEditing(true)}
+      className={`${style} -mx-[4px] block max-w-full cursor-text rounded-[6px] px-[4px] text-left hover:bg-[var(--fk-surface)]`}
+    >
+      {speakerLabel(speaker)}
+    </button>
+  );
 };
 
 const transcriptText = (segments: Segment[]) =>
@@ -120,11 +170,16 @@ const transcriptText = (segments: Segment[]) =>
 const Transcript = ({
   detail,
   live,
+  writing,
   focusMs,
+  onRenamed,
 }: {
   detail: MeetingDetail;
   live: boolean;
+  /** Notes are being written: speakers can't be renamed until they are. */
+  writing: boolean;
   focusMs: number | null;
+  onRenamed: () => void;
 }) => {
   const { segments, meeting } = detail;
   const list = useRef<HTMLDivElement>(null);
@@ -175,12 +230,14 @@ const Transcript = ({
               key={`${g.items[0].start_ms}-${i}`}
               className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-[16px] border-b border-[var(--fk-border)] py-[12px]"
             >
-              <div className="pt-[2px]">
-                <div
-                  className={`truncate text-[13px] font-semibold leading-[20px] ${g.speaker === "Me" ? "text-[var(--fk-accent)]" : ""}`}
-                >
-                  {speakerLabel(g.speaker)}
-                </div>
+              <div className="min-w-0 pt-[2px]">
+                <SpeakerLabel
+                  meetingId={meeting.id}
+                  speaker={g.speaker}
+                  speakerKey={g.key}
+                  editable={!live && !writing && g.key !== "me"}
+                  onRenamed={onRenamed}
+                />
                 <div className="fk-num text-[12px] leading-[16px] text-[var(--fk-text-faint)]">
                   {clockDuration(g.items[0].start_ms)}
                 </div>
@@ -278,7 +335,7 @@ const STEPS = [
 
 const ProgressCard = ({ processing }: { processing: Processing | null }) => {
   const transcribing = processing?.stage === "transcribing";
-  const step = !processing ? 0 : transcribing ? 1 : 2;
+  const step = !processing ? 0 : processing.stage === "summarizing" ? 2 : 1;
   const percent =
     transcribing && processing.progress > 0
       ? Math.round(processing.progress * 100)
@@ -665,7 +722,13 @@ export const NoteView = ({
       <Tabs value={shownTab} onChange={setTab} live={live} writing={writing} />
       <div key={shownTab} className="nt-fade pt-[16px]">
         {shownTab === "transcript" && (
-          <Transcript detail={detail} live={live} focusMs={focusMs} />
+          <Transcript
+            detail={detail}
+            live={live}
+            writing={writing}
+            focusMs={focusMs}
+            onRenamed={reload}
+          />
         )}
         {shownTab === "summary" && (
           <Summary

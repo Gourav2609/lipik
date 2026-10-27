@@ -7,6 +7,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 use super::audio::{samples_to_ms, Piece, SpeechTrack, RATE};
+use super::diarize::{self, Speakers};
 use super::Segment;
 use crate::audio_toolkit::SpeechScorer;
 use crate::managers::audio::AudioRecordingManager;
@@ -106,30 +107,52 @@ pub fn release_model(app: &AppHandle) {
     }
 }
 
-pub fn piece_segment(piece: &Piece, offset_ms: i64, source: &str, text: String) -> Segment {
-    let start_ms = offset_ms + samples_to_ms(piece.start_sample);
+/// A transcribed piece as a line. With `speakers` (system audio split by
+/// voice), the line goes to the speaker heard most during the piece.
+pub fn piece_segment(
+    piece: &Piece,
+    offset_ms: i64,
+    source: &str,
+    text: String,
+    speakers: Option<&Speakers>,
+) -> Segment {
+    let wav_start = samples_to_ms(piece.start_sample);
+    let wav_end = wav_start + samples_to_ms(piece.audio.len() as u64);
+    let (speaker_key, speaker) = match speakers.and_then(|s| s.speaker_at(wav_start, wav_end)) {
+        Some(n) => diarize::key_and_label(n),
+        None => (
+            diarize::key_for(source).to_string(),
+            speaker_for(source).to_string(),
+        ),
+    };
     Segment {
         source: source.to_string(),
-        speaker: speaker_for(source).to_string(),
-        start_ms,
-        end_ms: start_ms + samples_to_ms(piece.audio.len() as u64),
+        speaker,
+        speaker_key,
+        start_ms: offset_ms + wav_start,
+        end_ms: offset_ms + wav_end,
         text,
     }
 }
 
 /// Every piece of speech in a finished stream WAV, transcribed. Reads the file
 /// in blocks so a long meeting is never held in memory. `progress` gets the
-/// fraction of the file done.
+/// fraction of the file done. With `speakers`, pieces also end where the
+/// speaker changes and each line is labelled with its speaker.
 pub fn transcribe_file(
     app: &AppHandle,
     path: &Path,
     offset_ms: i64,
     source: &str,
+    speakers: Option<&Speakers>,
     mut progress: impl FnMut(f32),
 ) -> Result<Vec<Segment>> {
     let mut reader = hound::WavReader::open(path)?;
     let total = reader.duration().max(1) as f32;
     let mut track = SpeechTrack::new(new_scorer(app));
+    if let Some(s) = speakers {
+        track.set_cuts(s.change_samples());
+    }
     let mut out = Vec::new();
     let mut block = Vec::with_capacity(8 * RATE);
     let mut read = 0usize;
@@ -150,6 +173,7 @@ pub fn transcribe_file(
                     offset_ms,
                     source,
                     text.trim().to_string(),
+                    speakers,
                 ));
             }
             progress(read as f32 / total);
@@ -242,6 +266,7 @@ mod tests {
         Segment {
             source: source.into(),
             speaker: speaker_for(source).into(),
+            speaker_key: diarize::key_for(source).into(),
             start_ms: start,
             end_ms: end,
             text: text.into(),
@@ -280,6 +305,28 @@ mod tests {
         );
         assert_eq!(merged[0].speaker, ME);
         assert_eq!(merged[1].speaker, THEM);
+    }
+
+    #[test]
+    fn pieces_take_the_speaker_heard_most() {
+        let speakers = diarize::tidy(&[(0, 30_000, 0), (30_000, 60_000, 1)], &[None, None]);
+        let piece = Piece {
+            start_sample: 28 * RATE as u64,
+            audio: vec![0.0; 10 * RATE],
+        };
+        let s = piece_segment(&piece, 1_500, "system", "hi".into(), Some(&speakers));
+        assert_eq!(
+            (s.speaker.as_str(), s.speaker_key.as_str()),
+            ("Speaker 2", "s2")
+        );
+        assert_eq!((s.start_ms, s.end_ms), (29_500, 39_500));
+        let plain = piece_segment(&piece, 0, "system", "hi".into(), None);
+        assert_eq!(
+            (plain.speaker.as_str(), plain.speaker_key.as_str()),
+            ("Them", "them")
+        );
+        let mic = piece_segment(&piece, 0, "mic", "hi".into(), None);
+        assert_eq!(mic.speaker_key, "me");
     }
 
     #[test]

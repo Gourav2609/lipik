@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { commands, type RecordingRetentionPeriod } from "@/bindings";
 import { useSettings } from "@/hooks/useSettings";
-import { Button } from "../ui";
+import { Button, Toggle } from "../ui";
 import { SettingsPage } from "./SettingsPage";
 import { Section, Select, SettingRow, SettingsCard } from "./parts";
 import { APP_NAME } from "@/flow/brand";
@@ -25,6 +27,35 @@ const OpenButton = ({ onClick }: { onClick: () => void }) => (
     Open
   </Button>
 );
+
+/** Voices kept from speakers the user named in meeting notes. */
+const SavedVoices = () => {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    void commands
+      .notetakerSavedVoices()
+      .then((r) => setCount(r.status === "ok" ? r.data : null))
+      .catch(() => setCount(null));
+  }, []);
+  const forget = async () => {
+    const r = await commands.notetakerForgetVoices().catch(() => null);
+    if (r?.status === "ok") setCount(0);
+    else toast(`Couldn't forget the voices: ${r?.error ?? "try again"}`);
+  };
+  const people =
+    count === null ? "" : `: ${count} ${count === 1 ? "person" : "people"}`;
+  return (
+    <SettingRow
+      title={`Saved voices${people}`}
+      description="When you name a speaker in meeting notes, their voice is kept on this Mac so later meetings can name them too."
+      control={
+        <Button variant="secondary" disabled={!count} onClick={forget}>
+          Forget all voices
+        </Button>
+      }
+    />
+  );
+};
 
 export default function Privacy() {
   const { getSetting, updateSetting, isUpdating } = useSettings();
@@ -75,6 +106,22 @@ export default function Privacy() {
           />
         </SettingsCard>
       </Section>
+      <Section title="Updates">
+        <SettingsCard>
+          <SettingRow
+            title="Check for new versions"
+            description="Once a day, asks GitHub for the latest version number. Nothing about you is sent."
+            control={
+              <Toggle
+                label="Check for new versions"
+                checked={getSetting("release_check_enabled") ?? true}
+                disabled={isUpdating("release_check_enabled")}
+                onChange={(v) => updateSetting("release_check_enabled", v)}
+              />
+            }
+          />
+        </SettingsCard>
+      </Section>
       <Section title="Your data">
         <SettingsCard>
           <SettingRow
@@ -89,6 +136,7 @@ export default function Privacy() {
               <OpenButton onClick={() => commands.openRecordingsFolder()} />
             }
           />
+          <SavedVoices />
         </SettingsCard>
       </Section>
     </SettingsPage>

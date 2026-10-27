@@ -902,6 +902,56 @@ mod tests {
         }
     }
 
+    /// The launch line through the real built-in engine: the llama-server
+    /// that scripts/fetch-llama-server.sh built and the GGUF file at
+    /// LIPIK_CLEANUP_MODEL, warmed up the way the app does:
+    /// `LIPIK_CLEANUP_MODEL=<file.gguf> cargo test --lib launch_line_through_the_builtin -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn launch_line_through_the_builtin_engine() {
+        use super::super::engine::{chat_body, post_chat, Engine};
+        let bin_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("llama-server/bin");
+        let binary = std::fs::read_dir(&bin_dir)
+            .expect("run scripts/fetch-llama-server.sh")
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .find(|p| {
+                p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("llama-server-"))
+            })
+            .expect("llama-server binary");
+        let model = std::path::PathBuf::from(std::env::var("LIPIK_CLEANUP_MODEL").unwrap());
+        let engine = Engine::new(Some(binary));
+        let started = std::time::Instant::now();
+        let conn = tauri::async_runtime::block_on(engine.ensure(&model, llm::SMALL_CONTEXT))
+            .expect("engine starts");
+        println!("started in {:?}", started.elapsed());
+        let warm = cleanup_messages("Slack", StyleKind::Formal, &[], false, "ok");
+        tauri::async_runtime::block_on(post_chat(&conn, &chat_body(&warm, Some(1)), false))
+            .expect("warm-up");
+        for said in [
+            "Hey can we, move the call to four, no, five.",
+            "so um I was thinking we could maybe like ship the update on friday",
+        ] {
+            let rules_text = rules::apply(said, &[]);
+            let messages = cleanup_messages("Slack", StyleKind::Formal, &[], false, &rules_text);
+            let started = std::time::Instant::now();
+            let limit = reply_token_limit(&rules_text);
+            let reply = tauri::async_runtime::block_on(post_chat(
+                &conn,
+                &chat_body(&messages, Some(limit)),
+                true,
+            ))
+            .expect("engine reply");
+            let text = accept(said, &reply, &rules_text, &[]);
+            println!(
+                "{said:?} -> {reply:?} -> {text:?} ({:?})",
+                started.elapsed()
+            );
+            assert!(!reply.contains("<think>"));
+        }
+        engine.stop();
+    }
+
     #[test]
     fn wrapping_tags_and_quotes_are_removed() {
         assert_eq!(

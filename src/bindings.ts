@@ -1228,9 +1228,10 @@ async cleanupModelStatus() : Promise<CleanupModelStatus> {
     return await TAURI_INVOKE("cleanup_model_status");
 },
 /**
- * Downloads the clean-up model through Ollama and loads it. Progress comes
- * as `CleanupModelPull` events. `Ok(false)`: cancelled, or replaced by a
- * newer download.
+ * Downloads the clean-up model of the engine onboarding and Settings show
+ * (the built-in engine's GGUF file, or through Ollama) and loads it.
+ * Progress comes as `CleanupModelPull` events. `Ok(false)`: cancelled, or
+ * replaced by a newer download.
  */
 async pullCleanupModel() : Promise<Result<boolean, string>> {
     try {
@@ -1242,6 +1243,20 @@ async pullCleanupModel() : Promise<Result<boolean, string>> {
 },
 async cancelCleanupModelPull() : Promise<void> {
     await TAURI_INVOKE("cancel_cleanup_model_pull");
+},
+/**
+ * Switches the engine for clean-up and notes. Leaving the built-in engine
+ * stops its server; moving to it unloads Ollama's model so the two don't
+ * both hold memory. A running download is cancelled.
+ */
+async setCleanupEngine(engine: CleanupEngine) : Promise<void> {
+    await TAURI_INVOKE("set_cleanup_engine", { engine });
+},
+async checkForNewRelease() : Promise<NewRelease | null> {
+    return await TAURI_INVOKE("check_for_new_release");
+},
+async changeReleaseCheckSetting(enabled: boolean) : Promise<void> {
+    await TAURI_INVOKE("change_release_check_setting", { enabled });
 },
 async aiAppsStatus() : Promise<AiApp[]> {
     return await TAURI_INVOKE("ai_apps_status");
@@ -1321,6 +1336,40 @@ async notetakerDelete(id: string) : Promise<Result<null, string>> {
 async notetakerRename(id: string, title: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("notetaker_rename", { id, title }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Names one speaker (`speaker_key` from a segment) on every line of the
+ * meeting.
+ */
+async notetakerRenameSpeaker(meetingId: string, speakerKey: string, name: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_rename_speaker", { meetingId, speakerKey, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * How many people have a saved voice (from speakers the user named).
+ */
+async notetakerSavedVoices() : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_saved_voices") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Forgets every saved voice, in all meetings.
+ */
+async notetakerForgetVoices() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_forget_voices") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1542,7 +1591,11 @@ shortcut_activation?: ShortcutActivation;
  * Hold-or-toggle only: a press held at least this long is push-to-talk,
  * anything shorter is a tap that locks recording on.
  */
-hold_threshold_ms?: number; audio_feedback?: boolean; audio_feedback_volume?: number; sound_theme?: SoundTheme; start_hidden?: boolean; autostart_enabled?: boolean; update_checks_enabled?: boolean; show_whats_new_on_update?: boolean; 
+hold_threshold_ms?: number; audio_feedback?: boolean; audio_feedback_volume?: number; sound_theme?: SoundTheme; start_hidden?: boolean; autostart_enabled?: boolean; update_checks_enabled?: boolean; 
+/**
+ * Lipik asks GitHub once a day whether a newer release is out.
+ */
+release_check_enabled?: boolean; show_whats_new_on_update?: boolean; 
 /**
  * The app version whose What's New the user has already seen. Fresh installs
  * default to the current version (nothing is "new" to them). Existing users
@@ -1587,7 +1640,13 @@ long_form_chunking?: boolean;
  * not gated on this — that follows model capability. Migrated from the old
  * `overlay_position` (position `none` → style `None`).
  */
-overlay_style?: OverlayStyle; pill_side?: PillSide; notetaker?: NotetakerSettings }
+overlay_style?: OverlayStyle; pill_side?: PillSide; notetaker?: NotetakerSettings; 
+/**
+ * What runs the clean-up model. `None` until the app has picked one:
+ * Ollama when it already has the clean-up model and the built-in model
+ * isn't downloaded, else the built-in engine. See textflow/CONTRACT.md.
+ */
+cleanup_engine?: CleanupEngine | null }
 export type AskAnswer = { thread_id: string; question: ChatMessage; answer: ChatMessage }
 export type Attendee = { name: string | null; email: string | null; is_me: boolean }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
@@ -1630,6 +1689,7 @@ export type Citation = {
  * The [n] marker used in the answer text.
  */
 marker: number; meeting_id: string; meeting_title: string; start_ms: number; quote: string }
+export type CleanupEngine = "builtin" | "ollama"
 /**
  * Download progress of the clean-up model, in bytes over all its files.
  */
@@ -1638,8 +1698,16 @@ export type CleanupModelState = "no_ollama" | "no_model" |
 /**
  * The model is plain `qwen3:4b`, which is too slow for dictation.
  */
-"slow_model" | "downloading" | "ready"
-export type CleanupModelStatus = { state: CleanupModelState; 
+"slow_model" | "downloading" | 
+/**
+ * The built-in model is downloaded and its checksum is being checked.
+ */
+"verifying" | "ready"
+export type CleanupModelStatus = { engine: CleanupEngine; 
+/**
+ * Whether this build has the built-in engine (macOS only).
+ */
+builtin_available: boolean; state: CleanupModelState; 
 /**
  * The configured model, or while `downloading` the model being downloaded.
  */
@@ -1647,7 +1715,11 @@ model: string;
 /**
  * Bytes so far while `state` is `downloading`.
  */
-progress: CleanupModelPull | null }
+progress: CleanupModelPull | null; 
+/**
+ * The built-in model's download size in bytes; 0 with Ollama.
+ */
+size: number }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type DailyWords = { 
@@ -1756,6 +1828,11 @@ sha256: string | null } } |
  */
 "Local"
 export type ModelUnloadTimeout = "never" | "immediately" | "min_2" | "min_5" | "min_10" | "min_15" | "hour_1" | "sec_15"
+export type NewRelease = { version: string; 
+/**
+ * The release page, with the notes and the download.
+ */
+url: string }
 export type Note = { id: string; title: string; body: string; 
 /**
  * Unix milliseconds.
@@ -1775,7 +1852,8 @@ export type NotetakerMeetingSoon = { event: CalendarEvent; starts_in_seconds: nu
 export type NotetakerNoteReady = { meeting_id: string; summary_status: SummaryStatus; summary_error: string | null }
 export type NotetakerProcessing = { meeting_id: string; stage: ProcessingStage; 
 /**
- * 0..1 for transcribing; summarizing has no progress and sends 0.
+ * 0..1 for transcribing; speakers and summarizing have no progress
+ * and send 0.
  */
 progress: number }
 export type NotetakerSettings = { 
@@ -1842,7 +1920,11 @@ export type PostProcessApiFormat =
  */
 "anthropic"
 export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean; api_format?: PostProcessApiFormat }
-export type ProcessingStage = "transcribing" | "summarizing"
+export type ProcessingStage = 
+/**
+ * Telling the voices on the call apart (before transcribing).
+ */
+"speakers" | "transcribing" | "summarizing"
 export type RecordingRetentionPeriod = "never" | 
 /**
  * Keep every recording and transcript; same as `Never` (never delete).
@@ -1892,9 +1974,16 @@ export type Segment = {
  */
 source: string; 
 /**
- * "Me", "Them", or a name found for a "Them" segment.
+ * What to show: "Me", "Them" (call audio not split by voice),
+ * "Speaker 1", "Speaker 2", … or a name.
  */
 speaker: string; 
+/**
+ * Which voice this is, fixed while `speaker` may be renamed: "me" (mic),
+ * "them" (call audio not split), or "s1", "s2", … in order of first
+ * appearance. Every line of one key shares one label.
+ */
+speaker_key: string; 
 /**
  * From the start of the meeting.
  */

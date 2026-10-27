@@ -193,6 +193,11 @@ export const Notepad = () => {
                   copy(transcriptText(detail.segments), "Transcript copied")
                 }
                 onSoon={setNotice}
+                busy={generating}
+                onRenameSpeaker={async (key, name) => {
+                  const error = await actions.renameSpeaker(key, name);
+                  if (error) setNotice(error);
+                }}
               />
             )}
             {tab === "summary" && (

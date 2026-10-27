@@ -356,6 +356,8 @@ pub struct SpeechTrack {
     pending: Vec<f32>,
     probs: Vec<f32>,
     base: u64,
+    /// Sample positions where a piece must end (speaker changes), ascending.
+    cuts: std::collections::VecDeque<u64>,
 }
 
 impl SpeechTrack {
@@ -367,7 +369,15 @@ impl SpeechTrack {
             pending: Vec::new(),
             probs: Vec::new(),
             base: 0,
+            cuts: Default::default(),
         }
+    }
+
+    /// Pieces will also end at these sample positions, on top of the pauses.
+    pub fn set_cuts(&mut self, mut cuts: Vec<u64>) {
+        cuts.sort_unstable();
+        cuts.dedup();
+        self.cuts = cuts.into();
     }
 
     pub fn push(&mut self, samples: &[f32]) {
@@ -406,10 +416,26 @@ impl SpeechTrack {
                 }
                 return None;
             }
+            while self.cuts.front().is_some_and(|&c| c <= self.base) {
+                self.cuts.pop_front();
+            }
+            let forced = self
+                .cuts
+                .front()
+                .map(|&c| ((c - self.base) as usize / self.frame).max(1))
+                .filter(|&f| f <= frames);
             let cut = self
                 .find_pause(min_f, max_f.min(frames), pause_f)
                 .or_else(|| (frames >= max_f).then(|| self.quietest(max_f, max_f / 4)))
-                .or_else(|| flush.then_some(frames))?;
+                .or_else(|| flush.then_some(frames));
+            let cut = match (forced, cut) {
+                (Some(f), Some(c)) if c < f => c,
+                (Some(f), _) => {
+                    self.cuts.pop_front();
+                    f
+                }
+                (None, c) => c?,
+            };
             if let Some(piece) = self.cut_at(cut) {
                 return Some(piece);
             }
@@ -520,6 +546,22 @@ mod tests {
         let piece = track.take(FINAL_RULES, false).expect("hard cut");
         let secs = piece.audio.len() as f32 / RATE as f32;
         assert!(secs <= 25.5, "piece {secs}s");
+    }
+
+    #[test]
+    fn cuts_where_the_speaker_changes() {
+        let mut track = SpeechTrack::new(None);
+        track.set_cuts(vec![4 * RATE as u64]);
+        track.push(&tone(10.0));
+        track.push(&silence(2.0));
+
+        let first = track.take(FINAL_RULES, false).expect("first speaker");
+        let secs = first.audio.len() as f32 / RATE as f32;
+        assert!((3.9..4.1).contains(&secs), "first piece {secs}s");
+        let second = track.take(FINAL_RULES, true).expect("second speaker");
+        let start = second.start_sample as f32 / RATE as f32;
+        assert!((3.9..4.1).contains(&start), "second starts {start}s");
+        assert!(track.take(FINAL_RULES, true).is_none());
     }
 
     #[test]

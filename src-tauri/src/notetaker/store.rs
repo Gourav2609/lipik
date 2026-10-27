@@ -4,6 +4,7 @@ use rusqlite_migration::{Migrations, M};
 use std::path::Path;
 use std::sync::Mutex;
 
+use super::diarize::{is_default_label, VoiceProfile};
 use super::{
     now_ms, Attendee, ChatMessage, ChatThread, Citation, FolderInfo, Meeting, MeetingDetail,
     MeetingStatus, NoteSummary, NotetakerFilter, Segment, SummaryStatus,
@@ -67,12 +68,42 @@ static MIGRATIONS: &[M] = &[
         "ALTER TABLE meetings ADD COLUMN process_attempts INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE summaries ADD COLUMN search_text TEXT NOT NULL DEFAULT '';",
     ),
+    M::up(
+        "ALTER TABLE segments ADD COLUMN speaker_key TEXT NOT NULL DEFAULT '';
+    UPDATE segments SET speaker_key = CASE WHEN source = 'mic' THEN 'me'
+        WHEN speaker = 'Them' THEN 'them' ELSE 'n:' || lower(speaker) END;
+    CREATE TABLE meeting_voices (
+        meeting_id TEXT NOT NULL,
+        speaker_key TEXT NOT NULL,
+        embedding BLOB NOT NULL,
+        speech_ms INTEGER NOT NULL,
+        named INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (meeting_id, speaker_key)
+    );",
+    ),
 ];
+
+/// Segments read by a store that skipped the migrations (the AI tools server
+/// on a database the app has not opened since an update) lack `speaker_key`.
+/// Same keys as the migration's backfill: each old name is its own speaker.
+const LEGACY_SPEAKER_KEY: &str = "CASE WHEN source = 'mic' THEN 'me' \
+    WHEN speaker = 'Them' THEN 'them' ELSE 'n:' || lower(speaker) END";
+
+fn voice_to_blob(voice: &[f32]) -> Vec<u8> {
+    voice.iter().flat_map(|x| x.to_le_bytes()).collect()
+}
+
+fn voice_from_blob(blob: &[u8]) -> Vec<f32> {
+    blob.chunks_exact(4)
+        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .collect()
+}
 
 const MEETING_COLUMNS: &str = "id, title, title_auto, start_ms, end_ms, app, bundle_id, calendar_event_id, attendees_json, folder, status, summary_status, summary_error, mic_offset_ms, system_offset_ms";
 
 pub struct Store {
     conn: Mutex<Connection>,
+    speaker_key_column: &'static str,
 }
 
 /// The words of the notes, without the JSON keys, for search.
@@ -122,6 +153,7 @@ fn segment_from_row(row: &Row) -> rusqlite::Result<Segment> {
         start_ms: row.get(2)?,
         end_ms: row.get(3)?,
         text: row.get(4)?,
+        speaker_key: row.get(5)?,
     })
 }
 
@@ -134,6 +166,7 @@ impl Store {
             .map_err(|e| anyhow!("notetaker migrations failed: {e}"))?;
         Ok(Self {
             conn: Mutex::new(conn),
+            speaker_key_column: "speaker_key",
         })
     }
 
@@ -141,8 +174,18 @@ impl Store {
     /// writing: no migrations, no writes.
     pub fn open_read_only(path: &Path) -> Result<Self> {
         let conn = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let has_key: bool = conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM pragma_table_info('segments') WHERE name = 'speaker_key')",
+            [],
+            |r| r.get(0),
+        )?;
         Ok(Self {
             conn: Mutex::new(conn),
+            speaker_key_column: if has_key {
+                "speaker_key"
+            } else {
+                LEGACY_SPEAKER_KEY
+            },
         })
     }
 
@@ -268,19 +311,20 @@ impl Store {
             |r| r.get(0),
         )?;
         let pass = if has_final { "final" } else { "live" };
-        let mut stmt = conn.prepare(
-            "SELECT source, speaker, start_ms, end_ms, text FROM segments
+        let mut stmt = conn.prepare(&format!(
+            "SELECT source, speaker, start_ms, end_ms, text, {} FROM segments
              WHERE meeting_id = ?1 AND pass = ?2 ORDER BY start_ms, id",
-        )?;
+            self.speaker_key_column
+        ))?;
         let rows = stmt.query_map(params![id, pass], segment_from_row)?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     pub fn add_live_segment(&self, meeting_id: &str, s: &Segment) -> Result<()> {
         self.conn().execute(
-            "INSERT INTO segments (meeting_id, pass, source, speaker, start_ms, end_ms, text)
-             VALUES (?1, 'live', ?2, ?3, ?4, ?5, ?6)",
-            params![meeting_id, s.source, s.speaker, s.start_ms, s.end_ms, s.text],
+            "INSERT INTO segments (meeting_id, pass, source, speaker, start_ms, end_ms, text, speaker_key)
+             VALUES (?1, 'live', ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![meeting_id, s.source, s.speaker, s.start_ms, s.end_ms, s.text, s.speaker_key],
         )?;
         Ok(())
     }
@@ -294,13 +338,139 @@ impl Store {
         )?;
         for s in segments {
             tx.execute(
-                "INSERT INTO segments (meeting_id, pass, source, speaker, start_ms, end_ms, text)
-                 VALUES (?1, 'final', ?2, ?3, ?4, ?5, ?6)",
-                params![meeting_id, s.source, s.speaker, s.start_ms, s.end_ms, s.text],
+                "INSERT INTO segments (meeting_id, pass, source, speaker, start_ms, end_ms, text, speaker_key)
+                 VALUES (?1, 'final', ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![meeting_id, s.source, s.speaker, s.start_ms, s.end_ms, s.text, s.speaker_key],
             )?;
         }
         tx.commit()?;
         Ok(())
+    }
+
+    /// Renames every line of one speaker in a meeting.
+    pub fn rename_speaker(&self, meeting_id: &str, speaker_key: &str, name: &str) -> Result<()> {
+        let changed = self.conn().execute(
+            "UPDATE segments SET speaker = ?3 WHERE meeting_id = ?1 AND speaker_key = ?2",
+            params![meeting_id, speaker_key, name],
+        )?;
+        if changed == 0 {
+            return Err(anyhow!("No speaker {speaker_key} in this meeting"));
+        }
+        Ok(())
+    }
+
+    /// The voices heard in a meeting's call audio, replacing earlier ones.
+    pub fn save_meeting_voices(
+        &self,
+        meeting_id: &str,
+        voices: &[(String, Vec<f32>, i64)],
+    ) -> Result<()> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM meeting_voices WHERE meeting_id = ?1",
+            params![meeting_id],
+        )?;
+        for (key, voice, speech_ms) in voices {
+            tx.execute(
+                "INSERT INTO meeting_voices (meeting_id, speaker_key, embedding, speech_ms)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![meeting_id, key, voice_to_blob(voice), speech_ms],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn meeting_voice(&self, meeting_id: &str, speaker_key: &str) -> Result<Option<Vec<f32>>> {
+        let blob: Option<Vec<u8>> = self
+            .conn()
+            .query_row(
+                "SELECT embedding FROM meeting_voices WHERE meeting_id = ?1 AND speaker_key = ?2",
+                params![meeting_id, speaker_key],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(blob.map(|b| voice_from_blob(&b)))
+    }
+
+    /// Marks whether the user named this meeting voice (only those make
+    /// voice profiles).
+    pub fn set_voice_named(&self, meeting_id: &str, speaker_key: &str, named: bool) -> Result<()> {
+        self.conn().execute(
+            "UPDATE meeting_voices SET named = ?3 WHERE meeting_id = ?1 AND speaker_key = ?2",
+            params![meeting_id, speaker_key, named as i64],
+        )?;
+        Ok(())
+    }
+
+    /// One profile per name the user gave a voice: the average of every
+    /// meeting voice they named so, under its current label. A corrected name
+    /// moves the voice to the new name; a deleted meeting stops counting.
+    pub fn voice_profiles(&self) -> Result<Vec<VoiceProfile>> {
+        let rows: Vec<(Option<String>, Vec<u8>)> = {
+            let conn = self.conn();
+            let mut stmt = conn.prepare(
+                "SELECT (SELECT s.speaker FROM segments s
+                         WHERE s.meeting_id = v.meeting_id AND s.speaker_key = v.speaker_key
+                         ORDER BY s.id DESC LIMIT 1),
+                        v.embedding
+                 FROM meeting_voices v WHERE v.named = 1 ORDER BY v.meeting_id",
+            )?;
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let mut by_name: Vec<(String, Vec<f32>, usize)> = Vec::new();
+        for (label, blob) in rows {
+            let Some(label) = label.filter(|l| !is_default_label(l)) else {
+                continue;
+            };
+            let voice = voice_from_blob(&blob);
+            let norm = voice.iter().map(|x| x * x).sum::<f32>().sqrt();
+            if norm == 0.0 {
+                continue;
+            }
+            match by_name
+                .iter_mut()
+                .find(|(n, sum, _)| n.eq_ignore_ascii_case(&label) && sum.len() == voice.len())
+            {
+                Some((_, sum, count)) => {
+                    for (s, x) in sum.iter_mut().zip(&voice) {
+                        *s += x / norm;
+                    }
+                    *count += 1;
+                }
+                None => by_name.push((label, voice.iter().map(|x| x / norm).collect(), 1)),
+            }
+        }
+        Ok(by_name
+            .into_iter()
+            .map(|(name, sum, count)| VoiceProfile {
+                name,
+                voice: sum.into_iter().map(|x| x / count as f32).collect(),
+            })
+            .collect())
+    }
+
+    /// Forgets every saved voice, in all meetings.
+    pub fn forget_voices(&self) -> Result<()> {
+        self.conn().execute("DELETE FROM meeting_voices", [])?;
+        Ok(())
+    }
+
+    /// Gives every line of one speaker still on `default` the name `name`.
+    pub fn name_speaker_if_default(
+        &self,
+        meeting_id: &str,
+        speaker_key: &str,
+        default: &str,
+        name: &str,
+    ) -> Result<usize> {
+        Ok(self.conn().execute(
+            "UPDATE segments SET speaker = ?4
+             WHERE meeting_id = ?1 AND speaker_key = ?2 AND speaker = ?3",
+            params![meeting_id, speaker_key, default, name],
+        )?)
     }
 
     pub fn thoughts(&self, id: &str) -> Result<String> {
@@ -467,6 +637,10 @@ impl Store {
         tx.execute("DELETE FROM my_thoughts WHERE meeting_id = ?1", params![id])?;
         tx.execute("DELETE FROM summaries WHERE meeting_id = ?1", params![id])?;
         tx.execute(
+            "DELETE FROM meeting_voices WHERE meeting_id = ?1",
+            params![id],
+        )?;
+        tx.execute(
             "DELETE FROM chat_messages WHERE meeting_id = ?1",
             params![id],
         )?;
@@ -548,5 +722,205 @@ impl Store {
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn meeting(id: &str) -> Meeting {
+        Meeting {
+            id: id.into(),
+            title: "Call".into(),
+            title_auto: false,
+            start_ms: 0,
+            end_ms: None,
+            app: None,
+            bundle_id: None,
+            calendar_event_id: None,
+            attendees: Vec::new(),
+            folder: None,
+            status: MeetingStatus::Ready,
+            summary_status: SummaryStatus::Ready,
+            summary_error: None,
+            mic_offset_ms: None,
+            system_offset_ms: None,
+        }
+    }
+
+    fn seg(key: &str, speaker: &str, start: i64) -> Segment {
+        Segment {
+            source: if key == "me" { "mic" } else { "system" }.into(),
+            speaker: speaker.into(),
+            speaker_key: key.into(),
+            start_ms: start,
+            end_ms: start + 1_000,
+            text: "hello".into(),
+        }
+    }
+
+    /// A database as the previous release left it, with one live line each.
+    fn old_database(path: &Path) {
+        let mut conn = Connection::open(path).unwrap();
+        Migrations::from_slice(&MIGRATIONS[..2])
+            .to_latest(&mut conn)
+            .unwrap();
+        conn.execute_batch(
+            "INSERT INTO meetings (id, title, start_ms, status, updated_ms) VALUES ('m1', 'Old', 0, 'ready', 0);
+             INSERT INTO segments (meeting_id, pass, source, speaker, start_ms, end_ms, text)
+             VALUES ('m1', 'final', 'mic', 'Me', 0, 1, 'hi'), ('m1', 'final', 'system', 'Priya', 2, 3, 'yo'),
+                    ('m1', 'final', 'system', 'Them', 4, 5, 'ok');",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn migration_gives_old_lines_a_speaker_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notetaker.db");
+        old_database(&path);
+
+        let legacy = Store::open_read_only(&path).unwrap();
+        let keys: Vec<String> = legacy
+            .segments("m1")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.speaker_key)
+            .collect();
+        assert_eq!(keys, vec!["me", "n:priya", "them"]);
+
+        let store = Store::open(&path).unwrap();
+        let segments = store.segments("m1").unwrap();
+        let keys: Vec<(&str, &str)> = segments
+            .iter()
+            .map(|s| (s.speaker_key.as_str(), s.speaker.as_str()))
+            .collect();
+        assert_eq!(
+            keys,
+            vec![("me", "Me"), ("n:priya", "Priya"), ("them", "Them")]
+        );
+        assert!(Store::open_read_only(&path).unwrap().segments("m1").is_ok());
+    }
+
+    #[test]
+    fn renaming_a_speaker_renames_all_its_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("notetaker.db")).unwrap();
+        store.insert_meeting(&meeting("m1")).unwrap();
+        store
+            .replace_final_segments(
+                "m1",
+                &[
+                    seg("s1", "Speaker 1", 0),
+                    seg("me", "Me", 1_000),
+                    seg("s1", "Speaker 1", 2_000),
+                    seg("s2", "Speaker 2", 3_000),
+                ],
+            )
+            .unwrap();
+        store.rename_speaker("m1", "s1", "Priya").unwrap();
+        let labels: Vec<String> = store
+            .segments("m1")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.speaker)
+            .collect();
+        assert_eq!(labels, vec!["Priya", "Me", "Priya", "Speaker 2"]);
+        assert!(store.rename_speaker("m1", "s9", "Nobody").is_err());
+    }
+
+    #[test]
+    fn voice_profiles_come_from_voices_the_user_named() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("notetaker.db")).unwrap();
+        for id in ["m1", "m2"] {
+            store.insert_meeting(&meeting(id)).unwrap();
+            store
+                .replace_final_segments(
+                    id,
+                    &[seg("s1", "Speaker 1", 0), seg("s2", "Speaker 2", 1_000)],
+                )
+                .unwrap();
+        }
+        store
+            .save_meeting_voices(
+                "m1",
+                &[
+                    ("s1".into(), vec![1.0, 0.0], 60_000),
+                    ("s2".into(), vec![0.0, 3.0], 60_000),
+                ],
+            )
+            .unwrap();
+        store
+            .save_meeting_voices("m2", &[("s1".into(), vec![0.0, 1.0], 60_000)])
+            .unwrap();
+        assert_eq!(
+            store.meeting_voice("m1", "s1").unwrap(),
+            Some(vec![1.0, 0.0])
+        );
+        assert!(
+            store.voice_profiles().unwrap().is_empty(),
+            "nothing named yet"
+        );
+
+        for (id, key) in [("m1", "s1"), ("m2", "s1")] {
+            store.rename_speaker(id, key, "Priya").unwrap();
+            store.set_voice_named(id, key, true).unwrap();
+        }
+        let profiles = store.voice_profiles().unwrap();
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(profiles[0].name, "Priya");
+        assert_eq!(profiles[0].voice, vec![0.5, 0.5]);
+
+        store.rename_speaker("m2", "s1", "Asha").unwrap();
+        let mut names: Vec<String> = store
+            .voice_profiles()
+            .unwrap()
+            .into_iter()
+            .map(|p| p.name)
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["Asha", "Priya"], "a correction moves the voice");
+
+        store.delete("m2").unwrap();
+        assert_eq!(store.voice_profiles().unwrap().len(), 1);
+        assert_eq!(store.meeting_voice("m2", "s1").unwrap(), None);
+        store.forget_voices().unwrap();
+        assert!(store.voice_profiles().unwrap().is_empty());
+        assert_eq!(store.meeting_voice("m1", "s2").unwrap(), None);
+    }
+
+    #[test]
+    fn model_names_skip_speakers_the_user_named() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("notetaker.db")).unwrap();
+        store.insert_meeting(&meeting("m1")).unwrap();
+        store
+            .replace_final_segments(
+                "m1",
+                &[seg("s1", "Speaker 1", 0), seg("s2", "Speaker 2", 1_000)],
+            )
+            .unwrap();
+        store.rename_speaker("m1", "s1", "Asha").unwrap();
+        assert_eq!(
+            store
+                .name_speaker_if_default("m1", "s1", "Speaker 1", "Priya")
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            store
+                .name_speaker_if_default("m1", "s2", "Speaker 2", "Ravi")
+                .unwrap(),
+            1
+        );
+        let labels: Vec<String> = store
+            .segments("m1")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.speaker)
+            .collect();
+        assert_eq!(labels, vec!["Asha", "Ravi"]);
     }
 }

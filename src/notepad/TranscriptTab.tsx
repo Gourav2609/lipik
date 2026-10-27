@@ -3,6 +3,8 @@ import { Copy, Languages, UserPlus } from "lucide-react";
 import type { Segment } from "@/bindings";
 import { HeaderCard } from "./HeaderCard";
 import { clock, markText, speakerLabel } from "./format";
+import { isDefaultSpeaker } from "@/lib/speakers";
+import { SpeakerNameInput } from "@/components/notetaker/SpeakerNameInput";
 import { LiveBars } from "./icons";
 import {
   segKey,
@@ -25,6 +27,47 @@ type Props = {
   focusMs: { ms: number; at: number } | null;
   onCopy: () => void;
   onSoon: (what: string) => void;
+  /** Names every line of one speaker (by `speaker_key`). */
+  onRenameSpeaker?: (speakerKey: string, name: string) => void;
+  /** Notes are being written: speakers can't be renamed until they are. */
+  busy: boolean;
+};
+
+/** A speaker's label; click to name them. The name applies to every line
+ * of that speaker. */
+const SpeakerName = ({
+  speaker,
+  live,
+  editing,
+  onEdit,
+  onDone,
+}: {
+  speaker: string;
+  live: boolean;
+  editing: boolean;
+  onEdit?: () => void;
+  onDone: (name: string | null) => void;
+}) => {
+  if (editing)
+    return (
+      <SpeakerNameInput
+        className="np-speaker-input"
+        speaker={speaker}
+        placeholder={speakerLabel(speaker, live)}
+        onDone={onDone}
+      />
+    );
+  if (!onEdit) return <>{speakerLabel(speaker, live)}</>;
+  return (
+    <button
+      type="button"
+      className="np-speaker-name"
+      title="Name this speaker"
+      onClick={onEdit}
+    >
+      {speakerLabel(speaker, live)}
+    </button>
+  );
 };
 
 const Marked = ({ text, query }: { text: string; query: string }) => (
@@ -99,11 +142,25 @@ const PartialBubble = ({ live }: { live: LiveText }) => (
   </div>
 );
 
-type Group = { speaker: string; items: { seg: Segment; index: number }[] };
+type Group = {
+  speaker: string;
+  key: string;
+  items: { seg: Segment; index: number }[];
+};
 
 export const TranscriptTab = (p: Props) => {
   const [query, setQuery] = useState("");
   const [flash, setFlash] = useState<number | null>(null);
+  /** Speaker key and the first line of the group whose label is open. */
+  const [editing, setEditing] = useState<{ key: string; at: string } | null>(
+    null,
+  );
+  const canRename = (g: Group) =>
+    !p.live && !p.busy && !!p.onRenameSpeaker && !!g.key && g.key !== "me";
+  const editAt = (g: Group) =>
+    setEditing({ key: g.key, at: segKey(g.items[0].seg) });
+  const isEditing = (g: Group) =>
+    !!editing && editing.key === g.key && editing.at === segKey(g.items[0].seg);
 
   const { shown, current } = p.reveal;
   const revealing = p.reveal.words > 0 ? current : null;
@@ -113,11 +170,32 @@ export const TranscriptTab = (p: Props) => {
       const key = segKey(seg);
       if (!shown.has(key) && key !== revealing) return;
       const last = out[out.length - 1];
-      if (last && last.speaker === seg.speaker) last.items.push({ seg, index });
-      else out.push({ speaker: seg.speaker, items: [{ seg, index }] });
+      const speakerKey = seg.speaker_key || seg.speaker;
+      if (last && last.key === speakerKey) last.items.push({ seg, index });
+      else
+        out.push({
+          speaker: seg.speaker,
+          key: speakerKey,
+          items: [{ seg, index }],
+        });
     });
     return out;
   }, [p.segments, shown, revealing]);
+
+  const finishRename = (g: Group, name: string | null) => {
+    setEditing(null);
+    if (name) p.onRenameSpeaker?.(g.key, name);
+  };
+
+  const nameASpeaker = () => {
+    const renamable = groups.filter(canRename);
+    const target =
+      renamable.find((g) => isDefaultSpeaker(g.speaker)) ?? renamable[0];
+    if (target) editAt(target);
+    else if (p.busy)
+      p.onSoon("Speakers can be named once the notes are written");
+    else p.onSoon("There's no one else in this transcript to name");
+  };
   const speakers = useMemo(
     () => new Set(p.segments.map((s) => s.speaker)).size,
     [p.segments],
@@ -198,9 +276,7 @@ export const TranscriptTab = (p: Props) => {
             className="np-tool"
             aria-label="Name a speaker"
             title="Name a speaker"
-            onClick={() =>
-              p.onSoon(`Naming speakers by hand isn't in ${APP_NAME} yet`)
-            }
+            onClick={nameASpeaker}
           >
             <UserPlus size={16} strokeWidth={1.75} />
           </button>
@@ -224,7 +300,13 @@ export const TranscriptTab = (p: Props) => {
       {groups.map((g, gi) => (
         <div className="np-group" key={`${gi}-${segKey(g.items[0].seg)}`}>
           <div className={`np-speaker${g.speaker === "Me" ? " me" : ""}`}>
-            {speakerLabel(g.speaker, p.live)}
+            <SpeakerName
+              speaker={g.speaker}
+              live={p.live}
+              editing={isEditing(g)}
+              onEdit={canRename(g) ? () => editAt(g) : undefined}
+              onDone={(name) => finishRename(g, name)}
+            />
             <small>{clock(g.items[0].seg.start_ms)}</small>
           </div>
           {g.items.map(({ seg, index }) => {

@@ -318,6 +318,7 @@ impl Source<'_> {
             let segment = Segment {
                 source: self.source.to_string(),
                 speaker: transcribe::speaker_for(self.source).to_string(),
+                speaker_key: super::diarize::key_for(self.source).to_string(),
                 start_ms,
                 end_ms: self.offset_ms + samples_to_ms(end),
                 text: text.to_string(),

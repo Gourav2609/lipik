@@ -34,46 +34,56 @@ const seg = (
   start: number,
   end: number,
   text: string,
+  key = speaker === "Me" ? "me" : "them",
 ): Segment => ({
   source: speaker === "Me" ? "mic" : "system",
   speaker,
+  speaker_key: key,
   start_ms: start * 1000,
   end_ms: end * 1000,
   text,
 });
 
+/** Text and speaker key: "me", or the call voice ("s1", "s2"). */
 const LINES: [string, string][] = [
   [
     "Okay, let's get started. The main thing today is the spring launch and whether we can still hold the April date.",
-    "Me",
+    "me",
   ],
   [
     "We can, if the design review moves up a week. Maya said the new screens are almost done.",
-    "Them",
+    "s1",
   ],
   [
     "Good. Then I'd like the beta list frozen by Friday so support has time to prepare.",
-    "Me",
+    "me",
   ],
   [
     "That works. One risk is the pricing page. Legal hasn't signed off on it yet.",
-    "Them",
+    "s2",
   ],
   [
     "Let's flag that. I'll follow up with legal today and send a short note to the team.",
-    "Me",
+    "me",
   ],
   [
     "Sounds good. I'll book the review for Tuesday and share the agenda tomorrow.",
-    "Them",
+    "s1",
   ],
 ];
 
-const LIVE = LINES.slice(0, 3).map(([t, s], i) =>
-  seg(s, 2 + i * 8, 9 + i * 8, t),
+const LIVE = LINES.slice(0, 3).map(([t, k], i) =>
+  seg(k === "me" ? "Me" : "Them", 2 + i * 8, 9 + i * 8, t),
 );
-const FINAL = LINES.map(([t, s], i) =>
-  seg(s === "Them" ? "Jordan" : s, 2 + i * 8, 9 + i * 8, t),
+/** After processing: two voices on the call, the first one named. */
+const FINAL = LINES.map(([t, k], i) =>
+  seg(
+    k === "me" ? "Me" : k === "s1" ? "Jordan" : "Speaker 2",
+    2 + i * 8,
+    9 + i * 8,
+    t,
+    k,
+  ),
 );
 
 const SUMMARY: NoteSummary = {
@@ -224,6 +234,13 @@ const process = (fast = false) => {
   };
   const k = fast ? 0.3 : 1;
   const at = (ms: number, run: () => void) => window.setTimeout(run, ms * k);
+  at(1500, () =>
+    emit("notetaker-processing", {
+      meeting_id: id,
+      stage: "speakers",
+      progress: 0,
+    }),
+  );
   at(3000, () =>
     emit("notetaker-processing", {
       meeting_id: id,
@@ -304,6 +321,15 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     note = {
       ...note,
       meeting: { ...note.meeting, title: String(title), title_auto: false },
+    };
+    return null;
+  },
+  notetaker_rename_speaker: ({ speakerKey, name }) => {
+    note = {
+      ...note,
+      segments: note.segments.map((s) =>
+        s.speaker_key === speakerKey ? { ...s, speaker: String(name) } : s,
+      ),
     };
     return null;
   },

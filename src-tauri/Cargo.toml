@@ -1,6 +1,6 @@
 [package]
 name = "lipik"
-version = "0.1.2"
+version = "0.1.3"
 description = "Lipik"
 authors = ["cjpais"]
 edition = "2021"
@@ -9,6 +9,19 @@ default-run = "lipik"
 
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.
+
+# Speaker detection is number crunching: unoptimized, a meeting takes many
+# minutes instead of about one in `tauri dev` and tests.
+[profile.dev.package.speakrs]
+opt-level = 3
+[profile.dev.package.ndarray]
+opt-level = 3
+[profile.dev.package.matrixmultiply]
+opt-level = 3
+[profile.dev.package.rustfft]
+opt-level = 3
+[profile.dev.package.kodama]
+opt-level = 3
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -85,6 +98,12 @@ tauri-plugin-dialog = "2.6"
 hf-hub = { git = "https://github.com/cjpais/hf-hub", branch = "cancellable-downloads", features = [
   "tokio",
 ] }
+# Notetaker speaker detection (pyannote community-1 pipeline, native CPU).
+# No `online`: its hf-hub 0.5 clashes with the fork above; the app downloads
+# the models itself.
+speakrs = { version = "=0.7.0", default-features = false, features = ["cpu"] }
+ndarray = "0.17"
+rayon = "1"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"

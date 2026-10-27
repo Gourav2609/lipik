@@ -416,6 +416,9 @@ pub struct AppSettings {
     pub autostart_enabled: bool,
     #[serde(default = "default_update_checks_enabled")]
     pub update_checks_enabled: bool,
+    /// Lipik asks GitHub once a day whether a newer release is out.
+    #[serde(default = "default_release_check_enabled")]
+    pub release_check_enabled: bool,
     #[serde(default = "default_show_whats_new_on_update")]
     pub show_whats_new_on_update: bool,
     /// The app version whose What's New the user has already seen. Fresh installs
@@ -558,6 +561,18 @@ pub struct AppSettings {
     /// Locale for Apple's on-device dictation, e.g. "en-IN".
     #[serde(default = "default_apple_locale")]
     pub apple_locale: String,
+    /// What runs the clean-up model. `None` until the app has picked one:
+    /// Ollama when it already has the clean-up model and the built-in model
+    /// isn't downloaded, else the built-in engine. See textflow/CONTRACT.md.
+    #[serde(default)]
+    pub cleanup_engine: Option<CleanupEngine>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum CleanupEngine {
+    Builtin,
+    Ollama,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
@@ -605,6 +620,10 @@ fn default_autostart_enabled() -> bool {
 
 fn default_update_checks_enabled() -> bool {
     false
+}
+
+fn default_release_check_enabled() -> bool {
+    true
 }
 
 fn default_show_whats_new_on_update() -> bool {
@@ -1026,6 +1045,7 @@ pub fn get_default_settings() -> AppSettings {
         start_hidden: default_start_hidden(),
         autostart_enabled: default_autostart_enabled(),
         update_checks_enabled: default_update_checks_enabled(),
+        release_check_enabled: default_release_check_enabled(),
         show_whats_new_on_update: default_show_whats_new_on_update(),
         whats_new_last_seen_version: default_whats_new_last_seen_version(),
         selected_model: "".to_string(),
@@ -1083,6 +1103,7 @@ pub fn get_default_settings() -> AppSettings {
         notetaker: crate::notetaker::NotetakerSettings::default(),
         speech_engine: SpeechEngine::default(),
         apple_locale: default_apple_locale(),
+        cleanup_engine: None,
     }
 }
 

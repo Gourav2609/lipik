@@ -1,5 +1,8 @@
 {
   "bundle": {
-    "externalBin": ["apple-speech/bin/apple-speech"]
+    "externalBin": [
+      "apple-speech/bin/apple-speech",
+      "llama-server/bin/llama-server"
+    ]
   }
 }

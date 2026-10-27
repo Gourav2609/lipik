@@ -1,4 +1,5 @@
 import type { MeetingDetail } from "@/bindings";
+import { isDefaultSpeaker } from "@/lib/speakers";
 
 const GENERIC = new Set(["me", "them", "you", "others", "unknown contact"]);
 
@@ -10,7 +11,10 @@ export const meetingNames = (detail: MeetingDetail | null) => {
     ...detail.segments.map((s) => s.speaker),
   ]
     .map((n) => n.trim())
-    .filter((n) => n.length > 1 && !GENERIC.has(n.toLowerCase()));
+    .filter(
+      (n) =>
+        n.length > 1 && !GENERIC.has(n.toLowerCase()) && !isDefaultSpeaker(n),
+    );
   const first = full.map((n) => n.split(/\s+/)[0]).filter((n) => n.length > 1);
   return [...new Set([...full, ...first])].sort((a, b) => b.length - a.length);
 };

@@ -79,6 +79,7 @@ const stepMessages = (detail: MeetingDetail, step: number) => {
     ];
   if (step === 1)
     return [
+      "Telling the voices apart",
       "Writing the final transcript",
       ...(words > 0 ? [`Checking ${words.toLocaleString()} words`] : []),
       "Matching words to speakers",

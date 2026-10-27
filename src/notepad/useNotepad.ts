@@ -218,7 +218,7 @@ export const useNotepad = () => {
         const p = e.payload;
         if (p.meeting_id !== idRef.current) return;
         watching.current = true;
-        const next: Step = p.stage === "transcribing" ? 1 : 2;
+        const next: Step = p.stage === "summarizing" ? 2 : 1;
         setStep((s) => (next > s ? next : s));
         setDetail((d) =>
           d && d.meeting.status !== "processing"
@@ -308,6 +308,30 @@ export const useNotepad = () => {
       if (!idRef.current) return;
       patchMeeting({ title, title_auto: false });
       await commands.notetakerRename(idRef.current, title).catch(() => null);
+    },
+    /** Names every line of one speaker; returns why it failed, if it did. */
+    renameSpeaker: async (
+      speakerKey: string,
+      name: string,
+    ): Promise<string | null> => {
+      const id = idRef.current;
+      if (!id) return null;
+      setDetail((d) =>
+        d
+          ? {
+              ...d,
+              segments: d.segments.map((s) =>
+                s.speaker_key === speakerKey ? { ...s, speaker: name } : s,
+              ),
+            }
+          : d,
+      );
+      const r = await commands
+        .notetakerRenameSpeaker(id, speakerKey, name)
+        .catch(() => null);
+      if (r?.status === "ok") return null;
+      refetch(id);
+      return `Couldn't rename: ${r?.error ?? "try again"}`;
     },
     moveToFolder: async (folder: string | null) => {
       if (!idRef.current) return;

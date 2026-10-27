@@ -1,4 +1,5 @@
 import type { MeetingDetail, NoteSummary, Segment } from "@/bindings";
+import { isDefaultSpeaker } from "@/lib/speakers";
 
 export const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -45,7 +46,11 @@ export const groupSegments = (segments: Segment[]) => {
   }[] = [];
   segments.forEach((seg, index) => {
     const last = groups[groups.length - 1];
-    if (last && last.speaker === seg.speaker) last.items.push({ seg, index });
+    const prev = last?.items[last.items.length - 1].seg;
+    const same =
+      !!prev &&
+      (prev.speaker_key || prev.speaker) === (seg.speaker_key || seg.speaker);
+    if (last && same) last.items.push({ seg, index });
     else groups.push({ speaker: seg.speaker, items: [{ seg, index }] });
   });
   return groups;
@@ -66,7 +71,7 @@ export const peopleNames = (detail: MeetingDetail) => {
   const add = (name: string | null | undefined) => {
     if (!name) return;
     const clean = name.trim();
-    if (clean.length < 2 || clean === "Me" || clean === "Them") return;
+    if (clean.length < 2 || isDefaultSpeaker(clean)) return;
     names.add(clean);
     const first = clean.split(/\s+/)[0];
     if (first.length > 1) names.add(first);

@@ -62,7 +62,7 @@
             "name": "Where are my notes kept?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "On your Mac. The transcript and summary are made and saved on your Mac. Lipik has no account and sends no telemetry."
+              "text": "On your Mac. The transcript and summary are made and saved on your Mac, and so are saved speaker voices. Lipik has no account and sends no telemetry."
             }
           },
           {
@@ -70,7 +70,7 @@
             "name": "Do I need Ollama?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Only for the summary and for questions about past meetings. Without it, you still get the transcript."
+              "text": "No. Clean-up is built into Lipik, so the summary and questions about past meetings work without any other app. Ollama is an optional choice for advanced users, in Settings. If you already use Ollama with Lipik, it keeps using it."
             }
           },
           {
@@ -191,10 +191,25 @@
             <li>your Mac's sound, for what the other people say</li>
           </ul>
           <p>
-            Because the two are kept apart, the transcript shows who said what:
-            your lines are marked as yours, and the rest as the other people's.
-            Lipik records the Mac's sound rather than a call app, so it works
-            with any call you can hear on your Mac.
+            Because the two are kept apart, the transcript shows who said what.
+            Your microphone is you. Lipik splits the Mac's sound into speakers:
+            Speaker 1, Speaker 2 and so on. When there's clear evidence, such as
+            someone introducing themselves or being addressed by name, it uses
+            their name instead. Lipik records the Mac's sound rather than a call
+            app, so it works with any call you can hear on your Mac.
+          </p>
+
+          <h2>Name the speakers</h2>
+          <p>
+            Click a speaker's name to rename them. The new name is used
+            everywhere in that meeting, and Lipik recognises that voice in later
+            meetings. Saved voices stay on your Mac. They are removed with their
+            meeting, and you can forget all of them in Settings, under Privacy.
+          </p>
+          <p>
+            Speaker labels need a speaker model, a one-time 33 MB download from
+            Hugging Face. On calls over 3 hours, the other side stays as a
+            single "Them".
           </p>
 
           <h2>Transcript and summary, made on your Mac</h2>
@@ -205,10 +220,12 @@
             ask questions about past meetings.
           </p>
           <p>
-            The summary needs the clean-up model: Qwen3 8B through the free
-            <a href="https://ollama.com">Ollama</a> app, about 5 GB. It runs on
-            your Mac too. Without it, you still get the transcript, and you can
-            write the summary later once Ollama is set up.
+            The summary and questions use Lipik's built-in clean-up model, which
+            also runs on your Mac. No other app is needed. One button in setup,
+            or in Settings under Meetings, downloads it from Hugging Face: Qwen3
+            8B (5 GB) on Macs with 16 GB of memory or more, or Qwen3 4B Instruct
+            (2.5 GB) on smaller Macs. Without it, you still get the transcript,
+            and you can write the summary later once the model is downloaded.
           </p>
 
           <h2 id="ai-apps">Ask your AI apps about a meeting</h2>
@@ -248,9 +265,27 @@
             <li>A Mac with Apple silicon (M1 or later)</li>
             <li>macOS 14.2 or later, to record the Mac's sound</li>
             <li>
-              For the summary: the free Ollama app with Qwen3 8B, about 5 GB
+              One-time downloads from Hugging Face: the speech model (731 MB),
+              the clean-up model for the summary (2.5 or 5 GB) and the speaker
+              model (33 MB)
             </li>
           </ul>
+
+          <h2>What goes online</h2>
+          <ul>
+            <li>the one-time downloads above, from Hugging Face</li>
+            <li>
+              Apple's English (India) speech files, through macOS, for Hinglish
+              dictation only
+            </li>
+            <li>
+              once a day, a check with GitHub for the latest version number, to
+              show a "new version" notice. It carries nothing about you, and you
+              can turn it off in Settings, under Privacy, then Updates.
+            </li>
+            <li>cloud clean-up, only if you add your own API key</li>
+          </ul>
+          <p>There is no account and no telemetry.</p>
         </div>
       </section>
 
@@ -272,7 +307,8 @@
               <div class="faq-a">
                 <p>
                   On your Mac. The transcript and summary are made and saved on
-                  your Mac. Lipik has no account and sends no telemetry.
+                  your Mac, and so are saved speaker voices. Lipik has no
+                  account and sends no telemetry.
                 </p>
               </div>
             </details>
@@ -280,8 +316,10 @@
               <summary>Do I need Ollama?</summary>
               <div class="faq-a">
                 <p>
-                  Only for the summary and for questions about past meetings.
-                  Without it, you still get the transcript.
+                  No. Clean-up is built into Lipik, so the summary and questions
+                  about past meetings work without any other app. Ollama is an
+                  optional choice for advanced users, in Settings. If you
+                  already use Ollama with Lipik, it keeps using it.
                 </p>
               </div>
             </details>

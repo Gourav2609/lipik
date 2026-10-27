@@ -113,6 +113,7 @@ const makeSettings = (theme: "dark" | "light"): AppSettings => ({
   start_hidden: false,
   autostart_enabled: true,
   update_checks_enabled: true,
+  release_check_enabled: true,
   show_whats_new_on_update: false,
   whats_new_last_seen_version: "0.1.1",
   selected_model: MODEL.id,
@@ -161,6 +162,14 @@ const defaults = (theme: "dark" | "light"): Record<string, MockHandler> => {
     is_recording: () => false,
     is_portable: () => false,
     is_update_checks_locked: () => false,
+    check_for_new_release: () =>
+      new URLSearchParams(window.location.search).has("newRelease")
+        ? {
+            version: "0.1.3",
+            url: "https://github.com/Gourav2609/lipik/releases",
+          }
+        : null,
+    change_release_check_setting: () => null,
     check_custom_sounds: () => ({ start: false, stop: false }),
     // ?secureInput=<process> shows the paused-shortcut notice.
     get_secure_input_status: () => {

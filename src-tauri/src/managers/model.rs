@@ -17,8 +17,10 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
 mod download;
+pub mod speakers;
 
-use download::{HttpDownloadOutcome, DOWNLOAD_STALL_TIMEOUT};
+use download::DOWNLOAD_STALL_TIMEOUT;
+pub(crate) use download::{HttpDownloadEvent, HttpDownloadOutcome};
 
 /// Where a model comes from and how Handy obtains it — the routing discriminant
 /// for downloading and on-disk resolution.

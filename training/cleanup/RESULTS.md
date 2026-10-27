@@ -716,3 +716,37 @@ clip the gate still loses is the "you am" transcriber noise; the one long
 clip lost ("You know, without any delay, ...": the model kept "You know")
 is offset by one won. The model is now skipped on 41 of 102 real clips of
 8+ words (was 42): the line-break fix sends one more.
+
+## Built-in engine (llama-server) against Ollama
+
+The app now runs the model itself: llama.cpp's `llama-server` (b11935, built
+by `scripts/fetch-llama-server.sh`) with the GGUF files in
+`src-tauri/src/textflow/engine.rs`, started with engine.rs's arguments
+(`--ctx-size 4096 --parallel 1 --flash-attn auto`, prompt cache on, thinking
+off). Same setup as the app (`--vocab-in-prompt --prepass --parts
+--num-predict`), through the server's OpenAI-style API:
+
+```bash
+python3 run.py cleanup --api openai --key <key> --url http://127.0.0.1:<port> \
+  --model builtin-q8 --vocab-in-prompt --prepass --parts --num-predict --tag eng-q8
+python3 run.py cleanup ... --cases long.json --tag eng-long-q8
+```
+
+Ollama rows are the `ib-*` runs of 27 Oct (Ollama 0.40.10, same flags). M4
+Pro, 24 GB; Ollama kept qwen3:8b loaded during the built-in runs.
+
+| Model                  | Engine   | Real clips, English | Long, real | Wait, 8+ words median / p90 | Long median / p90 |
+| ---------------------- | -------- | ------------------- | ---------- | --------------------------- | ----------------- |
+| Qwen3-4B-Instruct-2507 | Ollama   | 81/106              | 17/30      | 393 / 879 ms                | 1151 / 2020 ms    |
+| Qwen3-4B-Instruct-2507 | Built-in | 82/106              | 19/30      | 266 / 586 ms                | 784 / 1267 ms     |
+| Qwen3-8B               | Ollama   | 86/106              | 22/30      | 500 / 1055 ms               | 1398 / 2384 ms    |
+| Qwen3-8B               | Built-in | 86/106              | 21/30      | 444 / 956 ms                | 1259 / 2134 ms    |
+
+No reply had a `<think>` block. Same quality within a clip or two (the
+models sample at temperature 0.2, so single clips move between runs), and
+the built-in engine is 10-30% faster. Loading takes 2-5 s (8B: 4.7 GB of
+memory, 4B: 3.1 GB).
+
+Re-run of the 8B after the review fixes (server now also has `--alias` and a
+closed CORS origin): 86/106 real clips, 21/30 long, 466 / 969 ms (8+ words),
+1286 / 2250 ms (long). Unchanged.

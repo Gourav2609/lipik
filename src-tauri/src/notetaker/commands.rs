@@ -96,6 +96,36 @@ pub async fn notetaker_rename(
     blocking(move || m.rename(&id, &title)).await
 }
 
+/// Names one speaker (`speaker_key` from a segment) on every line of the
+/// meeting.
+#[tauri::command]
+#[specta::specta]
+pub async fn notetaker_rename_speaker(
+    manager: Manager<'_>,
+    meeting_id: String,
+    speaker_key: String,
+    name: String,
+) -> Result<(), String> {
+    let m = manager.inner().clone();
+    blocking(move || m.rename_speaker(&meeting_id, &speaker_key, &name)).await
+}
+
+/// How many people have a saved voice (from speakers the user named).
+#[tauri::command]
+#[specta::specta]
+pub async fn notetaker_saved_voices(manager: Manager<'_>) -> Result<u32, String> {
+    let m = manager.inner().clone();
+    blocking(move || m.saved_voices()).await
+}
+
+/// Forgets every saved voice, in all meetings.
+#[tauri::command]
+#[specta::specta]
+pub async fn notetaker_forget_voices(manager: Manager<'_>) -> Result<(), String> {
+    let m = manager.inner().clone();
+    blocking(move || m.forget_voices()).await
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn notetaker_move_to_folder(

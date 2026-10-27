@@ -1,8 +1,13 @@
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Value};
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::settings::CleanupEngine;
+use crate::textflow::engine::{self, ENGINE};
+
+use super::diarize::SpeakerGuess;
 use super::{ActionItem, Attendee, Citation, Meeting, NoteSection, NoteSummary, Segment};
 
 const CONTEXT_TOKENS: u32 = 16_384;
@@ -12,6 +17,82 @@ const PART_TOKENS: usize = 9_000;
 /// "My notes" sent with each summary call.
 const THOUGHTS_CHARS: usize = 4_000;
 const ASK_CONTEXT_CHARS: usize = 24_000;
+
+/// The model that writes notes and answers questions: the built-in engine
+/// or Ollama, whichever the engine setting picks for clean-up.
+pub enum Model {
+    Ollama(Ollama),
+    Builtin { path: PathBuf, name: String },
+}
+
+impl Model {
+    pub fn for_app(app: &tauri::AppHandle) -> Self {
+        let settings = crate::settings::get_settings(app);
+        match crate::textflow::cleanup_model::engine_from(app, &settings) {
+            CleanupEngine::Ollama => Model::Ollama(Ollama::new(
+                &settings.notetaker.ollama_url,
+                &settings.notetaker.ollama_model,
+            )),
+            CleanupEngine::Builtin => Model::Builtin {
+                path: engine::model_path(app).unwrap_or_default(),
+                name: engine::builtin_model().name.to_string(),
+            },
+        }
+    }
+
+    pub fn model(&self) -> &str {
+        match self {
+            Model::Ollama(ollama) => ollama.model(),
+            Model::Builtin { name, .. } => name,
+        }
+    }
+
+    /// Why notes can't be written right now, or `None` when the model is
+    /// there.
+    pub fn unavailable_reason(&self) -> Option<String> {
+        match self {
+            Model::Ollama(ollama) => ollama.unavailable_reason(),
+            Model::Builtin { path, .. } if !path.is_file() => Some(
+                "The AI model isn't downloaded yet. Download it in Settings → Meetings."
+                    .to_string(),
+            ),
+            Model::Builtin { .. } => None,
+        }
+    }
+
+    fn chat_json(&self, system: &str, user: &str) -> Result<Value> {
+        let path = match self {
+            Model::Ollama(ollama) => return ollama.chat_json(system, user),
+            Model::Builtin { path, .. } => path,
+        };
+        let body = builtin_body(system, user);
+        let content = tauri::async_runtime::block_on(async {
+            let request = async {
+                let conn = ENGINE.ensure(path, CONTEXT_TOKENS).await?;
+                let reply = engine::post_chat(&conn, &body, false).await;
+                ENGINE.touch();
+                reply
+            };
+            tokio::time::timeout(Duration::from_secs(600), request)
+                .await
+                .map_err(|_| "The AI model took longer than 10 minutes".to_string())?
+        })
+        .map_err(|e| anyhow!(e))?;
+        parse_json_reply(&content)
+    }
+}
+
+/// A notes request to the built-in engine: the clean-up request's settings
+/// with the reply held to one JSON object.
+fn builtin_body(system: &str, user: &str) -> Value {
+    let messages = [
+        json!({ "role": "system", "content": system }),
+        json!({ "role": "user", "content": user }),
+    ];
+    let mut body = engine::chat_body(&messages, None);
+    body["response_format"] = json!({ "type": "json_object" });
+    body
+}
 
 pub struct Ollama {
     url: String,
@@ -187,7 +268,8 @@ fn capped_thoughts(thoughts: &str) -> String {
 }
 
 const NOTES_SYSTEM: &str = "You write meeting notes from a transcript. Lines look like '#index [time] speaker: text'. \
-'Me' is the user who recorded the meeting; 'Them' is everyone heard through the computer's speakers. \
+'Me' is the user who recorded the meeting. 'Speaker 1', 'Speaker 2' and so on are different people heard through \
+the computer's speakers, told apart by voice; 'Them' is everyone heard through the speakers when they could not be told apart. \
 Write in the language the meeting was mostly held in. Be concrete: names, numbers, dates and decisions as said. \
 Never invent facts that are not in the transcript. Reply with JSON only.";
 
@@ -198,7 +280,7 @@ const NOTES_SHAPE: &str = r#"{
   "key_points": ["the most important points"],
   "decisions": ["decisions that were made"],
   "action_items": [{"text": "what has to be done", "owner": "person or null", "due": "when, or null"}],
-  "speakers": [{"segment": 12, "name": "name of the person speaking in that 'Them' line"}]
+  "speakers": [{"speaker": "Speaker 2", "name": "the person's name", "lines": [12, 30]}]
 }"#;
 
 fn notes_prompt(
@@ -235,9 +317,10 @@ fn notes_prompt(
     }
     prompt.push_str(&format!(
         "\nTranscript:\n{transcript}\n\
-For 'speakers', only name a 'Them' line when the transcript makes it clear who spoke \
-(the person was addressed by name just before, introduced themselves, or is the only other invitee). \
-Use names from the invite list when they match. Leave out lines you are not sure about.\n\
+For 'speakers', only name a 'Speaker N' when the transcript makes it clear who that is: \
+someone says their name right before they speak, or they introduce themselves. \
+'lines' are the line numbers (#index) where that name is said. Never name 'Me' or 'Them'. \
+Use names from the invite list when they match. Leave out anyone you are not sure about.\n\
 Reply with JSON in this shape:\n{NOTES_SHAPE}"
     ));
     prompt
@@ -247,8 +330,7 @@ Reply with JSON in this shape:\n{NOTES_SHAPE}"
 /// odd value loses only that field.
 struct RawNotes {
     summary: NoteSummary,
-    /// (segment index, name) for 'Them' lines.
-    speakers: Vec<(usize, String)>,
+    speakers: Vec<SpeakerGuess>,
 }
 
 fn text(v: &Value) -> Option<String> {
@@ -302,7 +384,13 @@ fn raw_notes(v: &Value) -> RawNotes {
             .collect(),
     };
     let speakers = items(&v["speakers"])
-        .filter_map(|s| Some((segment_index(&s["segment"])?, text(&s["name"])?)))
+        .filter_map(|s| {
+            Some(SpeakerGuess {
+                speaker: text(&s["speaker"])?,
+                name: text(&s["name"])?,
+                lines: items(&s["lines"]).filter_map(segment_index).collect(),
+            })
+        })
         .collect();
     RawNotes { summary, speakers }
 }
@@ -324,20 +412,20 @@ fn notes_from(value: &Value, what: &str) -> Result<RawNotes> {
     Ok(raw)
 }
 
-/// Notes for a meeting, plus names for the 'Them' segments the model could
-/// attribute (segment index, name).
+/// Notes for a meeting, plus the names the model offered for speakers (each
+/// with the lines that say it; `diarize::names_from_guesses` checks them).
 pub fn summarize(
-    ollama: &Ollama,
+    model: &Model,
     meeting: &Meeting,
     thoughts: &str,
     segments: &[Segment],
-) -> Result<(NoteSummary, Vec<(usize, String)>)> {
+) -> Result<(NoteSummary, Vec<SpeakerGuess>)> {
     let parts = split_parts(&transcript_lines(segments));
     let mut speakers = Vec::new();
     let mut partials = Vec::new();
     for (i, part) in parts.iter().enumerate() {
         let numbering = (parts.len() > 1).then_some((i + 1, parts.len()));
-        let value = ollama.chat_json(
+        let value = model.chat_json(
             NOTES_SYSTEM,
             &notes_prompt(meeting, thoughts, part, numbering),
         )?;
@@ -373,20 +461,9 @@ Reply with JSON in this shape:\n{NOTES_SHAPE}",
             meeting.title,
             serde_json::to_string_pretty(&merged)?
         );
-        notes_from(
-            &ollama.chat_json(NOTES_SYSTEM, &prompt)?,
-            "the merged notes",
-        )?
-        .summary
+        notes_from(&model.chat_json(NOTES_SYSTEM, &prompt)?, "the merged notes")?.summary
     };
 
-    let valid: HashSet<usize> = segments
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| s.source == "system")
-        .map(|(i, _)| i)
-        .collect();
-    speakers.retain(|(i, name)| valid.contains(i) && !name.eq_ignore_ascii_case("them"));
     Ok((summary, speakers))
 }
 
@@ -502,7 +579,7 @@ pub fn pick_passages(mut scored: Vec<(f64, Passage)>) -> Vec<Passage> {
 }
 
 pub fn answer(
-    ollama: &Ollama,
+    model: &Model,
     question: &str,
     history: &[(String, String)],
     passages: &[Passage],
@@ -541,7 +618,7 @@ after each claim it supports. If the passages don't answer it, say so. Use short
     let system =
         "You answer questions about the user's meetings using passages from their meeting notes \
 and transcripts. 'Me' is the user. Answer in the language of the question. Reply with JSON only.";
-    let value = ollama.chat_json(system, &prompt)?;
+    let value = model.chat_json(system, &prompt)?;
     let text = value["answer"]
         .as_str()
         .unwrap_or_default()
@@ -581,6 +658,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn built_in_notes_request_asks_for_json_without_thinking() {
+        let body = builtin_body("Write notes.", "Transcript");
+        assert_eq!(body["response_format"], json!({ "type": "json_object" }));
+        assert_eq!(body["chat_template_kwargs"]["enable_thinking"], false);
+        assert_eq!(body["messages"][0]["role"], "system");
+        assert_eq!(body["messages"][1]["content"], "Transcript");
+        assert!(body.get("max_tokens").is_none());
+    }
+
+    #[test]
+    fn built_in_model_that_is_not_downloaded_says_so() {
+        let model = Model::Builtin {
+            path: PathBuf::from("/nonexistent/model.gguf"),
+            name: "Qwen3 8B".to_string(),
+        };
+        assert!(model
+            .unavailable_reason()
+            .is_some_and(|r| r.contains("isn't downloaded")));
+        assert_eq!(model.model(), "Qwen3 8B");
+    }
+
+    #[test]
     fn parses_reply_with_thinking_and_fences() {
         let v = parse_json_reply("<think>hmm</think>\n```json\n{\"a\": 1}\n```").unwrap();
         assert_eq!(v["a"], 1);
@@ -593,7 +692,8 @@ mod tests {
                 "sections": [{"heading": null, "bullets": ["a", null]}, "odd"],
                 "key_points": null,
                 "action_items": [{"text": null}, {"text": "Send deck", "owner": "null"}],
-                "speakers": [{"segment": "#12", "name": "Priya"}, {"segment": 3, "name": null}]}"##,
+                "speakers": [{"speaker": "Speaker 2", "name": "Priya", "lines": ["#12", 14]},
+                             {"speaker": "Speaker 1", "name": null}]}"##,
         )
         .unwrap();
         let raw = notes_from(&v, "the meeting").unwrap();
@@ -602,7 +702,14 @@ mod tests {
         assert_eq!(raw.summary.sections[0].bullets, vec!["a"]);
         assert_eq!(raw.summary.action_items.len(), 1);
         assert!(raw.summary.action_items[0].owner.is_none());
-        assert_eq!(raw.speakers, vec![(12, "Priya".to_string())]);
+        assert_eq!(
+            raw.speakers,
+            vec![SpeakerGuess {
+                speaker: "Speaker 2".into(),
+                name: "Priya".into(),
+                lines: vec![12, 14],
+            }]
+        );
         assert!(notes_from(&json!({"title": "x"}), "the meeting").is_err());
     }
 

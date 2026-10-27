@@ -59,7 +59,7 @@
             "name": "Does Lipik work offline?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes, once the models are downloaded. The speech model is a one-time 731 MB download from Hugging Face, and the optional clean-up model comes through Ollama. After that, Lipik works with Wi-Fi off."
+              "text": "Yes, once the models are downloaded. The speech model is a one-time 731 MB download from Hugging Face, and the optional clean-up model is a one-time 2.5 or 5 GB download from the same place. After that, Lipik works with Wi-Fi off."
             }
           },
           {
@@ -235,12 +235,15 @@
           </p>
           <p>
             The clean-up step removes filler words, fixes punctuation and writes
-            in the tone you set for each kind of app. It is optional. It uses
-            Qwen3 8B through the free
-            <a href="https://ollama.com">Ollama</a> app, about 5 GB, and also
-            runs on your Mac. Without it, Lipik still types what you said, and
-            its built-in rules still handle "um", spoken punctuation, numbers
-            and emails.
+            in the tone you set for each kind of app. It is optional, and it is
+            built in, so no other app is needed. One button in setup downloads
+            the clean-up model from Hugging Face: Qwen3 8B (5 GB) on Macs with
+            16 GB of memory or more, or Qwen3 4B Instruct (2.5 GB) on smaller
+            Macs. It runs on your Mac. Built-in clean-up needs macOS 13.3 or
+            later. On older versions, you can use the free
+            <a href="https://ollama.com">Ollama</a> app instead. Without a
+            clean-up model, Lipik still types what you said, and its built-in
+            rules still fix "um", spoken punctuation, numbers, times and emails.
           </p>
           <p>
             If you'd rather use a cloud model for clean-up, you can add your own
@@ -249,10 +252,28 @@
           </p>
 
           <h2>What needs the internet</h2>
+          <p>Lipik goes online only for these:</p>
+          <ul>
+            <li>
+              one-time downloads from Hugging Face: the speech model (731 MB),
+              the clean-up model (2.5 or 5 GB) and, for meeting notes, the
+              speaker model (33 MB)
+            </li>
+            <li>
+              Apple's English (India) speech files, through macOS, for Hinglish
+              only
+            </li>
+            <li>
+              once a day, a check with GitHub for the latest version number, to
+              show a "new version" notice. It carries nothing about you, and you
+              can turn it off in Settings, under Privacy, then Updates.
+            </li>
+            <li>cloud clean-up, only if you add your own API key</li>
+          </ul>
           <p>
-            Lipik needs the internet to download its models once. After that,
-            dictation works with Wi-Fi off. There is no account, and Lipik sends
-            no telemetry: no usage stats and no tracking.
+            After the downloads, dictation works with Wi-Fi off. There is no
+            account, and Lipik sends no telemetry: no usage stats and no
+            tracking.
           </p>
 
           <h2>What else is included</h2>
@@ -293,8 +314,8 @@
                 <p>
                   Yes, once the models are downloaded. The speech model is a
                   one-time 731 MB download from Hugging Face, and the optional
-                  clean-up model comes through Ollama. After that, Lipik works
-                  with Wi-Fi off.
+                  clean-up model is a one-time 2.5 or 5 GB download from the
+                  same place. After that, Lipik works with Wi-Fi off.
                 </p>
               </div>
             </details>

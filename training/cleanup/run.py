@@ -8,6 +8,9 @@
     python3 run.py cleanup ... --input spoken --tag text-r3   # skip ASR: clean the spoken line
     python3 run.py cleanup ... --input spoken --cases holdout.json --vocab holdout_vocab.json --tag holdout-r3
     python3 run.py prompt --vocab-in-prompt   # print the messages sent
+    python3 run.py cleanup --api openai --url http://127.0.0.1:8080 --model qwen3-4b-builtin ...
+        # Lipik's built-in engine (llama-server, started with engine.rs's arguments):
+        # POST /v1/chat/completions with the app's request body; --key for its API key
 
 The default prompt is the app's own, src-tauri/src/textflow/cleanup_prompt.txt.
 A prompt file has a "### EXAMPLES" section: it is sent as a fixed system
@@ -157,10 +160,17 @@ def build_messages(app_name, text, prompt_file, vocab):
     return msgs
 
 
-# ---------- Ollama ----------
+# ---------- Ollama or llama-server ----------
+
+API = "ollama"
+KEY = None
+
 
 def post(url, body, timeout=120):
-    req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"}
+    if KEY:
+        headers["Authorization"] = f"Bearer {KEY}"
+    req = urllib.request.Request(url, json.dumps(body).encode(), headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
@@ -176,7 +186,28 @@ def too_long(output, inp, times=1.5, extra=40):
     return len(output) > len(inp) * times + extra
 
 
+def openai_chat(url, messages, think, max_tokens):
+    """The built-in engine's request (engine.rs chat_body), its reply in Ollama's shape."""
+    body = {"messages": messages, "stream": False, "temperature": 0.2, "cache_prompt": True,
+            "chat_template_kwargs": {"enable_thinking": bool(think)}}
+    if max_tokens:
+        body["max_tokens"] = max_tokens
+    t = time.perf_counter()
+    r = post(f"{url}/v1/chat/completions", body)
+    ms = (time.perf_counter() - t) * 1000
+    choice, timings, usage = r["choices"][0], r.get("timings", {}), r.get("usage", {})
+    shaped = {"message": {"content": choice["message"].get("content") or "",
+                          "thinking": choice["message"].get("reasoning_content")},
+              "done_reason": choice.get("finish_reason"),
+              "prompt_eval_count": usage.get("prompt_tokens"), "eval_count": usage.get("completion_tokens"),
+              "prompt_eval_duration": timings.get("prompt_ms", 0) * 1e6,
+              "eval_duration": timings.get("predicted_ms", 0) * 1e6, "load_duration": 0}
+    return strip_think(shaped["message"]["content"]).strip(), ms, shaped
+
+
 def chat(url, model, messages, context, think, num_predict=None):
+    if API == "openai":
+        return openai_chat(url, messages, think, num_predict)
     options = {"temperature": 0.2, "num_ctx": context}
     if num_predict:
         options["num_predict"] = num_predict
@@ -198,6 +229,9 @@ def num_predict(text):
 
 
 def warm_up(url, model, messages, think, context):
+    if API == "openai":
+        openai_chat(url, messages, think, 1)
+        return
     body = {"model": model, "stream": False, "keep_alive": KEEP_ALIVE,
             "options": {"num_ctx": context, "num_predict": 1}, "messages": messages}
     if think is not None:
@@ -303,7 +337,7 @@ def run_cleanup(args):
     lat = [json.loads(l)["latency_ms"] for l in out.read_text().splitlines()]
     lat = sorted(x for x in lat if x is not None)
     print(f"median {statistics.median(lat):.0f} ms, p90 {lat[int(0.9 * (len(lat) - 1))]} ms")
-    if args.unload:
+    if args.unload and API == "ollama":
         post(f"{args.url}/api/generate", {"model": args.model, "keep_alive": 0})
 
 
@@ -320,6 +354,9 @@ def main():
     p.add_argument("--asr", default="parakeet-en", choices=list(ASR_MODELS))
     p.add_argument("--model", default="qwen3:8b")
     p.add_argument("--url", default="http://127.0.0.1:11434")
+    p.add_argument("--api", choices=["ollama", "openai"], default="ollama",
+                   help="openai = an OpenAI-style server such as Lipik's built-in llama-server")
+    p.add_argument("--key", help="--api openai: the server's API key")
     p.add_argument("--prompt-file")
     p.add_argument("--input", choices=["asr", "spoken"], default="asr",
                    help="spoken = clean the spoken line itself, to separate clean-up errors from ASR errors")
@@ -340,8 +377,9 @@ def main():
     p.add_argument("--cases", default="cases.json", help="holdout.json for the held-out lines (spoken input)")
     p.add_argument("--vocab", default="vocab.json")
     args = p.parse_args()
-    global CASES_FILE, VOCAB_FILE
+    global CASES_FILE, VOCAB_FILE, API, KEY
     CASES_FILE, VOCAB_FILE = args.cases, args.vocab
+    API, KEY = args.api, args.key
     if args.step == "audio":
         make_audio(args)
     elif args.step == "asr":

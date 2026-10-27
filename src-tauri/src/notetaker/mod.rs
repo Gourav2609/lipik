@@ -1,6 +1,7 @@
 //! Notetaker: records a meeting as two streams (microphone = "Me", system
 //! audio = "Them"), transcribes it live and again at the end, and writes notes
-//! with a local Ollama model. See CONTRACT.md for the commands and events.
+//! with a local model (built in, or Ollama). See CONTRACT.md for the commands
+//! and events.
 
 mod ai;
 pub mod ai_apps;
@@ -10,6 +11,7 @@ pub mod commands;
 #[cfg(target_os = "macos")]
 mod coreaudio;
 mod detect;
+mod diarize;
 mod live;
 pub mod mcp;
 mod store;
@@ -152,8 +154,13 @@ pub struct Meeting {
 pub struct Segment {
     /// "mic" or "system".
     pub source: String,
-    /// "Me", "Them", or a name found for a "Them" segment.
+    /// What to show: "Me", "Them" (call audio not split by voice),
+    /// "Speaker 1", "Speaker 2", … or a name.
     pub speaker: String,
+    /// Which voice this is, fixed while `speaker` may be renamed: "me" (mic),
+    /// "them" (call audio not split), or "s1", "s2", … in order of first
+    /// appearance. Every line of one key shares one label.
+    pub speaker_key: String,
     /// From the start of the meeting.
     pub start_ms: i64,
     pub end_ms: i64,
@@ -322,6 +329,8 @@ pub struct NotetakerTranscript {
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum ProcessingStage {
+    /// Telling the voices on the call apart (before transcribing).
+    Speakers,
     Transcribing,
     Summarizing,
 }
@@ -330,7 +339,8 @@ pub enum ProcessingStage {
 pub struct NotetakerProcessing {
     pub meeting_id: String,
     pub stage: ProcessingStage,
-    /// 0..1 for transcribing; summarizing has no progress and sends 0.
+    /// 0..1 for transcribing; speakers and summarizing have no progress
+    /// and send 0.
     pub progress: f32,
 }
 
@@ -1029,6 +1039,7 @@ impl NotetakerManager {
         let spawned = std::thread::Builder::new()
             .name("notetaker-final".into())
             .spawn(move || {
+                background_priority();
                 let id = thread_id;
                 let _ = this.store.add_process_attempt(&id);
                 if let Err(e) = this.process(&id, transcribe) {
@@ -1055,6 +1066,15 @@ impl NotetakerManager {
         let dir = self.meeting_dir(id);
 
         if transcribe {
+            let system_wav = dir.join("system.wav");
+            let heard_call = self
+                .store
+                .segments(id)?
+                .iter()
+                .any(|s| s.source == "system");
+            let speakers = (system_wav.exists() && heard_call)
+                .then(|| self.find_speakers(id, &system_wav))
+                .flatten();
             let sources = [
                 (
                     "mic",
@@ -1080,7 +1100,8 @@ impl NotetakerManager {
                     }
                     .emit(&self.app);
                 };
-                match transcribe::transcribe_file(&self.app, path, *offset, source, emit) {
+                let split = speakers.as_ref().filter(|_| *source == "system");
+                match transcribe::transcribe_file(&self.app, path, *offset, source, split, emit) {
                     Ok(segments) => results.push((*source, segments)),
                     Err(e) => {
                         failed = Some(e);
@@ -1099,7 +1120,10 @@ impl NotetakerManager {
                             system = segments;
                         }
                     }
-                    let merged = transcribe::merge_streams(mic, system);
+                    let mut merged = transcribe::merge_streams(mic, system);
+                    if let Some(speakers) = &speakers {
+                        self.name_known_speakers(id, &meeting, speakers, &mut merged);
+                    }
                     if merged.is_empty() && !self.store.segments(id)?.is_empty() {
                         log::warn!(
                             "Notetaker final pass heard no speech; keeping the live transcript"
@@ -1121,6 +1145,60 @@ impl NotetakerManager {
         }
         self.store.set_status(id, MeetingStatus::Ready)?;
         self.write_notes(id)
+    }
+
+    /// Splits the call audio by voice. Any failure (no models, offline on
+    /// first use, a crash in the model) keeps one "Them" for the call.
+    fn find_speakers(&self, id: &str, wav: &std::path::Path) -> Option<diarize::Speakers> {
+        let _ = NotetakerProcessing {
+            meeting_id: id.to_string(),
+            stage: ProcessingStage::Speakers,
+            progress: 0.0,
+        }
+        .emit(&self.app);
+        let started = Instant::now();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            diarize::detect(&self.app, wav)
+        }))
+        .unwrap_or_else(|_| Err(anyhow!("speaker detection panicked")));
+        match result {
+            Ok(speakers) => {
+                log::info!(
+                    "Notetaker found {} speakers in {id} in {:.1}s",
+                    speakers.count(),
+                    started.elapsed().as_secs_f32()
+                );
+                Some(speakers)
+            }
+            Err(e) => {
+                log::warn!("Notetaker kept one speaker for the call audio of {id}: {e}");
+                None
+            }
+        }
+    }
+
+    /// Keeps the meeting's voices (for naming them later) and names the
+    /// speakers a saved voice or the calendar already identifies.
+    fn name_known_speakers(
+        &self,
+        id: &str,
+        meeting: &Meeting,
+        speakers: &diarize::Speakers,
+        segments: &mut [Segment],
+    ) {
+        let voices: Vec<(String, Vec<f32>, i64)> = speakers
+            .voices
+            .iter()
+            .enumerate()
+            .filter_map(|(n, v)| Some((diarize::speaker_key(n), v.clone()?, speakers.speech_ms[n])))
+            .collect();
+        if let Err(e) = self.store.save_meeting_voices(id, &voices) {
+            log::warn!("Notetaker could not save the voices of {id}: {e}");
+        }
+        let profiles = self.store.voice_profiles().unwrap_or_default();
+        for (n, name) in diarize::known_names(speakers, &profiles, &meeting.attendees) {
+            diarize::apply_name(segments, &diarize::speaker_key(n), &name);
+        }
     }
 
     fn write_notes(&self, id: &str) -> Result<()> {
@@ -1147,9 +1225,8 @@ impl NotetakerManager {
             );
         }
 
-        let s = settings(&self.app);
-        let ollama = ai::Ollama::new(&s.ollama_url, &s.ollama_model);
-        if let Some(reason) = ollama.unavailable_reason() {
+        let model = ai::Model::for_app(&self.app);
+        if let Some(reason) = model.unavailable_reason() {
             return finish(SummaryStatus::Unavailable, Some(reason));
         }
         let _ = NotetakerProcessing {
@@ -1160,19 +1237,20 @@ impl NotetakerManager {
         .emit(&self.app);
 
         let thoughts = self.store.thoughts(id)?;
-        match ai::summarize(&ollama, &meeting, &thoughts, &segments) {
-            Ok((summary, speakers)) => {
-                if !speakers.is_empty() {
-                    let mut named = segments.clone();
-                    for (index, name) in speakers {
-                        if let Some(seg) = named.get_mut(index) {
-                            seg.speaker = name;
-                        }
-                    }
-                    self.store.replace_final_segments(id, &named)?;
+        match ai::summarize(&model, &meeting, &thoughts, &segments) {
+            Ok((summary, guesses)) => {
+                let own = self.own_names(&meeting);
+                let mut changed = 0;
+                for (key, name) in diarize::names_from_guesses(&segments, &guesses, &own) {
+                    let default = diarize::default_label(&key);
+                    changed += self
+                        .store
+                        .name_speaker_if_default(id, &key, &default, &name)?;
+                }
+                if changed > 0 {
                     let _ = NotetakerTranscript {
                         meeting_id: id.to_string(),
-                        segments: named,
+                        segments: self.store.segments(id)?,
                         replace: true,
                     }
                     .emit(&self.app);
@@ -1180,14 +1258,14 @@ impl NotetakerManager {
                 if let Some(title) = &summary.title {
                     self.store.set_auto_title(id, title)?;
                 }
-                self.store.save_summary(id, &summary, ollama.model())?;
+                self.store.save_summary(id, &summary, model.model())?;
                 finish(SummaryStatus::Ready, None)
             }
             Err(e) => finish(SummaryStatus::Failed, Some(format!("Notes failed: {e}"))),
         }
     }
 
-    /// Writes the notes again (after Ollama was started, or the thoughts
+    /// Writes the notes again (once the model is there, or the thoughts
     /// changed). The transcript is kept, unless processing failed: then the
     /// final transcript is made again too.
     pub fn regenerate(self: &Arc<Self>, id: &str) -> Result<()> {
@@ -1266,6 +1344,55 @@ impl NotetakerManager {
         self.store.rename(id, title)
     }
 
+    /// The user's own names and emails: never a name for someone on the call.
+    fn own_names(&self, meeting: &Meeting) -> Vec<String> {
+        let mut own: Vec<String> = meeting
+            .attendees
+            .iter()
+            .filter(|a| a.is_me)
+            .flat_map(|a| [a.name.clone(), a.email.clone()])
+            .flatten()
+            .collect();
+        own.extend(user_full_name());
+        own.extend(crate::textflow::dictionary_emails(&self.app));
+        own
+    }
+
+    /// Names one speaker on every line of a meeting. A voice-split speaker's
+    /// voice then counts toward that name, so later meetings name it too.
+    pub fn rename_speaker(&self, id: &str, speaker_key: &str, name: &str) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(anyhow!("The name can't be empty"));
+        }
+        if self.processing.lock().unwrap().iter().any(|m| m == id) {
+            return Err(anyhow!("Speakers can be named once the notes are written"));
+        }
+        self.store.rename_speaker(id, speaker_key, name)?;
+        if let Err(e) =
+            self.store
+                .set_voice_named(id, speaker_key, !diarize::is_default_label(name))
+        {
+            log::warn!("Notetaker could not remember a voice: {e}");
+        }
+        let _ = NotetakerTranscript {
+            meeting_id: id.to_string(),
+            segments: self.store.segments(id)?,
+            replace: true,
+        }
+        .emit(&self.app);
+        Ok(())
+    }
+
+    /// How many people have a saved voice.
+    pub fn saved_voices(&self) -> Result<u32> {
+        Ok(self.store.voice_profiles()?.len() as u32)
+    }
+
+    pub fn forget_voices(&self) -> Result<()> {
+        self.store.forget_voices()
+    }
+
     pub fn move_to_folder(&self, id: &str, folder: Option<&str>) -> Result<()> {
         self.store
             .move_to_folder(id, folder.map(str::trim).filter(|f| !f.is_empty()))
@@ -1298,9 +1425,8 @@ impl NotetakerManager {
         if question.is_empty() {
             return Err(anyhow!("Ask a question"));
         }
-        let s = settings(&self.app);
-        let ollama = ai::Ollama::new(&s.ollama_url, &s.ollama_model);
-        if let Some(reason) = ollama.unavailable_reason() {
+        let model = ai::Model::for_app(&self.app);
+        if let Some(reason) = model.unavailable_reason() {
             return Err(anyhow!(reason));
         }
 
@@ -1374,7 +1500,7 @@ impl NotetakerManager {
             .rev()
             .map(|m| (m.role, m.content))
             .collect();
-        let (text, citations) = ai::answer(&ollama, question, &history, &passages)?;
+        let (text, citations) = ai::answer(&model, question, &history, &passages)?;
 
         let mut question_msg = ChatMessage {
             id: 0,
@@ -1410,6 +1536,33 @@ impl NotetakerManager {
     pub fn chat_messages(&self, thread_id: &str) -> Result<Vec<ChatMessage>> {
         self.store.chat_messages(thread_id)
     }
+}
+
+/// Processing runs behind dictation: macOS gives this thread (and threads it
+/// starts) a lower priority.
+fn background_priority() {
+    #[cfg(target_os = "macos")]
+    // SAFETY: sets the calling thread's own QoS class; no pointers involved.
+    unsafe {
+        libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_UTILITY, 0);
+    }
+}
+
+/// The macOS account's full name ("Gourav Sharma"), read once.
+fn user_full_name() -> Option<String> {
+    static NAME: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    NAME.get_or_init(|| {
+        if !cfg!(target_os = "macos") {
+            return None;
+        }
+        let out = std::process::Command::new("/usr/bin/id")
+            .arg("-F")
+            .output()
+            .ok()?;
+        let name = String::from_utf8(out.stdout).ok()?.trim().to_string();
+        (out.status.success() && !name.is_empty()).then_some(name)
+    })
+    .clone()
 }
 
 #[cfg(target_os = "macos")]

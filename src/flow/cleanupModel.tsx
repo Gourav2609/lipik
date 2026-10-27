@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   commands,
   events,
+  type CleanupEngine,
   type CleanupModelPull,
   type CleanupModelStatus,
 } from "@/bindings";
@@ -19,6 +20,7 @@ export type CleanupModelView =
   | "no_model"
   | "slow_model"
   | "downloading"
+  | "verifying"
   | "failed"
   | "ready";
 
@@ -29,12 +31,15 @@ export const openOllamaDownload = () => {
   openUrl(OLLAMA_DOWNLOAD_URL).catch(() => {});
 };
 
-export const downloadLabel = (model: string) =>
-  model === "qwen3:8b"
-    ? "Download the clean-up model (5 GB)"
-    : `Download ${model}`;
-
 const GB = 1e9;
+
+/** The download button: the built-in model's size, or the Ollama model. */
+export const downloadLabel = (model: string, size = 0) =>
+  size > 0
+    ? `Download the clean-up model (${(size / GB).toFixed(1)} GB)`
+    : model === "qwen3:8b"
+      ? "Download the clean-up model (5 GB)"
+      : `Download ${model}`;
 
 export const pullText = (p: CleanupModelPull | null) =>
   p && p.total > 0
@@ -45,9 +50,9 @@ export const pullPercent = (p: CleanupModelPull | null) =>
   p && p.total > 0 ? Math.floor((p.completed / p.total) * 100) : 0;
 
 /**
- * Whether Ollama runs and has the clean-up model, checked again every few
- * seconds until it does (and now and then after), plus the download of the
- * model through Ollama.
+ * Which engine runs clean-up and whether it has its model (for Ollama:
+ * whether Ollama runs and has it), checked again every few seconds until it
+ * does (and now and then after), plus the model's download.
  */
 export const useCleanupModel = () => {
   const [status, setStatus] = useState<CleanupModelStatus | null>(null);
@@ -106,6 +111,17 @@ export const useCleanupModel = () => {
     await check();
   }, [check]);
 
+  const setEngine = useCallback(
+    async (engine: CleanupEngine) => {
+      oldest.current = sent.current + 1;
+      setError(null);
+      setProgress(null);
+      await commands.setCleanupEngine(engine);
+      await check();
+    },
+    [check],
+  );
+
   const failed =
     error !== null &&
     status?.state === "no_model" &&
@@ -118,11 +134,15 @@ export const useCleanupModel = () => {
 
   return {
     view,
+    engine: status?.engine ?? null,
+    builtinAvailable: status?.builtin_available ?? false,
     model: status?.model ?? "",
+    size: status?.size ?? 0,
     progress,
     error: failed ? error.text : null,
     download,
     cancel,
+    setEngine,
     recheck: check,
   };
 };

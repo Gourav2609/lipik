@@ -39,6 +39,7 @@ fn main() {
     // Must run before tauri_build, which checks that every externalBin exists.
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         build_apple_speech_helper();
+        fetch_llama_server();
     }
 
     tauri_build::build()
@@ -122,6 +123,32 @@ fn build_apple_speech_helper() {
     assert!(
         compile(&stub),
         "swiftc failed to build the Apple speech stub"
+    );
+}
+
+/// Build the built-in clean-up engine (llama.cpp's `llama-server`) into
+/// `llama-server/bin/llama-server-<target triple>` for tauri's `externalBin`,
+/// once: scripts/fetch-llama-server.sh pins the llama.cpp release and skips
+/// the build when that release is already there.
+fn fetch_llama_server() {
+    use std::path::PathBuf;
+
+    let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let script = manifest.join("../scripts/fetch-llama-server.sh");
+    let triple = std::env::var("TARGET").unwrap();
+    let out = manifest.join(format!("llama-server/bin/llama-server-{triple}"));
+    println!("cargo:rerun-if-changed={}", script.display());
+    println!("cargo:rerun-if-changed={}", out.display());
+    let ok = std::process::Command::new("bash")
+        .arg(&script)
+        .arg(&triple)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    assert!(
+        ok,
+        "scripts/fetch-llama-server.sh failed; it needs cmake, Xcode's command line tools and \
+         the internet once"
     );
 }
 

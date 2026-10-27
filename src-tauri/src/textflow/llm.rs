@@ -1,17 +1,21 @@
-//! Calls to the local Ollama server.
+//! Calls to the local model: the built-in engine (engine.rs) or Ollama.
 
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use serde_json::json;
+use std::path::PathBuf;
 use std::time::Duration;
 use tauri::AppHandle;
+
+use super::engine::{self, ENGINE};
+use crate::settings::CleanupEngine;
 
 /// Dictations fit a small context, which keeps the model smaller in memory;
 /// the clean-up prompt with its examples is about 1,600 tokens. Longer text
 /// gets the Notetaker's size. Ollama reloads the model (about 3 s) whenever a
 /// request asks for a different size, so a request keeps a larger size the
 /// model is already loaded with.
-const SMALL_CONTEXT: u32 = 4_096;
+pub(super) const SMALL_CONTEXT: u32 = 4_096;
 const LARGE_CONTEXT: u32 = 16_384;
 const KEEP_ALIVE: &str = "1h";
 
@@ -22,10 +26,12 @@ pub(super) static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
         .unwrap_or_default()
 });
 
-/// Ollama URL and model, shared with the Notetaker settings.
+/// Where clean-up requests go. Ollama's URL and model are shared with the
+/// Notetaker settings; for the built-in engine `model` is the model's name.
 pub struct Endpoint {
     pub(super) url: String,
     pub(super) model: String,
+    pub(super) builtin: Option<PathBuf>,
 }
 
 #[cfg(test)]
@@ -34,15 +40,35 @@ impl Endpoint {
         Self {
             url: "http://127.0.0.1:11434".to_string(),
             model: model.to_string(),
+            builtin: None,
         }
     }
 }
 
-pub fn endpoint(app: &AppHandle) -> Endpoint {
-    let notetaker = crate::settings::get_settings(app).notetaker;
+fn ollama(notetaker: crate::notetaker::NotetakerSettings) -> Endpoint {
     Endpoint {
         url: notetaker.ollama_url.trim_end_matches('/').to_string(),
         model: notetaker.ollama_model,
+        builtin: None,
+    }
+}
+
+/// The Ollama endpoint from the settings, whatever the clean-up engine.
+pub fn ollama_endpoint(app: &AppHandle) -> Endpoint {
+    ollama(crate::settings::get_settings(app).notetaker)
+}
+
+/// The endpoint of the clean-up engine in use. The built-in one carries the
+/// path of its model file (which may not be downloaded yet).
+pub fn endpoint(app: &AppHandle) -> Endpoint {
+    let settings = crate::settings::get_settings(app);
+    if super::cleanup_model::engine_from(app, &settings) == CleanupEngine::Ollama {
+        return ollama(settings.notetaker);
+    }
+    Endpoint {
+        url: String::new(),
+        model: engine::builtin_model().name.to_string(),
+        builtin: Some(engine::model_path(app).unwrap_or_default()),
     }
 }
 
@@ -79,7 +105,7 @@ pub fn messages_context(messages: &[Message]) -> u32 {
     }
 }
 
-fn strip_think(s: &str) -> &str {
+pub(super) fn strip_think(s: &str) -> &str {
     if let Some(rest) = s.trim_start().strip_prefix("<think>") {
         if let Some(end) = rest.find("</think>") {
             return rest[end + "</think>".len()..].trim_start();
@@ -114,6 +140,22 @@ pub async fn chat_messages(
     timeout: Duration,
     max_tokens: Option<u32>,
 ) -> Result<String, String> {
+    if let Some(model) = &endpoint.builtin {
+        let request = async {
+            let conn = ENGINE.ensure(model, context).await?;
+            let reply = engine::post_chat(
+                &conn,
+                &engine::chat_body(messages, max_tokens),
+                max_tokens.is_some(),
+            )
+            .await;
+            ENGINE.touch();
+            reply
+        };
+        return tokio::time::timeout(timeout, request)
+            .await
+            .map_err(|_| format!("The clean-up engine took longer than {timeout:?}"))?;
+    }
     let mut options = json!({ "temperature": 0.2, "num_ctx": context });
     if let Some(n) = max_tokens {
         options["num_predict"] = json!(n);
@@ -162,6 +204,9 @@ fn reply_text(value: &serde_json::Value, capped: bool) -> Result<String, String>
 /// The context size the model is loaded with, or `None` when it is not
 /// loaded. Ollama versions that don't report the size give `needed`.
 pub async fn loaded_context(endpoint: &Endpoint, needed: u32) -> Option<u32> {
+    if let Some(model) = &endpoint.builtin {
+        return ENGINE.loaded(model).map(|conn| conn.ctx);
+    }
     let response = CLIENT
         .get(format!("{}/api/ps", endpoint.url))
         .timeout(Duration::from_millis(300))
@@ -182,11 +227,32 @@ pub async fn loaded_context(endpoint: &Endpoint, needed: u32) -> Option<u32> {
 }
 
 /// Loads the model ahead of a request so the first clean-up is not slow. It
-/// sends the clean-up instructions and examples too, so Ollama keeps them in
-/// its prompt cache and the real clean-up only reads the new words.
+/// sends the clean-up instructions and examples too, so the engine keeps them
+/// in its prompt cache and the real clean-up only reads the new words.
 pub fn warm_up(app: &AppHandle) {
     let endpoint = endpoint(app);
     let messages = super::pipeline::warm_up_messages(app);
+    if let Some(model) = endpoint.builtin {
+        if !model.is_file() {
+            return;
+        }
+        tauri::async_runtime::spawn(async move {
+            let context = ENGINE
+                .loaded(&model)
+                .map_or(SMALL_CONTEXT, |conn| conn.ctx.max(SMALL_CONTEXT));
+            let warm = async {
+                let conn = ENGINE.ensure(&model, context).await?;
+                engine::post_chat(&conn, &engine::chat_body(&messages, Some(1)), false).await
+            };
+            if let Err(e) = tokio::time::timeout(Duration::from_secs(180), warm)
+                .await
+                .unwrap_or_else(|_| Err("timed out".to_string()))
+            {
+                log::warn!("Clean-up engine warm-up failed: {e}");
+            }
+        });
+        return;
+    }
     tauri::async_runtime::spawn(async move {
         // Keep a larger size the model already has (after a Notetaker summary
         // or a long dictation) instead of reloading it smaller.

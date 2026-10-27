@@ -168,14 +168,22 @@ const CalendarControl = ({ access }: { access: CalendarAccess | null }) => {
   );
 };
 
+const ENGINE_OPTIONS = [
+  { value: "builtin", label: "Built-in (recommended)" },
+  { value: "ollama", label: "Ollama (advanced)" },
+];
+
 const CleanupModelRow = ({
   view,
+  engine,
   model,
+  size,
   progress,
   error,
   download,
   cancel,
 }: ReturnType<typeof useCleanupModel>) => {
+  const builtin = engine === "builtin";
   const row = (description: ReactNode, control?: ReactNode) => (
     <SettingRow
       title="Clean-up model"
@@ -186,7 +194,7 @@ const CleanupModelRow = ({
   switch (view) {
     case "checking":
       return row(
-        "Checking for Ollama…",
+        "Checking the clean-up model…",
         <Loader2
           size={16}
           strokeWidth={1.75}
@@ -195,7 +203,9 @@ const CleanupModelRow = ({
       );
     case "ready":
       return row(
-        `${model} is ready in Ollama.`,
+        builtin
+          ? `${model} is ready. It runs inside ${APP_NAME}, on this Mac.`
+          : `${model} is ready in Ollama.`,
         <span className="flex items-center gap-[6px] text-[14.5px] font-medium text-[var(--fk-ok)]">
           <Check size={16} strokeWidth={1.75} />
           Ready
@@ -210,9 +220,11 @@ const CleanupModelRow = ({
       );
     case "no_model":
       return row(
-        `Ollama is running but doesn't have ${model} yet.`,
+        builtin
+          ? `Clean-up needs ${model}, a model that runs on this Mac. It downloads once.`
+          : `Ollama is running but doesn't have ${model} yet.`,
         <Button variant="secondary" onClick={download}>
-          {downloadLabel(model)}
+          {downloadLabel(model, size)}
         </Button>,
       );
     case "slow_model":
@@ -234,6 +246,15 @@ const CleanupModelRow = ({
           </div>
           <PullProgress progress={progress} onCancel={cancel} />
         </div>
+      );
+    case "verifying":
+      return row(
+        `Checking the download of ${model}…`,
+        <Loader2
+          size={16}
+          strokeWidth={1.75}
+          className="animate-spin text-[var(--fk-text-muted)]"
+        />,
       );
     case "failed":
       return row(
@@ -365,9 +386,36 @@ export default function NotetakerSettings() {
       </Section>
       <Section title="Notes">
         <SettingsCard>
+          {cleanup.builtinAvailable && (
+            <SettingRow
+              title="Clean-up engine"
+              description={
+                cleanup.engine === "ollama"
+                  ? "Clean-up and notes use the AI model below, in Ollama, a separate app."
+                  : `Clean-up and notes run inside ${APP_NAME}, on this Mac.`
+              }
+              control={
+                <Select
+                  label="Clean-up engine"
+                  value={cleanup.engine ?? "builtin"}
+                  options={ENGINE_OPTIONS}
+                  width={240}
+                  disabled={cleanup.engine === null}
+                  onChange={(v) =>
+                    cleanup.setEngine(v === "ollama" ? "ollama" : "builtin")
+                  }
+                />
+              }
+            />
+          )}
+          <CleanupModelRow {...cleanup} />
           <SettingRow
             title="AI model"
-            description="The Ollama model that cleans up your dictation and writes your notes."
+            description={
+              cleanup.engine === "builtin"
+                ? "Used only when the engine is Ollama."
+                : "The Ollama model that cleans up your dictation and writes your notes."
+            }
             control={
               <ModelField
                 value={s.ollama_model}
@@ -378,7 +426,6 @@ export default function NotetakerSettings() {
               />
             }
           />
-          <CleanupModelRow {...cleanup} />
           <SettingRow
             title="Meeting audio"
             description="Recordings stay on this Mac until you delete the meeting."

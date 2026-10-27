@@ -100,16 +100,26 @@ const meeting = (
   ...extra,
 });
 
+/** Call voices get keys s1, s2, … in order of first appearance. */
 const lines = (
   rows: [speaker: string, seconds: number, text: string][],
-): Segment[] =>
-  rows.map(([speaker, s, text], i) => ({
-    source: speaker === "Me" ? "mic" : "system",
-    speaker,
-    start_ms: s * 1000,
-    end_ms: (rows[i + 1]?.[1] ?? s + 8) * 1000,
-    text,
-  }));
+): Segment[] => {
+  const keys = new Map<string, string>([
+    ["Me", "me"],
+    ["Them", "them"],
+  ]);
+  return rows.map(([speaker, s, text], i) => {
+    if (!keys.has(speaker)) keys.set(speaker, `s${keys.size - 1}`);
+    return {
+      source: speaker === "Me" ? "mic" : "system",
+      speaker,
+      speaker_key: keys.get(speaker)!,
+      start_ms: s * 1000,
+      end_ms: (rows[i + 1]?.[1] ?? s + 8) * 1000,
+      text,
+    };
+  });
+};
 
 type Sample = {
   meeting: Meeting;
@@ -287,6 +297,8 @@ if (params.get("ntRecording") === "1")
 
 let library = params.get("ntEmpty") === "1" ? [] : records;
 
+let savedVoices = 3;
+
 const find = (id: unknown) => library.find((r) => r.meeting.id === id);
 
 const matches = (r: Sample, query: string) =>
@@ -385,6 +397,20 @@ export const handlers: Record<string, MockHandler> = {
     const r = find(id);
     if (!r) throw "No such meeting";
     r.thoughts = String(markdown);
+    return null;
+  },
+  notetaker_rename_speaker: ({ meetingId, speakerKey, name }) => {
+    const r = find(meetingId);
+    if (!r) throw "No such meeting";
+    if (!String(name).trim()) throw "The name can't be empty";
+    r.segments = r.segments.map((s) =>
+      s.speaker_key === speakerKey ? { ...s, speaker: String(name).trim() } : s,
+    );
+    return null;
+  },
+  notetaker_saved_voices: () => savedVoices,
+  notetaker_forget_voices: () => {
+    savedVoices = 0;
     return null;
   },
   notetaker_rename: ({ id, title }) => {

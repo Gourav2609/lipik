@@ -1,9 +1,14 @@
-//! Checks that Ollama runs and has the clean-up model, and downloads the
-//! model through Ollama for onboarding and Settings.
+//! The clean-up model for onboarding and Settings: which engine runs it
+//! (built-in or Ollama), whether it is there, and its download (the GGUF
+//! file for the built-in engine, or through Ollama).
 
+use super::engine::{self, BuiltinModel, ENGINE};
 use super::llm::{self, CLIENT};
+use crate::managers::model::{HttpDownloadEvent, HttpDownloadOutcome, ModelManager};
+use crate::settings::CleanupEngine;
 use futures_util::future::{select, Either};
 use futures_util::StreamExt;
+use hf_hub::api::tokio::CancellationToken;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -26,16 +31,23 @@ pub enum CleanupModelState {
     /// The model is plain `qwen3:4b`, which is too slow for dictation.
     SlowModel,
     Downloading,
+    /// The built-in model is downloaded and its checksum is being checked.
+    Verifying,
     Ready,
 }
 
 #[derive(Clone, Debug, Serialize, Type)]
 pub struct CleanupModelStatus {
+    pub engine: CleanupEngine,
+    /// Whether this build has the built-in engine (macOS only).
+    pub builtin_available: bool,
     pub state: CleanupModelState,
     /// The configured model, or while `downloading` the model being downloaded.
     pub model: String,
     /// Bytes so far while `state` is `downloading`.
     pub progress: Option<CleanupModelPull>,
+    /// The built-in model's download size in bytes; 0 with Ollama.
+    pub size: u64,
 }
 
 /// Download progress of the clean-up model, in bytes over all its files.
@@ -50,20 +62,41 @@ pub struct CleanupModelPull {
 #[derive(Default)]
 struct Pulls {
     generation: u64,
-    active: Option<(String, CleanupModelPull)>,
+    active: Option<Active>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Active {
+    engine: CleanupEngine,
+    model: String,
+    progress: CleanupModelPull,
+    verifying: bool,
 }
 
 impl Pulls {
-    fn start(&mut self, model: &str) -> u64 {
+    fn start(&mut self, engine: CleanupEngine, model: &str) -> u64 {
         self.generation += 1;
-        self.active = Some((model.to_string(), CleanupModelPull::default()));
+        self.active = Some(Active {
+            engine,
+            model: model.to_string(),
+            progress: CleanupModelPull::default(),
+            verifying: false,
+        });
         self.generation
     }
 
     fn update(&mut self, generation: u64, progress: CleanupModelPull) -> bool {
+        self.change(generation, |a| a.progress = progress)
+    }
+
+    fn verifying(&mut self, generation: u64) -> bool {
+        self.change(generation, |a| a.verifying = true)
+    }
+
+    fn change(&mut self, generation: u64, f: impl FnOnce(&mut Active)) -> bool {
         match &mut self.active {
-            Some((_, p)) if self.generation == generation => {
-                *p = progress;
+            Some(active) if self.generation == generation => {
+                f(active);
                 true
             }
             _ => false,
@@ -84,10 +117,24 @@ impl Pulls {
     fn is_current(&self, generation: u64) -> bool {
         self.generation == generation && self.active.is_some()
     }
+
+    fn builtin_running(&self) -> bool {
+        self.active
+            .as_ref()
+            .is_some_and(|a| a.engine == CleanupEngine::Builtin)
+    }
 }
 
 static PULLS: Lazy<Mutex<Pulls>> = Lazy::new(Default::default);
 static CANCEL: Lazy<Notify> = Lazy::new(Notify::new);
+/// Cancels the running download of the built-in model.
+static BUILTIN_CANCEL: Lazy<Mutex<CancellationToken>> =
+    Lazy::new(|| Mutex::new(CancellationToken::new()));
+/// How often Ollama is asked again while the engine is not chosen yet.
+const PICK_RETRY_EVERY: Duration = Duration::from_secs(30);
+/// The engine offered in onboarding and Settings while the setting is unset:
+/// Ollama once it answered with the clean-up model, else the built-in one.
+static OFFERED: Lazy<Mutex<CleanupEngine>> = Lazy::new(|| Mutex::new(CleanupEngine::Builtin));
 
 const SLOW_MODEL: &str = "qwen3:4b thinks before answering and is too slow for dictation; use qwen3:4b-instruct or qwen3:8b.";
 
@@ -174,59 +221,188 @@ fn per_mille(p: CleanupModelPull) -> u64 {
     (p.completed * 1000).checked_div(p.total).unwrap_or(0)
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn cleanup_model_status(app: AppHandle) -> CleanupModelStatus {
-    let endpoint = llm::endpoint(&app);
-    let model = endpoint.model.clone();
-    if let Some((pulling, progress)) = PULLS.lock().unwrap().active.clone() {
-        return CleanupModelStatus {
-            state: CleanupModelState::Downloading,
-            model: pulling,
-            progress: Some(progress),
-        };
+/// Which engine clean-up and notes requests go to: the setting, or while it
+/// is unset, the built-in engine only once its model file is there and
+/// Ollama otherwise, so someone who used Ollama before never loses it (and
+/// a request to a missing Ollama fails at once).
+pub fn engine_from(app: &AppHandle, settings: &crate::settings::AppSettings) -> CleanupEngine {
+    settings.cleanup_engine.unwrap_or_else(|| {
+        if builtin_downloaded(app) {
+            CleanupEngine::Builtin
+        } else {
+            CleanupEngine::Ollama
+        }
+    })
+}
+
+fn builtin_downloaded(app: &AppHandle) -> bool {
+    ENGINE.is_available() && engine::model_path(app).is_some_and(|p| p.is_file())
+}
+
+/// The engine onboarding and Settings show: the setting, or while it is
+/// unset the one `pick_engine` offers.
+fn offered_engine(app: &AppHandle) -> CleanupEngine {
+    if !ENGINE.is_available() {
+        return CleanupEngine::Ollama;
     }
-    let tags = async {
-        CLIENT
-            .get(format!("{}/api/tags", endpoint.url))
-            .timeout(Duration::from_millis(1500))
-            .send()
-            .await
-            .ok()?
-            .json::<Value>()
-            .await
-            .ok()
-    }
-    .await;
-    let state = match tags {
-        None => CleanupModelState::NoOllama,
-        Some(_) if is_thinking_model(&model) => CleanupModelState::SlowModel,
-        Some(tags) if has_model(&tags, &model) => CleanupModelState::Ready,
-        Some(_) => CleanupModelState::NoModel,
-    };
-    CleanupModelStatus {
-        state,
-        model,
-        progress: None,
+    crate::settings::get_settings(app)
+        .cleanup_engine
+        .unwrap_or_else(|| *OFFERED.lock().unwrap())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum BuiltinFile {
+    Missing,
+    Downloading,
+    Ready,
+}
+
+/// The engine for a user who has not chosen one, and whether to save it.
+/// `ollama`: whether Ollama answered, and if so whether it has the clean-up
+/// model. Only a downloaded built-in model or Ollama with the model settles
+/// it; otherwise the built-in engine is offered and Ollama asked again.
+fn default_engine(builtin: BuiltinFile, ollama: Option<bool>) -> (CleanupEngine, bool) {
+    match (builtin, ollama) {
+        (BuiltinFile::Ready, _) => (CleanupEngine::Builtin, true),
+        (BuiltinFile::Downloading, _) => (CleanupEngine::Builtin, false),
+        (BuiltinFile::Missing, Some(true)) => (CleanupEngine::Ollama, true),
+        (BuiltinFile::Missing, _) => (CleanupEngine::Builtin, false),
     }
 }
 
-/// Downloads the clean-up model through Ollama and loads it. Progress comes
-/// as `CleanupModelPull` events. `Ok(false)`: cancelled, or replaced by a
-/// newer download.
+/// While the user has not chosen an engine: people who already use Ollama
+/// with the clean-up model keep it (saved as their choice), a downloaded
+/// built-in model makes the built-in engine the choice, and Ollama is asked
+/// again every 30 s in case it starts later. Builds or Macs without the
+/// built-in engine use Ollama.
+pub fn pick_engine(app: &AppHandle) {
+    if !ENGINE.is_available() || crate::settings::get_settings(app).cleanup_engine.is_some() {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            if crate::settings::get_settings(&app).cleanup_engine.is_some() {
+                return;
+            }
+            let file = if builtin_downloaded(&app) {
+                BuiltinFile::Ready
+            } else if PULLS.lock().unwrap().builtin_running() {
+                BuiltinFile::Downloading
+            } else {
+                BuiltinFile::Missing
+            };
+            let ollama = if file == BuiltinFile::Missing {
+                let endpoint = llm::ollama_endpoint(&app);
+                ollama_tags(&endpoint.url).await.map(|tags| {
+                    has_model(&tags, &endpoint.model) && !is_thinking_model(&endpoint.model)
+                })
+            } else {
+                None
+            };
+            let (picked, settled) = default_engine(file, ollama);
+            *OFFERED.lock().unwrap() = picked;
+            if settled {
+                let mut settings = crate::settings::get_settings(&app);
+                if settings.cleanup_engine.is_none() {
+                    settings.cleanup_engine = Some(picked);
+                    crate::settings::write_settings(&app, settings);
+                    log::info!("Clean-up engine: {picked:?} (picked for this user)");
+                }
+                return;
+            }
+            tokio::time::sleep(PICK_RETRY_EVERY).await;
+        }
+    });
+}
+
+async fn ollama_tags(url: &str) -> Option<Value> {
+    CLIENT
+        .get(format!("{url}/api/tags"))
+        .timeout(Duration::from_millis(1500))
+        .send()
+        .await
+        .ok()?
+        .json::<Value>()
+        .await
+        .ok()
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn cleanup_model_status(app: AppHandle) -> CleanupModelStatus {
+    let engine = offered_engine(&app);
+    let pulling = PULLS
+        .lock()
+        .unwrap()
+        .active
+        .clone()
+        .filter(|a| a.engine == engine);
+    let builtin = engine::builtin_model();
+    let size = if engine == CleanupEngine::Builtin {
+        builtin.size
+    } else {
+        0
+    };
+    let status = |state, model: String, progress| CleanupModelStatus {
+        engine,
+        builtin_available: ENGINE.is_available(),
+        state,
+        model,
+        progress,
+        size,
+    };
+    if let Some(active) = pulling {
+        let state = if active.verifying {
+            CleanupModelState::Verifying
+        } else {
+            CleanupModelState::Downloading
+        };
+        return status(state, active.model, Some(active.progress));
+    }
+    if engine == CleanupEngine::Builtin {
+        let state = if builtin_downloaded(&app) {
+            CleanupModelState::Ready
+        } else {
+            CleanupModelState::NoModel
+        };
+        return status(state, builtin.name.to_string(), None);
+    }
+    let endpoint = llm::ollama_endpoint(&app);
+    let state = match ollama_tags(&endpoint.url).await {
+        None => CleanupModelState::NoOllama,
+        Some(_) if is_thinking_model(&endpoint.model) => CleanupModelState::SlowModel,
+        Some(tags) if has_model(&tags, &endpoint.model) => CleanupModelState::Ready,
+        Some(_) => CleanupModelState::NoModel,
+    };
+    status(state, endpoint.model, None)
+}
+
+/// Downloads the clean-up model of the engine onboarding and Settings show
+/// (the built-in engine's GGUF file, or through Ollama) and loads it.
+/// Progress comes as `CleanupModelPull` events. `Ok(false)`: cancelled, or
+/// replaced by a newer download.
 #[tauri::command]
 #[specta::specta]
 pub async fn pull_cleanup_model(app: AppHandle) -> Result<bool, String> {
-    let endpoint = llm::endpoint(&app);
-    if is_thinking_model(&endpoint.model) {
-        return Err(SLOW_MODEL.to_string());
-    }
-    let generation = PULLS.lock().unwrap().start(&endpoint.model);
-    let result = pull(&app, &endpoint.url, &endpoint.model, generation).await;
+    let engine = offered_engine(&app);
+    let ollama = llm::ollama_endpoint(&app);
+    let model = match engine {
+        CleanupEngine::Builtin => engine::builtin_model().name.to_string(),
+        CleanupEngine::Ollama if is_thinking_model(&ollama.model) => {
+            return Err(SLOW_MODEL.to_string())
+        }
+        CleanupEngine::Ollama => ollama.model.clone(),
+    };
+    let generation = PULLS.lock().unwrap().start(engine, &model);
+    let result = match engine {
+        CleanupEngine::Builtin => download_builtin(&app, engine::builtin_model(), generation).await,
+        CleanupEngine::Ollama => pull(&app, &ollama.url, &ollama.model, generation).await,
+    };
     PULLS.lock().unwrap().finish(generation);
     match result {
         Ok(true) => {
-            log::info!("cleanup model: {} downloaded", endpoint.model);
+            log::info!("cleanup model: {model} downloaded");
             if super::uses_llm(&app) {
                 llm::warm_up(&app);
             }
@@ -234,7 +410,7 @@ pub async fn pull_cleanup_model(app: AppHandle) -> Result<bool, String> {
         }
         Ok(false) => Ok(false),
         Err(e) => {
-            log::warn!("cleanup model: download of {} failed: {e}", endpoint.model);
+            log::warn!("cleanup model: download of {model} failed: {e}");
             Err(e)
         }
     }
@@ -245,20 +421,156 @@ pub async fn pull_cleanup_model(app: AppHandle) -> Result<bool, String> {
 pub fn cancel_cleanup_model_pull() {
     PULLS.lock().unwrap().cancel();
     CANCEL.notify_waiters();
+    BUILTIN_CANCEL.lock().unwrap().cancel();
 }
 
-/// Stops a running download of any model other than `model`, for when the
-/// model setting changes.
+/// Switches the engine for clean-up and notes. Leaving the built-in engine
+/// stops its server; moving to it unloads Ollama's model so the two don't
+/// both hold memory. A running download is cancelled.
+#[tauri::command]
+#[specta::specta]
+pub fn set_cleanup_engine(app: AppHandle, engine: CleanupEngine) {
+    let mut settings = crate::settings::get_settings(&app);
+    if settings.cleanup_engine == Some(engine) {
+        return;
+    }
+    settings.cleanup_engine = Some(engine);
+    crate::settings::write_settings(&app, settings);
+    cancel_cleanup_model_pull();
+    match engine {
+        CleanupEngine::Ollama => ENGINE.stop(),
+        CleanupEngine::Builtin => {
+            let ollama = llm::ollama_endpoint(&app);
+            tauri::async_runtime::spawn(async move {
+                let _ = CLIENT
+                    .post(format!("{}/api/generate", ollama.url))
+                    .json(&json!({ "model": ollama.model, "keep_alive": 0 }))
+                    .timeout(Duration::from_secs(5))
+                    .send()
+                    .await;
+            });
+        }
+    }
+    if super::uses_llm(&app) {
+        llm::warm_up(&app);
+    }
+}
+
+/// Stops a running Ollama download of any model other than `model`, for
+/// when the model setting changes.
 pub fn cancel_pull_unless(model: &str) {
     let mut pulls = PULLS.lock().unwrap();
     if pulls
         .active
         .as_ref()
-        .is_some_and(|(m, _)| m != model.trim())
+        .is_some_and(|a| a.engine == CleanupEngine::Ollama && a.model != model.trim())
     {
         pulls.cancel();
         drop(pulls);
         CANCEL.notify_waiters();
+    }
+}
+
+/// Room the download needs besides the model itself.
+const SPARE_DISK: u64 = 1_000_000_000;
+
+#[cfg(unix)]
+fn free_disk(dir: &std::path::Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::CString::new(dir.as_os_str().as_bytes()).ok()?;
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    (unsafe { libc::statvfs(path.as_ptr(), &mut stat) } == 0).then(|| {
+        #[allow(clippy::unnecessary_cast)]
+        let bytes = stat.f_bavail as u64 * stat.f_frsize as u64;
+        bytes
+    })
+}
+
+#[cfg(not(unix))]
+fn free_disk(_dir: &std::path::Path) -> Option<u64> {
+    None
+}
+
+const GB: f64 = 1e9;
+
+/// Downloads the built-in model into the models folder with the app's
+/// resumable downloader: a cancelled or broken download continues where it
+/// stopped, and the file is checked against its SHA-256 before it is used.
+async fn download_builtin(
+    app: &AppHandle,
+    model: &'static BuiltinModel,
+    generation: u64,
+) -> Result<bool, String> {
+    let dir = engine::models_dir(app).ok_or("Lipik has no data folder")?;
+    let path = dir.join(model.file);
+    if path.is_file() {
+        return Ok(true);
+    }
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    let partial = dir.join(format!("{}.partial", model.file));
+    let have = partial.metadata().map_or(0, |m| m.len());
+    if let Some(free) = free_disk(&dir) {
+        let needed = model.size.saturating_sub(have) + SPARE_DISK;
+        if free < needed {
+            return Err(format!(
+                "There isn't enough free disk space. The model needs {:.1} GB; this Mac has {:.1} GB free.",
+                needed as f64 / GB,
+                free as f64 / GB
+            ));
+        }
+    }
+    let cancel = CancellationToken::new();
+    *BUILTIN_CANCEL.lock().unwrap() = cancel.clone();
+    if !PULLS.lock().unwrap().is_current(generation) {
+        return Ok(false);
+    }
+    let shown = Mutex::new(None);
+    let emit = |event: HttpDownloadEvent<'_>| {
+        let p = match event {
+            HttpDownloadEvent::Progress(p) => p,
+            HttpDownloadEvent::VerificationStarted => {
+                PULLS.lock().unwrap().verifying(generation);
+                return;
+            }
+            HttpDownloadEvent::VerificationCompleted => return,
+        };
+        let progress = CleanupModelPull {
+            completed: p.downloaded,
+            total: p.total,
+        };
+        if !PULLS.lock().unwrap().update(generation, progress) {
+            cancel.cancel();
+            return;
+        }
+        let mut shown = shown.lock().unwrap();
+        if *shown != Some(per_mille(progress)) {
+            *shown = Some(per_mille(progress));
+            let _ = progress.emit(app);
+        }
+    };
+    let outcome = ModelManager::download_http_resumable_with_events(
+        model.file,
+        &model.url(),
+        &partial,
+        Some(model.size),
+        Some(model.sha256),
+        &cancel,
+        &emit,
+    )
+    .await
+    .map_err(|e| format!("Check your internet, then try again. ({e})"))?;
+    match outcome {
+        HttpDownloadOutcome::Cancelled => Ok(false),
+        HttpDownloadOutcome::Completed => {
+            // A second download of the same finished file may have renamed it.
+            if let Err(e) = std::fs::rename(&partial, &path) {
+                if !path.is_file() {
+                    return Err(format!("Could not save the model: {e}"));
+                }
+            }
+            Ok(PULLS.lock().unwrap().is_current(generation))
+        }
     }
 }
 
@@ -420,24 +732,52 @@ mod tests {
             completed,
             total: 10,
         };
-        let first = pulls.start("qwen3:8b");
+        let first = pulls.start(CleanupEngine::Ollama, "qwen3:8b");
         assert!(pulls.update(first, p(3)));
         pulls.cancel();
         assert!(!pulls.is_current(first));
         assert!(!pulls.update(first, p(4)));
         assert!(pulls.active.is_none());
 
-        let second = pulls.start("qwen3:4b-instruct");
+        let second = pulls.start(CleanupEngine::Builtin, "Qwen3 4B Instruct");
         assert!(!pulls.update(first, p(5)));
         pulls.finish(first);
+        assert!(pulls.builtin_running());
         assert_eq!(
-            pulls.active,
-            Some(("qwen3:4b-instruct".to_string(), CleanupModelPull::default()))
+            pulls
+                .active
+                .as_ref()
+                .map(|a| (a.model.as_str(), a.progress)),
+            Some(("Qwen3 4B Instruct", CleanupModelPull::default()))
         );
         assert!(pulls.update(second, p(6)));
+        assert!(!pulls.verifying(first));
+        assert!(pulls.verifying(second));
+        assert!(pulls.active.as_ref().is_some_and(|a| a.verifying));
         pulls.finish(second);
         assert!(pulls.active.is_none());
         assert!(!pulls.is_current(second));
+    }
+
+    #[test]
+    fn existing_ollama_users_keep_ollama_and_everyone_else_gets_built_in() {
+        use BuiltinFile::{Downloading, Missing, Ready};
+        use CleanupEngine::{Builtin, Ollama};
+        assert_eq!(default_engine(Missing, Some(true)), (Ollama, true));
+        assert_eq!(default_engine(Ready, Some(true)), (Builtin, true));
+        assert_eq!(default_engine(Ready, None), (Builtin, true));
+        // Not settled: built-in is offered and Ollama asked again later.
+        assert_eq!(default_engine(Missing, Some(false)), (Builtin, false));
+        assert_eq!(default_engine(Missing, None), (Builtin, false));
+        // A download in progress is not saved as the choice yet.
+        assert_eq!(default_engine(Downloading, Some(true)), (Builtin, false));
+        assert_eq!(default_engine(Downloading, None), (Builtin, false));
+    }
+
+    #[test]
+    fn free_disk_space_is_read() {
+        let free = free_disk(&std::env::temp_dir());
+        assert!(!cfg!(unix) || free.is_some_and(|b| b > 0));
     }
 
     #[test]

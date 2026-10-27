@@ -130,6 +130,10 @@ change merged to `main` that touches `website/` is deployed by
 
 Built on [Handy](https://github.com/cjpais/Handy) by CJ Pais (MIT). Thanks
 also to the authors of transcribe.cpp, whisper.cpp, ggml and Silero VAD.
+Meeting notes tell speakers apart with [speakrs](https://github.com/avencera/speakrs)
+(Apache 2.0) and the pyannote community-1 models: segmentation-3.0 (MIT) and
+WeSpeaker ResNet34 with PLDA (CC BY 4.0, by the pyannote and WeSpeaker
+authors).
 
 ## Licence
 

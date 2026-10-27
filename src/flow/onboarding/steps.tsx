@@ -380,8 +380,10 @@ const Shortcut = ({ next, back }: StepProps) => {
 const CLEANUP_SKIP_NOTE = `${APP_NAME} still types what you say and fixes “um”, spoken punctuation, numbers and emails without it. You can set this up later in Settings.`;
 
 const Cleanup = ({ next, back }: StepProps) => {
-  const { view, model, progress, error, download, cancel } = useCleanupModel();
+  const { view, engine, model, size, progress, error, download, cancel } =
+    useCleanupModel();
   const ready = view === "ready";
+  const builtin = engine === "builtin";
   return (
     <StepLayout
       eyebrow="Clean-up"
@@ -403,10 +405,16 @@ const Cleanup = ({ next, back }: StepProps) => {
       {view === "checking" && (
         <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
           <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
-          Checking for Ollama…
+          Checking the clean-up model…
         </p>
       )}
-      {ready && <OkNote>Clean-up is ready. It uses {model} in Ollama.</OkNote>}
+      {ready && (
+        <OkNote>
+          {builtin
+            ? `Clean-up is ready. It runs inside ${APP_NAME}, on this Mac.`
+            : `Clean-up is ready. It uses ${model} in Ollama.`}
+        </OkNote>
+      )}
       {view === "no_ollama" && (
         <div className="flex items-center gap-[16px]">
           <p className="flex-1 text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
@@ -421,10 +429,12 @@ const Cleanup = ({ next, back }: StepProps) => {
       {view === "no_model" && (
         <div className="flex items-center gap-[16px]">
           <p className="flex-1 text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
-            Ollama is running. Now get the model it uses for clean-up.
+            {builtin
+              ? "Clean-up needs a model that runs on this Mac. It downloads once."
+              : "Ollama is running. Now get the model it uses for clean-up."}
           </p>
           <Button onClick={download} className="shrink-0">
-            {downloadLabel(model)}
+            {downloadLabel(model, size)}
           </Button>
         </div>
       )}
@@ -440,6 +450,12 @@ const Cleanup = ({ next, back }: StepProps) => {
       )}
       {view === "downloading" && (
         <PullProgress progress={progress} onCancel={cancel} />
+      )}
+      {view === "verifying" && (
+        <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+          <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+          Checking the download…
+        </p>
       )}
       {view === "failed" && (
         <div className="flex items-center gap-[16px]">
@@ -700,7 +716,7 @@ const Privacy = ({ next, back }: StepProps) => (
         {[
           "Speech is turned into text on this Mac. Your audio is never uploaded.",
           `Recordings and their text stay in ${APP_NAME}'s data folder so it can learn your voice. You can change this in Settings.`,
-          "Clean-up runs on a model on this Mac through the free Ollama app, not in the cloud.",
+          "Clean-up and meeting notes run on a model on this Mac, not in the cloud.",
         ].map((line) => (
           <div
             key={line}

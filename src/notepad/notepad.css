@@ -583,6 +583,27 @@ mark.np-hit.now {
 .np-speaker.me {
   color: var(--np-ink);
 }
+.np-speaker-name {
+  margin: 0 -4px;
+  padding: 0 4px;
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+}
+.np-speaker-name:hover {
+  background: var(--np-line);
+}
+.np-speaker-input {
+  width: 180px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  border-radius: 6px;
+  font: inherit;
+  color: var(--np-text);
+  background: var(--np-line);
+  outline: none;
+}
 .np-speaker small {
   font-size: 12px;
   font-weight: 400;

@@ -5,9 +5,24 @@ This product is a modified version of Handy
 (https://github.com/cjpais/Handy), copyright (c) 2025 CJ Pais, released
 under the MIT License. The full licence text is in the LICENSE file.
 
-Changes in Lipik include a new interface, local AI clean-up through Ollama,
+Changes in Lipik include a new interface, local AI clean-up (built in, or through Ollama),
 a dictionary and snippets, text transforms, a meeting notetaker and voice
 training scripts.
+
+The built-in clean-up engine is llama.cpp's llama-server
+(https://github.com/ggml-org/llama.cpp), copyright (c) 2023-2026 The ggml
+authors, released under the MIT License, shipped as a separate program
+inside the app. The clean-up models it downloads are Qwen3-8B and
+Qwen3-4B-Instruct-2507 by the Qwen team, under the Apache 2.0 License.
+
+Speaker detection in meeting notes uses speakrs
+(https://github.com/avencera/speakrs), copyright Avencera, released under
+the Apache License 2.0, a Rust port of the pyannote community-1 pipeline.
+The speaker models it downloads come from
+https://huggingface.co/avencera/speakrs-models: the segmentation model
+(pyannote segmentation-3.0, MIT License) and the WeSpeaker ResNet34
+speaker embedding and PLDA parameters (pyannote community-1, Creative
+Commons Attribution 4.0, https://creativecommons.org/licenses/by/4.0/).
 
 Third-party libraries keep their own licences, listed in src-tauri/Cargo.toml
 (Rust) and package.json (JavaScript).

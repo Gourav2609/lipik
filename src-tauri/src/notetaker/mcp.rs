@@ -564,6 +564,7 @@ mod tests {
         let seg = |speaker: &str, text: &str| Segment {
             source: "mic".into(),
             speaker: speaker.into(),
+            speaker_key: String::new(),
             start_ms: 0,
             end_ms: 0,
             text: text.into(),
