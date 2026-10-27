@@ -1834,7 +1834,8 @@ s.sl-g {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  max-width: 760px;
+  width: max-content;
+  max-width: 940px;
   padding: 12px 18px;
   border-radius: 16px;
   background: rgba(18, 17, 15, 0.82);
@@ -1843,7 +1844,7 @@ s.sl-g {
   color: #f3efe7;
   font-size: 17px;
   line-height: 1.4;
-  white-space: nowrap;
+  text-wrap: balance;
   opacity: 0;
   transform: translate(-50%, 8px);
   transition:
@@ -2124,7 +2125,6 @@ s.sl-g {
   bottom: 70px;
   max-width: 396px;
   width: 396px;
-  white-space: normal;
   flex-direction: column;
   gap: 2px;
   font-size: 16px;

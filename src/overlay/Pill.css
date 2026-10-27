@@ -978,7 +978,11 @@
 }
 .note-card.call .card-main,
 .card-act > .card-main:only-child {
-  width: 168px;
+  width: 184px;
+}
+.note-card.call .card-text,
+.note-card:has(.card-main:only-child) .card-text {
+  right: 210px;
 }
 .card-logo {
   flex: none;
