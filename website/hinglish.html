@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hinglish Voice Typing on Mac (Beta) | Lipik</title>
+    <meta
+      name="description"
+      content="Speak Hinglish, get Roman-letter text in any Mac app. Free, open source, runs on your Mac. Hinglish support is in beta."
+    />
+    <meta name="theme-color" content="#fbf9f4" />
+    <link rel="canonical" href="https://lipik.refflux.dev/hinglish" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lipik" />
+    <meta
+      property="og:title"
+      content="Lipik: Hinglish voice typing on Mac (beta)"
+    />
+    <meta
+      property="og:description"
+      content="Speak Hindi and English in one sentence. Lipik types it in Roman letters in any Mac app. Free and open source."
+    />
+    <meta property="og:url" content="https://lipik.refflux.dev/hinglish" />
+    <meta
+      property="og:image"
+      content="https://lipik.refflux.dev/assets/og.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Lipik: speak freely, Lipik writes it down. Free, open-source voice dictation for Mac."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Lipik: Hinglish voice typing on Mac (beta)"
+    />
+    <meta
+      name="twitter:description"
+      content="Speak Hindi and English in one sentence. Lipik types it in Roman letters in any Mac app. Free and open source."
+    />
+    <meta
+      name="twitter:image"
+      content="https://lipik.refflux.dev/assets/og.png"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is Hinglish voice typing free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Lipik is free and open source under the MIT licence, with no account and no word limit. Hinglish mode is included."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which macOS version do I need?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "macOS 26 or later, on a Mac with Apple silicon (M1 or later). On older versions of macOS, Lipik still works for English."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it work offline?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, once the speech files are on your Mac. Lipik's own speech model is a one-time 731 MB download from Hugging Face. Apple's English (India) speech files are a one-time download through macOS, if your Mac doesn't have them yet. After that, Hinglish mode works with Wi-Fi off."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it write Hindi in Devanagari?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Hinglish mode writes everything in Roman letters, the way most people type Hinglish in chats."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why is it called beta?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "It works, but it makes more mistakes than English dictation. Hindi words can come out with a different spelling, or a word can be missed. We are still improving it."
+            }
+          }
+        ]
+      }
+    </script>
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:opsz,wght@14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+  </head>
+  <body class="page-topic">
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" id="nav">
+      <a class="brand" href="index.html" aria-label="Lipik home">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <g stroke="currentColor" stroke-linecap="round" fill="none">
+            <path d="M3 5.4h18" stroke-width="2.6" />
+            <path
+              d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+              stroke-width="2.3"
+            />
+          </g>
+        </svg>
+        <span>Lipik</span>
+      </a>
+      <nav id="nav-links" aria-label="Sections">
+        <a href="index.html#clean">Clean-up</a>
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#open">Open source</a>
+        <a href="index.html#faq">FAQ</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="releases.html">Release notes</a>
+      </nav>
+      <a class="btn btn-ink btn-sm" href="#download"
+        >Download<span class="hide-sm">&nbsp;for Mac</span></a
+      >
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-controls="nav-links"
+        aria-expanded="false"
+        aria-label="Open menu"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path class="nt-a" d="M3 7h14" />
+          <path class="nt-b" d="M3 13h14" />
+        </svg>
+      </button>
+    </header>
+
+    <main id="main">
+      <section class="topic-hero" aria-labelledby="topic-h">
+        <div class="wrap">
+          <p class="hero-eyebrow">Hinglish, in beta</p>
+          <h1 id="topic-h">Hinglish voice typing on Mac.</h1>
+          <p class="topic-sub">
+            Speak Hindi and English in the same sentence. Lipik types it in
+            Roman letters, in any app on your Mac. Hinglish support is in beta.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download for Mac</a
+            >
+            <a class="btn btn-line" href="#turn-on">How to turn it on</a>
+          </div>
+          <p class="fineprint">
+            Free and open source. Hinglish mode needs macOS 26 or later.
+          </p>
+        </div>
+      </section>
+
+      <section class="wrap topic-body">
+        <div class="prose">
+          <h2>What it does</h2>
+          <p>
+            A lot of us don't talk in one language at a time. A message to a
+            friend or a teammate often mixes both. Most dictation tools expect
+            one language, so the Hindi words come out wrong, or the tool tries
+            to turn them into English words.
+          </p>
+          <p>
+            With Hinglish mode, you hold <kbd>fn</kbd> and talk the way you
+            normally do. Lipik types the whole sentence in Roman letters, the
+            way people write Hinglish in chats. It works in any app where you
+            can type: a chat app, your email, a document or a code editor.
+          </p>
+          <dl class="say-card">
+            <div>
+              <dt>You say</dt>
+              <dd>"Hi, aaj ka din kaisa raha?"</dd>
+            </div>
+            <div>
+              <dt>Lipik types</dt>
+              <dd class="say-typed">Hi, aaj ka din kaisa raha?</dd>
+            </div>
+          </dl>
+
+          <h2>How it works</h2>
+          <p>
+            Lipik's own speech model is built for English. For Hinglish, Lipik
+            also uses Apple's dictation, which runs on your Mac in macOS 26 and
+            later. With the English (India) language, Apple's dictation writes
+            Hindi words in Roman letters.
+          </p>
+          <p>
+            When you speak, both run at the same time on your Mac. If what you
+            said reads as English, Lipik keeps its own text, so English
+            dictation is as fast as before. If it hears Hindi words, it uses
+            Apple's text instead.
+          </p>
+          <p>
+            Words you add to your Dictionary, such as names, are passed to
+            Apple's dictation too, so they are more likely to come out right.
+          </p>
+
+          <h2 id="turn-on">How to turn it on</h2>
+          <p>
+            Hinglish mode is on by default on macOS 26 and later. To check it,
+            or to turn it back on:
+          </p>
+          <ol>
+            <li>Open Lipik's Settings and go to <strong>Dictation</strong>.</li>
+            <li>
+              Under <strong>Speech to text</strong>, set
+              <strong>Speech engine</strong> to
+              <strong>Auto (Hinglish mode)</strong>.
+            </li>
+            <li>
+              Check that <strong>Apple dictation language</strong> is
+              <strong>English (India)</strong>. If Lipik says Apple's speech
+              files aren't on this Mac yet, click <strong>Download</strong>.
+              This needs the internet once.
+            </li>
+            <li>
+              Keep an English-only speech model, such as the default Parakeet
+              model. With a model for many languages, Lipik uses that model on
+              its own.
+            </li>
+          </ol>
+
+          <h2>What beta means</h2>
+          <p>
+            Hinglish mode works, but it makes more mistakes than English
+            dictation. A few limits for now:
+          </p>
+          <ul>
+            <li>
+              It needs macOS 26 or later. On older versions, Lipik uses its
+              English model only.
+            </li>
+            <li>
+              Meeting notes use Lipik's own model, so Hinglish mode doesn't
+              apply to them yet.
+            </li>
+            <li>It writes Roman letters only.</li>
+          </ul>
+          <p>
+            If something comes out wrong, you can report it on
+            <a href="https://github.com/Gourav2609/lipik">GitHub</a>.
+          </p>
+        </div>
+      </section>
+
+      <section class="section faq" aria-labelledby="tfaq-h">
+        <div class="wrap faq-inner">
+          <h2 id="tfaq-h">Questions</h2>
+          <div class="faq-list">
+            <details>
+              <summary>Is Hinglish voice typing free?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes. Lipik is free and open source under the MIT licence, with
+                  no account and no word limit. Hinglish mode is included.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Which macOS version do I need?</summary>
+              <div class="faq-a">
+                <p>
+                  macOS 26 or later, on a Mac with Apple silicon (M1 or later).
+                  On older versions of macOS, Lipik still works for English.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Does it work offline?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes, once the speech files are on your Mac. Lipik's own speech
+                  model is a one-time 731 MB download from Hugging Face. Apple's
+                  English (India) speech files are a one-time download through
+                  macOS, if your Mac doesn't have them yet. After that, Hinglish
+                  mode works with Wi-Fi off.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Does it write Hindi in Devanagari?</summary>
+              <div class="faq-a">
+                <p>
+                  No. Hinglish mode writes everything in Roman letters, the way
+                  most people type Hinglish in chats.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Why is it called beta?</summary>
+              <div class="faq-a">
+                <p>
+                  It works, but it makes more mistakes than English dictation.
+                  Hindi words can come out with a different spelling, or a word
+                  can be missed. We are still improving it.
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="download" id="download" aria-labelledby="download-h">
+        <div class="wrap download-inner">
+          <div class="dl-rule" aria-hidden="true"><span></span></div>
+          <img
+            class="dl-icon"
+            src="assets/icon.png"
+            alt=""
+            width="128"
+            height="128"
+          />
+          <h2 id="download-h">Get Lipik for Mac.</h2>
+          <p>
+            Free, for Macs with Apple silicon. Open the download, drag Lipik
+            into Applications, and hold fn to start.
+          </p>
+          <div class="dl-actions">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download Lipik.dmg</a
+            ><a class="btn btn-line" href="https://github.com/Gourav2609/lipik"
+              >View the code on GitHub</a
+            >
+          </div>
+          <p class="fineprint">
+            The first time you open it, macOS asks you to confirm: go to System
+            Settings, then Privacy &amp; Security, and click Open Anyway.
+            <a
+              href="https://github.com/Gourav2609/lipik/blob/main/docs/INSTALL.md"
+              >Install help</a
+            >
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <g stroke="currentColor" stroke-linecap="round" fill="none">
+              <path d="M3 5.4h18" stroke-width="2.6" />
+              <path
+                d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+                stroke-width="2.3"
+              />
+            </g>
+          </svg>
+          <span>Lipik</span>
+        </a>
+        <p>
+          Free and open source under the MIT licence.
+          <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
+        </p>
+      </div>
+      <nav class="wrap footer-more" aria-label="More pages">
+        <span>More</span>
+        <a href="hinglish.html" aria-current="page">Hinglish voice typing</a>
+        <a href="meeting-notes.html">Meeting notes without a bot</a>
+        <a href="free-dictation-mac.html">Free local dictation for Mac</a>
+      </nav>
+    </footer>
+
+    <script>
+      const nav = document.getElementById("nav");
+      const onScroll = () =>
+        nav.classList.toggle("is-scrolled", window.scrollY > 8);
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    </script>
+    <script src="nav.js"></script>
+    <!-- Cloudflare Web Analytics -->
+    <script
+      type="module"
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon='{"token": "a15babb81e4142a0a4f64e26ec8361bf"}'
+    ></script>
+    <!-- End Cloudflare Web Analytics -->
+  </body>
+</html>

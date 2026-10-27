@@ -17,3 +17,6 @@
 - Code: https://github.com/Gourav2609/lipik
 - Release notes: https://lipik.refflux.dev/releases
 - Pricing: https://lipik.refflux.dev/pricing
+- Hinglish voice typing (beta): https://lipik.refflux.dev/hinglish
+- Meeting notes without a bot: https://lipik.refflux.dev/meeting-notes
+- Free local dictation for Mac: https://lipik.refflux.dev/free-dictation-mac

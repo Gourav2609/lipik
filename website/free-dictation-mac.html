@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Free Local Dictation for Mac | Lipik</title>
+    <meta
+      name="description"
+      content="Free voice dictation for Mac with no word limit and no account. Lipik turns speech into text on your Mac and works with Wi-Fi off. Open source (MIT)."
+    />
+    <meta name="theme-color" content="#fbf9f4" />
+    <link rel="canonical" href="https://lipik.refflux.dev/free-dictation-mac" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lipik" />
+    <meta property="og:title" content="Lipik: free local dictation for Mac" />
+    <meta
+      property="og:description"
+      content="Free, no word limit, no account. Speech becomes text on your Mac, and it works with Wi-Fi off."
+    />
+    <meta
+      property="og:url"
+      content="https://lipik.refflux.dev/free-dictation-mac"
+    />
+    <meta
+      property="og:image"
+      content="https://lipik.refflux.dev/assets/og.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Lipik: speak freely, Lipik writes it down. Free, open-source voice dictation for Mac."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Lipik: free local dictation for Mac" />
+    <meta
+      name="twitter:description"
+      content="Free, no word limit, no account. Speech becomes text on your Mac, and it works with Wi-Fi off."
+    />
+    <meta
+      name="twitter:image"
+      content="https://lipik.refflux.dev/assets/og.png"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is Lipik really free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Every feature is free, with no subscription, no account and no word limit. The code is open source under the MIT licence."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Lipik work offline?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, once the models are downloaded. The speech model is a one-time 731 MB download from Hugging Face, and the optional clean-up model comes through Ollama. After that, Lipik works with Wi-Fi off."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Lipik send my voice anywhere?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Your voice is turned into text on your Mac, and the recording stays there. There is no account and no telemetry. If you add your own API key for cloud clean-up, the text, not the recording, goes to the provider you chose."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which Macs does it run on?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Macs with Apple silicon (M1 or later). There is no Windows version yet."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why does macOS say Lipik can't be opened?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Lipik isn't signed with an Apple Developer ID yet. On macOS 15 and later, double-click Lipik, click Done, then go to System Settings, then Privacy & Security, and click Open Anyway."
+            }
+          }
+        ]
+      }
+    </script>
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:opsz,wght@14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+  </head>
+  <body class="page-topic">
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" id="nav">
+      <a class="brand" href="index.html" aria-label="Lipik home">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <g stroke="currentColor" stroke-linecap="round" fill="none">
+            <path d="M3 5.4h18" stroke-width="2.6" />
+            <path
+              d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+              stroke-width="2.3"
+            />
+          </g>
+        </svg>
+        <span>Lipik</span>
+      </a>
+      <nav id="nav-links" aria-label="Sections">
+        <a href="index.html#clean">Clean-up</a>
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#open">Open source</a>
+        <a href="index.html#faq">FAQ</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="releases.html">Release notes</a>
+      </nav>
+      <a class="btn btn-ink btn-sm" href="#download"
+        >Download<span class="hide-sm">&nbsp;for Mac</span></a
+      >
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-controls="nav-links"
+        aria-expanded="false"
+        aria-label="Open menu"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path class="nt-a" d="M3 7h14" />
+          <path class="nt-b" d="M3 13h14" />
+        </svg>
+      </button>
+    </header>
+
+    <main id="main">
+      <section class="topic-hero" aria-labelledby="topic-h">
+        <div class="wrap">
+          <p class="hero-eyebrow">Free dictation for Mac</p>
+          <h1 id="topic-h">Free local dictation for Mac.</h1>
+          <p class="topic-sub">
+            Hold <kbd>fn</kbd>, talk, and let go. Lipik types clean text in any
+            app. It's free, has no word limit, and turns your speech into text
+            on your Mac.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download for Mac</a
+            >
+            <a class="btn btn-line" href="#compare">Compare</a>
+          </div>
+          <p class="fineprint">
+            Free and open source, for Macs with Apple silicon.
+          </p>
+        </div>
+      </section>
+
+      <section class="wrap topic-body">
+        <div class="prose">
+          <h2 id="compare">Lipik and typical cloud dictation apps</h2>
+          <p>
+            Many dictation apps send your recording to a server, turn it into
+            text there, and charge a monthly fee or limit how many words you can
+            use for free. Lipik does the work on your Mac instead. Details
+            differ from app to app, so check each app's own site.
+          </p>
+          <div class="compare-wrap">
+            <table class="compare">
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span class="visually-hidden">Question</span>
+                  </th>
+                  <th scope="col">Lipik</th>
+                  <th scope="col">Typical cloud dictation apps</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Price</th>
+                  <td>Free, no word limit</td>
+                  <td>
+                    Often a monthly subscription, or a free plan with a word
+                    limit
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Where speech becomes text</th>
+                  <td>On your Mac</td>
+                  <td>On the company's servers</td>
+                </tr>
+                <tr>
+                  <th scope="row">Account</th>
+                  <td>None</td>
+                  <td>Usually needed</td>
+                </tr>
+                <tr>
+                  <th scope="row">With Wi-Fi off</th>
+                  <td>Works once the models are downloaded</td>
+                  <td>Usually stops working</td>
+                </tr>
+                <tr>
+                  <th scope="row">Platform</th>
+                  <td>macOS, Apple silicon (M1 or later)</td>
+                  <td>Varies by app</td>
+                </tr>
+                <tr>
+                  <th scope="row">Licence</th>
+                  <td>Open source, MIT</td>
+                  <td>Usually closed source</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>What runs on your Mac</h2>
+          <p>
+            Speech to text uses Parakeet by default, an English model. Lipik
+            downloads it once from Hugging Face; it is 731 MB. For other
+            languages, you can download one of the free Whisper models in
+            Settings. Together they cover 99 languages, and
+            <a href="hinglish.html">Hinglish</a> works in beta.
+          </p>
+          <p>
+            The clean-up step removes filler words, fixes punctuation and writes
+            in the tone you set for each kind of app. It is optional. It uses
+            Qwen3 8B through the free
+            <a href="https://ollama.com">Ollama</a> app, about 5 GB, and also
+            runs on your Mac. Without it, Lipik still types what you said, and
+            its built-in rules still handle "um", spoken punctuation, numbers
+            and emails.
+          </p>
+          <p>
+            If you'd rather use a cloud model for clean-up, you can add your own
+            API key. Only then is text sent to that provider, and only the text,
+            not your recording.
+          </p>
+
+          <h2>What needs the internet</h2>
+          <p>
+            Lipik needs the internet to download its models once. After that,
+            dictation works with Wi-Fi off. There is no account, and Lipik sends
+            no telemetry: no usage stats and no tracking.
+          </p>
+
+          <h2>What else is included</h2>
+          <p>Every feature is free. Besides dictation in any app, you get:</p>
+          <ul>
+            <li>
+              a Dictionary for names and words it gets wrong, and snippets
+            </li>
+            <li>hands-free dictation with <kbd>fn</kbd> + Space</li>
+            <li>
+              <a href="meeting-notes.html">meeting notes</a> with a transcript
+              and a short summary, with no bot joining the call
+            </li>
+          </ul>
+          <p>
+            The full list is on the <a href="pricing.html">pricing page</a>.
+          </p>
+        </div>
+      </section>
+
+      <section class="section faq" aria-labelledby="tfaq-h">
+        <div class="wrap faq-inner">
+          <h2 id="tfaq-h">Questions</h2>
+          <div class="faq-list">
+            <details>
+              <summary>Is Lipik really free?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes. Every feature is free, with no subscription, no account
+                  and no word limit. The code is open source under the MIT
+                  licence.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Does Lipik work offline?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes, once the models are downloaded. The speech model is a
+                  one-time 731 MB download from Hugging Face, and the optional
+                  clean-up model comes through Ollama. After that, Lipik works
+                  with Wi-Fi off.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Does Lipik send my voice anywhere?</summary>
+              <div class="faq-a">
+                <p>
+                  No. Your voice is turned into text on your Mac, and the
+                  recording stays there. There is no account and no telemetry.
+                  If you add your own API key for cloud clean-up, the text, not
+                  the recording, goes to the provider you chose.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Which Macs does it run on?</summary>
+              <div class="faq-a">
+                <p>
+                  Macs with Apple silicon (M1 or later). There is no Windows
+                  version yet.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Why does macOS say Lipik can't be opened?</summary>
+              <div class="faq-a">
+                <p>
+                  Lipik isn't signed with an Apple Developer ID yet. On macOS 15
+                  and later, double-click Lipik, click Done, then go to System
+                  Settings, then Privacy &amp; Security, and click Open Anyway.
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="download" id="download" aria-labelledby="download-h">
+        <div class="wrap download-inner">
+          <div class="dl-rule" aria-hidden="true"><span></span></div>
+          <img
+            class="dl-icon"
+            src="assets/icon.png"
+            alt=""
+            width="128"
+            height="128"
+          />
+          <h2 id="download-h">Get Lipik for Mac.</h2>
+          <p>
+            Free, for Macs with Apple silicon. Open the download, drag Lipik
+            into Applications, and hold fn to start.
+          </p>
+          <div class="dl-actions">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download Lipik.dmg</a
+            ><a class="btn btn-line" href="https://github.com/Gourav2609/lipik"
+              >View the code on GitHub</a
+            >
+          </div>
+          <p class="fineprint">
+            The first time you open it, macOS asks you to confirm: go to System
+            Settings, then Privacy &amp; Security, and click Open Anyway.
+            <a
+              href="https://github.com/Gourav2609/lipik/blob/main/docs/INSTALL.md"
+              >Install help</a
+            >
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <g stroke="currentColor" stroke-linecap="round" fill="none">
+              <path d="M3 5.4h18" stroke-width="2.6" />
+              <path
+                d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+                stroke-width="2.3"
+              />
+            </g>
+          </svg>
+          <span>Lipik</span>
+        </a>
+        <p>
+          Free and open source under the MIT licence.
+          <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
+        </p>
+      </div>
+      <nav class="wrap footer-more" aria-label="More pages">
+        <span>More</span>
+        <a href="hinglish.html">Hinglish voice typing</a>
+        <a href="meeting-notes.html">Meeting notes without a bot</a>
+        <a href="free-dictation-mac.html" aria-current="page"
+          >Free local dictation for Mac</a
+        >
+      </nav>
+    </footer>
+
+    <script>
+      const nav = document.getElementById("nav");
+      const onScroll = () =>
+        nav.classList.toggle("is-scrolled", window.scrollY > 8);
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    </script>
+    <script src="nav.js"></script>
+    <!-- Cloudflare Web Analytics -->
+    <script
+      type="module"
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon='{"token": "a15babb81e4142a0a4f64e26ec8361bf"}'
+    ></script>
+    <!-- End Cloudflare Web Analytics -->
+  </body>
+</html>

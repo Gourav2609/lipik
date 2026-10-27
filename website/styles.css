@@ -3979,3 +3979,176 @@ s.sl-g {
   font-weight: 500;
   color: var(--muted);
 }
+
+/* Topic pages: Hinglish, meeting notes, free dictation */
+.topic-hero {
+  padding: 150px 0 0;
+}
+.topic-hero .hero-eyebrow {
+  margin: 0;
+}
+.topic-hero h1 {
+  max-width: 12em;
+  margin-top: 14px;
+  font-family: var(--serif);
+  font-size: clamp(50px, 7vw, 92px);
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+}
+.topic-sub {
+  max-width: 34em;
+  margin-top: 20px;
+  font-size: 19px;
+  color: var(--muted);
+}
+.topic-body {
+  padding-top: 100px;
+}
+.prose {
+  max-width: 700px;
+  line-height: 1.65;
+}
+.prose h2 {
+  margin: 60px 0 14px;
+  font-size: clamp(32px, 3.6vw, 44px);
+}
+.prose > h2:first-child {
+  margin-top: 0;
+}
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0 0 14px;
+}
+.prose ul,
+.prose ol {
+  padding-left: 1.2em;
+}
+.prose li {
+  margin: 6px 0;
+}
+.prose strong {
+  font-weight: 600;
+}
+.prose a {
+  color: var(--green);
+  text-underline-offset: 3px;
+}
+.topic-sub kbd,
+.prose kbd {
+  display: inline-block;
+  min-width: 1.9em;
+  padding: 0 0.42em 0.06em;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  box-shadow: 0 2px 0 var(--line-2);
+  background: #fffefb;
+  font-size: 0.8em;
+  font-weight: 550;
+  line-height: 1.5;
+  text-align: center;
+  vertical-align: 0.1em;
+  color: var(--ink);
+}
+.say-card,
+.compare-wrap {
+  margin: 28px 0;
+  border-radius: 24px;
+  background: #fffefb;
+  box-shadow:
+    0 0 0 1px rgba(66, 50, 24, 0.07),
+    0 2px 4px rgba(66, 50, 24, 0.04),
+    0 24px 60px -24px rgba(66, 50, 24, 0.22);
+}
+.say-card {
+  display: grid;
+  gap: 18px;
+  padding: 26px 28px;
+}
+.say-card dt {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.say-card dd {
+  margin: 6px 0 0;
+  font-family: var(--serif);
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.15;
+}
+.say-card .say-typed {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--sand-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-family: var(--sans);
+  font-size: 18px;
+  line-height: 1.4;
+}
+.compare-wrap {
+  overflow-x: auto;
+}
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.compare th,
+.compare td {
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.compare thead th {
+  border-top: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.compare thead th:nth-child(2) {
+  color: var(--green);
+}
+.compare tbody th {
+  width: 30%;
+  font-weight: 600;
+}
+.compare tbody td:nth-child(2) {
+  color: var(--green);
+  font-weight: 550;
+}
+.compare tbody td:nth-child(3) {
+  color: var(--muted);
+}
+.footer-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 20px;
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.footer-more span {
+  font-weight: 600;
+}
+.footer-more a[aria-current="page"] {
+  text-decoration: none;
+}
+@media (max-width: 720px) {
+  .topic-hero {
+    padding-top: 110px;
+  }
+  .topic-body {
+    padding-top: 72px;
+  }
+  .say-card {
+    padding: 20px;
+  }
+  .compare th,
+  .compare td {
+    padding: 12px;
+    font-size: 14.5px;
+  }
+}

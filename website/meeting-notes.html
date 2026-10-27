@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Meeting Notes on Mac Without a Bot | Lipik</title>
+    <meta
+      name="description"
+      content="Record a call on your Mac and get a transcript and short summary, made on your Mac. No bot joins the call. Free and open source."
+    />
+    <meta name="theme-color" content="#fbf9f4" />
+    <link rel="canonical" href="https://lipik.refflux.dev/meeting-notes" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lipik" />
+    <meta
+      property="og:title"
+      content="Lipik: meeting notes on Mac without a bot"
+    />
+    <meta
+      property="og:description"
+      content="Record a call on your Mac and get a transcript and short summary. No bot joins the call. Free and open source."
+    />
+    <meta property="og:url" content="https://lipik.refflux.dev/meeting-notes" />
+    <meta
+      property="og:image"
+      content="https://lipik.refflux.dev/assets/og.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Lipik: speak freely, Lipik writes it down. Free, open-source voice dictation for Mac."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Lipik: meeting notes on Mac without a bot"
+    />
+    <meta
+      name="twitter:description"
+      content="Record a call on your Mac and get a transcript and short summary. No bot joins the call. Free and open source."
+    />
+    <meta
+      name="twitter:image"
+      content="https://lipik.refflux.dev/assets/og.png"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Does a bot join the call?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Lipik records on your Mac, from your microphone and your Mac's sound. Nobody new joins the meeting."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Where are my notes kept?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "On your Mac. The transcript and summary are made and saved on your Mac. Lipik has no account and sends no telemetry."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need Ollama?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Only for the summary and for questions about past meetings. Without it, you still get the transcript."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which macOS version do I need?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "macOS 14.2 or later, on a Mac with Apple silicon (M1 or later)."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can ChatGPT read my meeting notes?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Not directly. ChatGPT can't run tools on your Mac. Open the note, choose Copy as Markdown from its menu, and paste it into ChatGPT."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Should I tell people I'm recording?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Because no bot joins, nobody is told about the recording automatically. Ask before you record; in many places the law requires it."
+            }
+          }
+        ]
+      }
+    </script>
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:opsz,wght@14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+  </head>
+  <body class="page-topic">
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" id="nav">
+      <a class="brand" href="index.html" aria-label="Lipik home">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <g stroke="currentColor" stroke-linecap="round" fill="none">
+            <path d="M3 5.4h18" stroke-width="2.6" />
+            <path
+              d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+              stroke-width="2.3"
+            />
+          </g>
+        </svg>
+        <span>Lipik</span>
+      </a>
+      <nav id="nav-links" aria-label="Sections">
+        <a href="index.html#clean">Clean-up</a>
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how">How it works</a>
+        <a href="index.html#open">Open source</a>
+        <a href="index.html#faq">FAQ</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="releases.html">Release notes</a>
+      </nav>
+      <a class="btn btn-ink btn-sm" href="#download"
+        >Download<span class="hide-sm">&nbsp;for Mac</span></a
+      >
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-controls="nav-links"
+        aria-expanded="false"
+        aria-label="Open menu"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path class="nt-a" d="M3 7h14" />
+          <path class="nt-b" d="M3 13h14" />
+        </svg>
+      </button>
+    </header>
+
+    <main id="main">
+      <section class="topic-hero" aria-labelledby="topic-h">
+        <div class="wrap">
+          <p class="hero-eyebrow">Meeting notes</p>
+          <h1 id="topic-h">Meeting notes on your Mac, without a bot.</h1>
+          <p class="topic-sub">
+            Lipik records your side and the other side of a call on your Mac,
+            then writes a transcript and a short summary. Nobody new joins the
+            meeting.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download for Mac</a
+            >
+            <a class="btn btn-line" href="#ai-apps">Use with AI apps</a>
+          </div>
+          <p class="fineprint">
+            Free and open source. Needs macOS 14.2 or later.
+          </p>
+        </div>
+      </section>
+
+      <section class="wrap topic-body">
+        <div class="prose">
+          <h2>How it records</h2>
+          <p>
+            Some note-taking tools add a bot to your call as an extra
+            participant. Lipik doesn't. It listens on your Mac and records two
+            things, kept apart:
+          </p>
+          <ul>
+            <li>your microphone, for what you say</li>
+            <li>your Mac's sound, for what the other people say</li>
+          </ul>
+          <p>
+            Because the two are kept apart, the transcript shows who said what:
+            your lines are marked as yours, and the rest as the other people's.
+            Lipik records the Mac's sound rather than a call app, so it works
+            with any call you can hear on your Mac.
+          </p>
+
+          <h2>Transcript and summary, made on your Mac</h2>
+          <p>
+            Lipik writes the transcript with its own speech model, on your Mac.
+            Then it writes a short summary of the meeting, with the decisions
+            and the next steps. You can add your own notes to each meeting, and
+            ask questions about past meetings.
+          </p>
+          <p>
+            The summary needs the clean-up model: Qwen3 8B through the free
+            <a href="https://ollama.com">Ollama</a> app, about 5 GB. It runs on
+            your Mac too. Without it, you still get the transcript, and you can
+            write the summary later once Ollama is set up.
+          </p>
+
+          <h2 id="ai-apps">Ask your AI apps about a meeting</h2>
+          <p>
+            New in Lipik 0.1.2: AI apps on your Mac can read your meeting notes
+            through MCP, a standard way for AI apps to use tools. This works
+            with Claude, Claude Code, Cursor, Codex, Windsurf, VS Code and
+            Gemini CLI.
+          </p>
+          <p>
+            Access is read-only. The apps can list, search and read your meeting
+            notes, but they can't change anything, and they can't see your
+            dictations.
+          </p>
+          <ol>
+            <li>
+              Connect your apps in Lipik's Settings, under
+              <strong>AI apps</strong>.
+            </li>
+            <li>
+              Open a note and choose <strong>Copy link for AI apps</strong> from
+              its menu.
+            </li>
+            <li>
+              Paste the link into a connected app and ask about the meeting.
+            </li>
+          </ol>
+          <p>
+            ChatGPT can't run tools on your Mac. For ChatGPT, choose
+            <strong>Copy as Markdown</strong> from the same menu and paste the
+            note in. Keep in mind that an AI app may send what it reads to its
+            own servers.
+          </p>
+
+          <h2>What you need</h2>
+          <ul>
+            <li>A Mac with Apple silicon (M1 or later)</li>
+            <li>macOS 14.2 or later, to record the Mac's sound</li>
+            <li>
+              For the summary: the free Ollama app with Qwen3 8B, about 5 GB
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section faq" aria-labelledby="tfaq-h">
+        <div class="wrap faq-inner">
+          <h2 id="tfaq-h">Questions</h2>
+          <div class="faq-list">
+            <details>
+              <summary>Does a bot join the call?</summary>
+              <div class="faq-a">
+                <p>
+                  No. Lipik records on your Mac, from your microphone and your
+                  Mac's sound. Nobody new joins the meeting.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Where are my notes kept?</summary>
+              <div class="faq-a">
+                <p>
+                  On your Mac. The transcript and summary are made and saved on
+                  your Mac. Lipik has no account and sends no telemetry.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Do I need Ollama?</summary>
+              <div class="faq-a">
+                <p>
+                  Only for the summary and for questions about past meetings.
+                  Without it, you still get the transcript.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Which macOS version do I need?</summary>
+              <div class="faq-a">
+                <p>
+                  macOS 14.2 or later, on a Mac with Apple silicon (M1 or
+                  later).
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Can ChatGPT read my meeting notes?</summary>
+              <div class="faq-a">
+                <p>
+                  Not directly. ChatGPT can't run tools on your Mac. Open the
+                  note, choose Copy as Markdown from its menu, and paste it into
+                  ChatGPT.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Should I tell people I'm recording?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes. Because no bot joins, nobody is told about the recording
+                  automatically. Ask before you record; in many places the law
+                  requires it.
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="download" id="download" aria-labelledby="download-h">
+        <div class="wrap download-inner">
+          <div class="dl-rule" aria-hidden="true"><span></span></div>
+          <img
+            class="dl-icon"
+            src="assets/icon.png"
+            alt=""
+            width="128"
+            height="128"
+          />
+          <h2 id="download-h">Get Lipik for Mac.</h2>
+          <p>
+            Free, for Macs with Apple silicon. Open the download, drag Lipik
+            into Applications, and hold fn to start.
+          </p>
+          <div class="dl-actions">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download Lipik.dmg</a
+            ><a class="btn btn-line" href="https://github.com/Gourav2609/lipik"
+              >View the code on GitHub</a
+            >
+          </div>
+          <p class="fineprint">
+            The first time you open it, macOS asks you to confirm: go to System
+            Settings, then Privacy &amp; Security, and click Open Anyway.
+            <a
+              href="https://github.com/Gourav2609/lipik/blob/main/docs/INSTALL.md"
+              >Install help</a
+            >
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <g stroke="currentColor" stroke-linecap="round" fill="none">
+              <path d="M3 5.4h18" stroke-width="2.6" />
+              <path
+                d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+                stroke-width="2.3"
+              />
+            </g>
+          </svg>
+          <span>Lipik</span>
+        </a>
+        <p>
+          Free and open source under the MIT licence.
+          <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
+        </p>
+      </div>
+      <nav class="wrap footer-more" aria-label="More pages">
+        <span>More</span>
+        <a href="hinglish.html">Hinglish voice typing</a>
+        <a href="meeting-notes.html" aria-current="page"
+          >Meeting notes without a bot</a
+        >
+        <a href="free-dictation-mac.html">Free local dictation for Mac</a>
+      </nav>
+    </footer>
+
+    <script>
+      const nav = document.getElementById("nav");
+      const onScroll = () =>
+        nav.classList.toggle("is-scrolled", window.scrollY > 8);
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    </script>
+    <script src="nav.js"></script>
+    <!-- Cloudflare Web Analytics -->
+    <script
+      type="module"
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon='{"token": "a15babb81e4142a0a4f64e26ec8361bf"}'
+    ></script>
+    <!-- End Cloudflare Web Analytics -->
+  </body>
+</html>
