@@ -291,7 +291,7 @@ export default function Notetaker() {
   return (
     <div className="nt relative h-full">
       <div key={view.kind} className="fk-scroll absolute inset-0">
-        <div className="fk-page pb-[112px]">
+        <div className="fk-page pb-[144px]">
           {head}
           <div className="grid grid-cols-[minmax(0,1fr)_280px] gap-x-[32px]">
             <div className="nt-fade min-w-0">{main}</div>
