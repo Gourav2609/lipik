@@ -415,6 +415,35 @@ fn push_restoring_capital(kept: &mut String, segment: &str, capital_owed: &mut b
     kept.push_str(segment);
 }
 
+/// Words a written phrase never ends on, so a comma after one is only the
+/// pause the filler made: "can we, um, move" -> "can we move". After any other
+/// word the comma may be real ("Hey, um, can", "red, um, blue") and stays.
+const NO_COMMA_AFTER: &[&str] = &[
+    "i", "we", "they", "he", "she", "a", "an", "the", "my", "your", "our", "their", "to", "of",
+    "and", "or", "but", "could", "would", "should", "will", "shall", "might", "must", "think",
+    "going", "gonna", "wanna",
+];
+
+/// Drops the comma that ends `kept` when the word before it is in
+/// [`NO_COMMA_AFTER`]; called where a filler was just removed.
+fn drop_pause_comma(kept: &mut String) {
+    let trimmed = kept.trim_end();
+    let Some(before) = trimmed.strip_suffix(',') else {
+        return;
+    };
+    let word = before
+        .trim_end()
+        .rsplit(char::is_whitespace)
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    if NO_COMMA_AFTER.contains(&word.as_str()) {
+        let spaces = kept[trimmed.len()..].to_string();
+        kept.truncate(before.len());
+        kept.push_str(&spaces);
+    }
+}
+
 /// "UM", "ERM": two or more letters, all capitals.
 fn is_acronym(token: &str) -> bool {
     let letters: Vec<char> = token.chars().filter(|c| c.is_alphabetic()).collect();
@@ -434,6 +463,10 @@ fn remove_filler_matches(text: &str, pattern: &Regex, keep_acronyms: bool) -> St
             continue;
         }
         push_restoring_capital(&mut kept, &text[resume..filler.start()], &mut capital_owed);
+        // A filler that took a period ended a sentence; the comma was not its pause.
+        if !filler.as_str().ends_with('.') {
+            drop_pause_comma(&mut kept);
+        }
         let capitalized = filler.as_str().starts_with(char::is_uppercase);
         capital_owed |= capitalized && opens_sentence(&kept);
         resume = filler.end();
@@ -650,6 +683,46 @@ mod tests {
         let text = "  Uhm, so I was, uh, thinking about this  ";
         let result = filter_transcription_output(text, "en", &None);
         assert_eq!(result, "So I was, thinking about this");
+    }
+
+    #[test]
+    fn test_filter_drops_pause_comma_only_inside_a_phrase() {
+        let cases = [
+            (
+                "Hey can we, um, move the call to 5?",
+                "Hey can we move the call to 5?",
+            ),
+            (
+                "I think, uh, we should ship it.",
+                "I think we should ship it.",
+            ),
+            ("Send it to, um, Rivaan.", "Send it to Rivaan."),
+            ("Hey, um, can we talk?", "Hey, can we talk?"),
+            ("Red, um, blue or green.", "Red, blue or green."),
+            ("He said, um, not today.", "He said, not today."),
+            ("Can we, move the call?", "Can we, move the call?"),
+            (
+                "Hey can we, UM, move the call",
+                "Hey can we, UM, move the call",
+            ),
+            (
+                "Thank you, um, I will call you later.",
+                "Thank you, I will call you later.",
+            ),
+            ("I fixed it, um, let me know.", "I fixed it, let me know."),
+            (
+                "I will talk to, um. Never mind.",
+                "I will talk to, Never mind.",
+            ),
+            ("Hey can we , um, move", "Hey can we move"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(
+                filter_transcription_output(input, "en", &None),
+                expected,
+                "{input}"
+            );
+        }
     }
 
     #[test]

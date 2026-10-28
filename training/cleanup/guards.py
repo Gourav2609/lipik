@@ -88,6 +88,17 @@ def _opens_sentence(kept):
     return not t or t[-1] in ".!?…"
 
 
+NO_COMMA_AFTER = set("""i we they he she a an the my your our their to of and or but could would should will shall might
+must think going gonna wanna""".split())
+
+
+def _drop_pause_comma(kept):
+    t = kept.rstrip()
+    if t.endswith(",") and (t[:-1].split() or [""])[-1].lower() in NO_COMMA_AFTER:
+        return t[:-1] + kept[len(t):]
+    return kept
+
+
 def _remove_filler_matches(text, pattern, keep_acronyms):
     kept, resume, owed = "", 0, False
 
@@ -105,6 +116,8 @@ def _remove_filler_matches(text, pattern, keep_acronyms):
         if keep_acronyms and _is_acronym(m[0]):
             continue
         push(text[resume:m.start()])
+        if not m[0].endswith("."):
+            kept = _drop_pause_comma(kept)
         owed = owed or (m[0][:1].isupper() and _opens_sentence(kept))
         resume = m.end()
     push(text[resume:])

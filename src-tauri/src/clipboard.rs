@@ -800,6 +800,35 @@ fn should_send_auto_submit(auto_submit: bool, paste_method: PasteMethod) -> bool
     auto_submit && paste_method != PasteMethod::None
 }
 
+/// Whether `text` needs a space in front to sit after `before`, so a second
+/// dictation doesn't run into the first ("words.Next" -> "words. Next").
+/// After "." or ":" only before a capital or digit, so "google." + "com" and
+/// "obj." + "method" stay joined.
+fn needs_leading_space(before: Option<char>, text: &str) -> bool {
+    let (Some(before), Some(first)) = (before, text.chars().next()) else {
+        return false;
+    };
+    if before.is_whitespace()
+        || "([{‘“/\\-_=@#".contains(before)
+        || first.is_whitespace()
+        || ".,!?;:)]}…’”".contains(first)
+    {
+        return false;
+    }
+    !matches!(before, '.' | ':') || first.is_uppercase() || first.is_ascii_digit()
+}
+
+/// `text` with a space in front when the caret sits right after other text.
+/// Apps that don't tell Accessibility what is before the caret get no space.
+fn with_leading_space(text: String) -> String {
+    let before = crate::pill::char_before_caret().flatten();
+    if needs_leading_space(before, &text) {
+        format!(" {text}")
+    } else {
+        text
+    }
+}
+
 /// Pastes `text` into the focused application. Call it from a worker thread,
 /// never the main thread: it sleeps between steps, and only the input
 /// injection hops to the main thread (see `with_enigo`).
@@ -815,6 +844,11 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
         format!("{} ", text)
     } else {
         text
+    };
+    let text = if paste_method == PasteMethod::None {
+        text
+    } else {
+        with_leading_space(text)
     };
 
     info!(
@@ -907,6 +941,27 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn leading_space_only_after_text() {
+        assert!(needs_leading_space(Some('s'), "Next words"));
+        assert!(needs_leading_space(Some('.'), "Next words"));
+        assert!(needs_leading_space(Some('?'), "5 more"));
+        assert!(needs_leading_space(Some('"'), "Then"));
+        assert!(needs_leading_space(Some('\''), "work"));
+        assert!(needs_leading_space(Some('s'), "\"Hello,\" she said"));
+        assert!(!needs_leading_space(Some(' '), "Next"));
+        assert!(!needs_leading_space(Some('\n'), "Next"));
+        assert!(!needs_leading_space(Some('('), "Next"));
+        assert!(!needs_leading_space(Some('.'), "com"));
+        assert!(!needs_leading_space(Some('_'), "var"));
+        assert!(!needs_leading_space(Some('='), "value"));
+        assert!(!needs_leading_space(None, "Next"));
+        assert!(!needs_leading_space(Some('s'), ", and more"));
+        assert!(!needs_leading_space(Some('s'), "."));
+        assert!(!needs_leading_space(Some('s'), " already spaced"));
+        assert!(!needs_leading_space(Some('s'), ""));
+    }
     use std::cell::Cell;
 
     #[cfg(target_os = "linux")]

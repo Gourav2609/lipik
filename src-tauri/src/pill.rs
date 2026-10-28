@@ -219,6 +219,19 @@ pub fn text_field_has_focus(app: &AppHandle) -> bool {
     }
 }
 
+/// The character just before the caret in the focused text field: Some(None)
+/// at the start of the field, None when Accessibility can't say.
+pub fn char_before_caret() -> Option<Option<char>> {
+    #[cfg(target_os = "macos")]
+    {
+        ax::char_before_caret()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
 pub fn start(app: &AppHandle) {
     if STARTED.swap(true, Ordering::SeqCst) {
         return;
@@ -321,6 +334,14 @@ mod ax {
             value: CfTypeRef,
         ) -> AxError;
         fn AXUIElementSetMessagingTimeout(element: CfTypeRef, seconds: f32) -> AxError;
+        fn AXUIElementCopyParameterizedAttributeValue(
+            element: CfTypeRef,
+            attribute: CfTypeRef,
+            parameter: CfTypeRef,
+            value: *mut CfTypeRef,
+        ) -> AxError;
+        fn AXValueCreate(value_type: u32, value: *const c_void) -> CfTypeRef;
+        fn AXValueGetValue(value: CfTypeRef, value_type: u32, out: *mut c_void) -> u8;
     }
 
     #[link(name = "CoreFoundation", kind = "framework")]
@@ -389,6 +410,74 @@ mod ax {
                     .into_owned(),
             )
         }
+    }
+
+    /// kAXValueCFRangeType
+    const AX_VALUE_CF_RANGE: u32 = 4;
+
+    #[repr(C)]
+    struct CfRange {
+        location: isize,
+        length: isize,
+    }
+
+    fn focused_app() -> Option<Cf> {
+        // SAFETY: returns a +1 reference, released by Cf.
+        let system = Cf(unsafe { AXUIElementCreateSystemWide() });
+        // SAFETY: system is a live AXUIElement.
+        unsafe { AXUIElementSetMessagingTimeout(system.0, 0.5) };
+        copy(&system, "AXFocusedApplication").ok()
+    }
+
+    pub fn char_before_caret() -> Option<Option<char>> {
+        let focused = copy(&focused_app()?, "AXFocusedUIElement").ok()?;
+        let selection = copy(&focused, "AXSelectedTextRange").ok()?;
+        let mut range = CfRange {
+            location: 0,
+            length: 0,
+        };
+        // SAFETY: selection is a live AXValue; range matches kAXValueCFRangeType.
+        let ok = unsafe {
+            AXValueGetValue(
+                selection.0,
+                AX_VALUE_CF_RANGE,
+                &mut range as *mut CfRange as *mut c_void,
+            )
+        };
+        if ok == 0 || range.location < 0 {
+            return None;
+        }
+        if range.location == 0 {
+            return Some(None);
+        }
+        // An emoji before the caret is two UTF-16 units; one alone won't decode.
+        (1..=range.location.min(2)).find_map(|length| {
+            string_for_range(&focused, range.location - length, length)?
+                .chars()
+                .next_back()
+                .map(Some)
+        })
+    }
+
+    fn string_for_range(element: &Cf, location: isize, length: isize) -> Option<String> {
+        let range = CfRange { location, length };
+        // SAFETY: range is a valid CFRange for kAXValueCFRangeType; +1 reference.
+        let parameter = Cf(unsafe {
+            AXValueCreate(AX_VALUE_CF_RANGE, &range as *const CfRange as *const c_void)
+        });
+        if parameter.0.is_null() {
+            return None;
+        }
+        let name = cf_string("AXStringForRange");
+        let mut value: CfTypeRef = std::ptr::null();
+        // SAFETY: element, name and parameter are live; value receives a +1 reference.
+        let error = unsafe {
+            AXUIElementCopyParameterizedAttributeValue(element.0, name.0, parameter.0, &mut value)
+        };
+        if error != 0 || value.is_null() {
+            return None;
+        }
+        string(&Cf(value))
     }
 
     /// Some(true) when the focused element takes text, Some(false) when focus is
