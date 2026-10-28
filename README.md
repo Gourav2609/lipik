@@ -59,19 +59,31 @@ _Coming soon._
 
 ## Install
 
-1. Download [Lipik.dmg](https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg)
-   (Apple silicon, M1 and later) and drag **Lipik** into **Applications**.
-2. Open it once. Lipik isn't signed with an Apple Developer ID yet, so macOS
-   blocks the first launch:
-   - macOS 15 and later: double-click Lipik, click **Done**, then go to
-     **System Settings → Privacy & Security** and click **Open Anyway**.
-   - macOS 14 and earlier: right-click Lipik in Applications, choose **Open**,
-     then **Open**.
-3. Allow **Microphone** and **Accessibility** when asked.
-4. Optional, for clean-up: install the free [Ollama](https://ollama.com) app
-   and run `ollama pull qwen3:8b` (about 5 GB). Without it, Lipik still types
-   what you said and fixes "um", spoken punctuation, numbers and emails with
-   its built-in rules.
+Paste this into Terminal and press Return:
+
+```bash
+curl -fsSL https://lipik.refflux.dev/install.sh | sh
+```
+
+It downloads the latest release, puts **Lipik** in **Applications** and opens
+it, with no macOS security warning to click through. Macs with Apple silicon
+(M1 and later). Run it again any time to update; settings and history stay.
+
+Or download [Lipik.dmg](https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg)
+and drag **Lipik** into **Applications**. Lipik isn't signed with an Apple
+Developer ID yet, so macOS blocks a downloaded copy the first time:
+
+- macOS 15 and later: double-click Lipik, click **Done**, then go to
+  **System Settings → Privacy & Security** and click **Open Anyway**.
+- macOS 14 and earlier: right-click Lipik in Applications, choose **Open**,
+  then **Open**.
+
+Then allow **Microphone** and **Accessibility** when asked. Clean-up is
+optional: one button in setup (or **Settings → Meetings**) downloads the
+clean-up model (5 GB, or 2.5 GB on Macs with less than 16 GB of memory), which
+runs inside Lipik with no extra app. Without it, Lipik still types what you
+said and fixes "um", spoken punctuation, numbers and emails with its built-in
+rules.
 
 [docs/INSTALL.md](docs/INSTALL.md) has the details.
 

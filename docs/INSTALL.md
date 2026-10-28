@@ -5,7 +5,26 @@ build for Intel Macs; you can build one from source (see the end of this page).
 The meeting notetaker needs macOS 14.2 or later; dictation works on older
 versions.
 
+## Quickest: one line in Terminal
+
+Open **Terminal** (in Applications → Utilities), paste this and press Return:
+
+```bash
+curl -fsSL https://lipik.refflux.dev/install.sh | sh
+```
+
+It checks your Mac, downloads the latest release from GitHub, copies
+**Lipik** into **Applications** and opens it. A download made from Terminal
+isn't marked as "downloaded from the internet", so macOS shows no security
+warning and you can skip step 2 below. If Lipik is already open, quit it
+first; run the same line again any time to update. Your settings, history and
+meeting notes stay. The script is
+[website/install.sh](https://github.com/Gourav2609/lipik/blob/main/website/install.sh)
+if you want to read it first.
+
 ## 1. Download
+
+Or install by hand:
 
 Download [Lipik.dmg](https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg)
 from the [Releases page](https://github.com/Gourav2609/lipik/releases).

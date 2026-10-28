@@ -14,6 +14,7 @@
 
 ## Links
 
+- Install: paste `curl -fsSL https://lipik.refflux.dev/install.sh | sh` into Terminal (downloads the latest release into Applications, no macOS security warning), or download the .dmg
 - Download: https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg
 - Code: https://github.com/Gourav2609/lipik
 - Release notes: https://lipik.refflux.dev/releases
