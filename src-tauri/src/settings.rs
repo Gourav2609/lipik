@@ -416,9 +416,15 @@ pub struct AppSettings {
     pub autostart_enabled: bool,
     #[serde(default = "default_update_checks_enabled")]
     pub update_checks_enabled: bool,
-    /// Lipik asks GitHub once a day whether a newer release is out.
+    /// Lipik checks the update feed every few hours for a new version.
     #[serde(default = "default_release_check_enabled")]
     pub release_check_enabled: bool,
+    /// Lipik tells lipik.refflux.dev every few hours that this copy is in use.
+    #[serde(default = "default_usage_ping_enabled")]
+    pub usage_ping_enabled: bool,
+    /// Random ID sent with the usage ping, made on first launch.
+    #[serde(default)]
+    pub install_id: String,
     #[serde(default = "default_show_whats_new_on_update")]
     pub show_whats_new_on_update: bool,
     /// The app version whose What's New the user has already seen. Fresh installs
@@ -431,6 +437,10 @@ pub struct AppSettings {
     pub selected_model: String,
     #[serde(default)]
     pub onboarding_completed: bool,
+    /// The user reached the end of setup. Separate from `onboarding_completed`,
+    /// which turns true as soon as the first speech model is chosen.
+    #[serde(default)]
+    pub setup_finished: bool,
     #[serde(default = "default_always_on_microphone")]
     pub always_on_microphone: bool,
     #[serde(default)]
@@ -623,6 +633,10 @@ fn default_update_checks_enabled() -> bool {
 }
 
 fn default_release_check_enabled() -> bool {
+    true
+}
+
+fn default_usage_ping_enabled() -> bool {
     true
 }
 
@@ -1046,10 +1060,13 @@ pub fn get_default_settings() -> AppSettings {
         autostart_enabled: default_autostart_enabled(),
         update_checks_enabled: default_update_checks_enabled(),
         release_check_enabled: default_release_check_enabled(),
+        usage_ping_enabled: default_usage_ping_enabled(),
+        install_id: String::new(),
         show_whats_new_on_update: default_show_whats_new_on_update(),
         whats_new_last_seen_version: default_whats_new_last_seen_version(),
         selected_model: "".to_string(),
         onboarding_completed: false,
+        setup_finished: false,
         always_on_microphone: false,
         selected_microphone: None,
         selected_channel: None,
@@ -1197,6 +1214,11 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         store.set("settings", serde_json::to_value(&settings).unwrap());
     }
 
+    if settings.install_id.is_empty() {
+        settings.install_id = uuid::Uuid::new_v4().to_string();
+        store.set("settings", serde_json::to_value(&settings).unwrap());
+    }
+
     settings
 }
 
@@ -1249,6 +1271,13 @@ fn apply_settings_migrations(
     // files on disk should still see onboarding.
     if settings_value.get("onboarding_completed").is_none() {
         settings.onboarding_completed = !settings.selected_model.is_empty();
+        updated = true;
+    }
+
+    // Stores from before `setup_finished` existed: anyone with a chosen model
+    // went through setup already.
+    if settings_value.get("setup_finished").is_none() {
+        settings.setup_finished = settings.onboarding_completed;
         updated = true;
     }
 
@@ -1454,6 +1483,9 @@ mod tests {
         assert_eq!(settings.hold_threshold_ms, default_hold_threshold_ms());
         assert!(!settings.audio_feedback);
         assert!(settings.filler_word_removal_enabled);
+        assert!(settings.usage_ping_enabled);
+        assert!(settings.install_id.is_empty());
+        assert!(!settings.setup_finished);
         // Bindings default to empty; the load path merges the real defaults in.
         assert!(settings.bindings.is_empty());
     }
@@ -1578,6 +1610,7 @@ mod tests {
             settings.long_form_chunking,
             "chunking is on for settings saved before it existed"
         );
+        assert!(settings.usage_ping_enabled);
 
         // The 0.1 integer device index is cleared once for transcribe.cpp 0.2.
         // Without an exact device, the retired generic GPU choice becomes Auto.
@@ -1594,6 +1627,8 @@ mod tests {
         // matching legacy mode rather than the new hold-or-toggle default.
         assert_eq!(settings.shortcut_activation, ShortcutActivation::Toggle);
         assert_eq!(settings.transcribe_gpu_device, None);
+        // A store from before setup_finished existed, with a chosen model.
+        assert!(settings.setup_finished);
     }
 
     #[test]
@@ -1865,6 +1900,7 @@ mod tests {
         let raw = serde_json::json!({
             "settings_schema_version": CURRENT_SETTINGS_SCHEMA_VERSION,
             "onboarding_completed": false,
+            "setup_finished": false,
             "whats_new_last_seen_version": default_whats_new_last_seen_version(),
             "overlay_style": "live",
             "transcribe_accelerator": "gpu",
@@ -1927,6 +1963,7 @@ mod tests {
         let raw = serde_json::json!({
             "settings_schema_version": CURRENT_SETTINGS_SCHEMA_VERSION,
             "onboarding_completed": false,
+            "setup_finished": false,
             "whats_new_last_seen_version": default_whats_new_last_seen_version(),
             "overlay_style": "live",
             "chinese_script": "as_transcribed",

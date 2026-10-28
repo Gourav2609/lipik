@@ -835,6 +835,14 @@ pub fn change_update_checks_setting(app: AppHandle, enabled: bool) -> Result<(),
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_release_check_setting(app: AppHandle, enabled: bool) {
+    let mut settings = settings::get_settings(&app);
+    settings.release_check_enabled = enabled;
+    settings::write_settings(&app, settings);
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_show_whats_new_on_update_setting(
     app: AppHandle,
     enabled: bool,

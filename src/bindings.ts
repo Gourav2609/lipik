@@ -603,6 +603,9 @@ async isPortable() : Promise<boolean> {
 async isUpdateChecksLocked() : Promise<boolean> {
     return await TAURI_INVOKE("is_update_checks_locked");
 },
+async markSetupFinished() : Promise<void> {
+    await TAURI_INVOKE("mark_setup_finished");
+},
 async getAppDirPath() : Promise<Result<string, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_app_dir_path") };
@@ -1252,11 +1255,19 @@ async cancelCleanupModelPull() : Promise<void> {
 async setCleanupEngine(engine: CleanupEngine) : Promise<void> {
     await TAURI_INVOKE("set_cleanup_engine", { engine });
 },
-async checkForNewRelease() : Promise<NewRelease | null> {
-    return await TAURI_INVOKE("check_for_new_release");
-},
 async changeReleaseCheckSetting(enabled: boolean) : Promise<void> {
     await TAURI_INVOKE("change_release_check_setting", { enabled });
+},
+async changeUsagePingSetting(enabled: boolean) : Promise<void> {
+    await TAURI_INVOKE("change_usage_ping_setting", { enabled });
+},
+async submitUpdateEmail(email: string, updates: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("submit_update_email", { email, updates }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 },
 async aiAppsStatus() : Promise<AiApp[]> {
     return await TAURI_INVOKE("ai_apps_status");
@@ -1593,16 +1604,29 @@ shortcut_activation?: ShortcutActivation;
  */
 hold_threshold_ms?: number; audio_feedback?: boolean; audio_feedback_volume?: number; sound_theme?: SoundTheme; start_hidden?: boolean; autostart_enabled?: boolean; update_checks_enabled?: boolean; 
 /**
- * Lipik asks GitHub once a day whether a newer release is out.
+ * Lipik checks the update feed every few hours for a new version.
  */
-release_check_enabled?: boolean; show_whats_new_on_update?: boolean; 
+release_check_enabled?: boolean; 
+/**
+ * Lipik tells lipik.refflux.dev every few hours that this copy is in use.
+ */
+usage_ping_enabled?: boolean; 
+/**
+ * Random ID sent with the usage ping, made on first launch.
+ */
+install_id?: string; show_whats_new_on_update?: boolean; 
 /**
  * The app version whose What's New the user has already seen. Fresh installs
  * default to the current version (nothing is "new" to them). Existing users
  * upgrading from before this key existed are blanked by the migration so they
  * see the current release's notes — see `apply_settings_migrations`.
  */
-whats_new_last_seen_version?: string; selected_model?: string; onboarding_completed?: boolean; always_on_microphone?: boolean; selected_microphone?: string | null; 
+whats_new_last_seen_version?: string; selected_model?: string; onboarding_completed?: boolean; 
+/**
+ * The user reached the end of setup. Separate from `onboarding_completed`,
+ * which turns true as soon as the first speech model is chosen.
+ */
+setup_finished?: boolean; always_on_microphone?: boolean; selected_microphone?: string | null; 
 /**
  * Which input channel to use on the selected microphone device.
  * None means "average all channels" (original behavior).
@@ -1828,11 +1852,6 @@ sha256: string | null } } |
  */
 "Local"
 export type ModelUnloadTimeout = "never" | "immediately" | "min_2" | "min_5" | "min_10" | "min_15" | "hour_1" | "sec_15"
-export type NewRelease = { version: string; 
-/**
- * The release page, with the notes and the download.
- */
-url: string }
 export type Note = { id: string; title: string; body: string; 
 /**
  * Unix milliseconds.

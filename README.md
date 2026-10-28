@@ -87,6 +87,24 @@ rules.
 
 [docs/INSTALL.md](docs/INSTALL.md) has the details.
 
+## What leaves your Mac
+
+Your voice, your text and your meeting notes stay on your Mac. Lipik only
+connects to the internet for:
+
+- one-time model downloads from Hugging Face (speech, clean-up, speakers)
+- Apple's English (India) speech files, through macOS, for Hinglish only
+- once a day, a request to GitHub for the latest version number (Settings →
+  Privacy → Updates turns it off)
+- every 3 hours, an anonymous usage count to lipik.refflux.dev: a random
+  install ID, the app version and the macOS version, so we know how many
+  people use Lipik (Settings → Privacy → Usage count turns it off). The
+  server notes the country and does not keep the IP address. The code is
+  [src-tauri/src/usage_ping.rs](src-tauri/src/usage_ping.rs) and
+  [website/worker.js](website/worker.js).
+- your email, only if you type it during setup to hear about new versions
+- cloud clean-up, only if you add your own API key
+
 ## AI apps (MCP)
 
 Lipik runs as an MCP server when an AI app starts it with `--mcp`:

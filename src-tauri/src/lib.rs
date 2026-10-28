@@ -23,7 +23,6 @@ mod overlay;
 mod paste_tx;
 mod pill;
 pub mod portable;
-mod release_check;
 mod secure_input;
 mod settings;
 mod shortcut;
@@ -34,6 +33,7 @@ mod traffic_lights;
 mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
+mod usage_ping;
 mod utils;
 
 pub use cli::CliArgs;
@@ -769,6 +769,7 @@ pub fn run(cli_args: CliArgs) {
             commands::cancel_operation,
             commands::is_portable,
             commands::is_update_checks_locked,
+            commands::mark_setup_finished,
             commands::get_app_dir_path,
             commands::get_app_settings,
             commands::get_default_settings,
@@ -857,8 +858,9 @@ pub fn run(cli_args: CliArgs) {
             textflow::cleanup_model::pull_cleanup_model,
             textflow::cleanup_model::cancel_cleanup_model_pull,
             textflow::cleanup_model::set_cleanup_engine,
-            release_check::check_for_new_release,
-            release_check::change_release_check_setting,
+            shortcut::change_release_check_setting,
+            usage_ping::change_usage_ping_setting,
+            usage_ping::submit_update_email,
             notetaker::ai_apps::ai_apps_status,
             notetaker::ai_apps::connect_ai_app,
             notetaker::ai_apps::disconnect_ai_app,
@@ -1162,6 +1164,7 @@ pub fn run(cli_args: CliArgs) {
             initialize_core_logic(&app_handle);
             textflow::init(&app_handle);
             notepad::init(&app_handle);
+            usage_ping::start(&app_handle);
 
             // Secure Input monitor (macOS): detects stuck secure input that
             // silently blocks keyed shortcuts, warns the user, and activates

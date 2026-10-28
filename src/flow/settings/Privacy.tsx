@@ -110,13 +110,25 @@ export default function Privacy() {
         <SettingsCard>
           <SettingRow
             title="Check for new versions"
-            description="Once a day, asks GitHub for the latest version number. Nothing about you is sent."
+            description={`Every few hours ${APP_NAME} checks GitHub for a new version and offers a one-click update. The check carries nothing about you.`}
             control={
               <Toggle
                 label="Check for new versions"
                 checked={getSetting("release_check_enabled") ?? true}
                 disabled={isUpdating("release_check_enabled")}
                 onChange={(v) => updateSetting("release_check_enabled", v)}
+              />
+            }
+          />
+          <SettingRow
+            title="Usage count"
+            description={`Every few hours ${APP_NAME} sends a random ID, the app version and the macOS version, so we know how many people use it. Never your voice, text or name.`}
+            control={
+              <Toggle
+                label="Usage count"
+                checked={getSetting("usage_ping_enabled") ?? true}
+                disabled={isUpdating("usage_ping_enabled")}
+                onChange={(v) => updateSetting("usage_ping_enabled", v)}
               />
             }
           />

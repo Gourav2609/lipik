@@ -46,6 +46,9 @@ import {
 } from "./pill/Menu";
 import { Meetings, MEETINGS, MEETINGS_OUT } from "./pill/Meetings";
 import { NoteCard, CARD, type Card } from "./pill/NoteCard";
+import { UpdateCard, type UpdateOffer } from "./pill/UpdateCard";
+import type { Update } from "@tauri-apps/plugin-updater";
+import { findUpdate } from "@/lib/selfUpdate";
 import { Mistake, MISTAKE } from "./pill/Mistake";
 import { Permission, PERM, type PermissionKind } from "./pill/Permission";
 import { platform } from "@tauri-apps/plugin-os";
@@ -110,6 +113,10 @@ const PERM_GAP = 400;
 const PREVIEW =
   import.meta.env.DEV &&
   new URLSearchParams(window.location.search).get("pillPreview") === "1";
+/** Update feed checks: two minutes after start, then every three hours. */
+const UPDATE_FIRST_MS = 2 * 60_000;
+const UPDATE_EVERY_MS = 3 * 60 * 60_000;
+const UPDATE_RETRY_MS = 60_000;
 const MIC_H = 50;
 const REC_GAP = 2;
 const LABEL_GAP = 3.5;
@@ -382,7 +389,7 @@ const Pill: React.FC = () => {
     h: MEETINGS.h,
   });
   const [noteDim, setNoteDim] = useState(false);
-  const [card, setCard] = useState<Card | null>(null);
+  const [card, setCard] = useState<Card | UpdateOffer | null>(null);
   const [cardHot, setCardHot] = useState(false);
   const [cardMenu, setCardMenu] = useState(false);
   const [mistake, setMistake] = useState<{ id: string; key: number } | null>(
@@ -417,6 +424,9 @@ const Pill: React.FC = () => {
   const noteBars = useRef<(HTMLElement | null)[]>([]);
   const noteId = useRef<string | null>(null);
   const discardId = useRef<string | null>(null);
+  const update = useRef<Update | null>(null);
+  const updating = useRef(false);
+  const skippedVersion = useRef<string | null>(null);
 
   const later = useCallback((name: string, ms: number, fn: () => void) => {
     clearTimeout(timers.current[name]);
@@ -619,7 +629,7 @@ const Pill: React.FC = () => {
             noteLoudness.current = freshLoudness();
             setNote(true);
             setNoteStopping(false);
-            setCard(null);
+            setCard((c) => (updating.current ? c : null));
             return;
           }
           noteId.current = null;
@@ -637,11 +647,11 @@ const Pill: React.FC = () => {
         },
       ),
       events.notetakerCallDetected.listen(async (e) => {
-        if (noteId.current) return;
+        if (noteId.current || updating.current) return;
         const settings = await commands
           .notetakerGetSettings()
           .catch(() => null);
-        if (settings?.auto_start || noteId.current) return;
+        if (settings?.auto_start || noteId.current || updating.current) return;
         setCardMenu(false);
         setCard({
           kind: "call",
@@ -658,7 +668,7 @@ const Pill: React.FC = () => {
       events.notetakerMeetingSoon.listen((e) => {
         if (noteId.current) return;
         setCard((c) =>
-          c?.kind === "call"
+          c?.kind === "call" || updating.current
             ? c
             : { kind: "soon", key: performance.now(), event: e.payload.event },
         );
@@ -903,6 +913,38 @@ const Pill: React.FC = () => {
     });
     pillHiddenUntil().then((until) => until != null && setPillOff(true));
   }, []);
+
+  // A new version on the update feed, offered when nothing else is going on.
+  useEffect(() => {
+    const show = () => {
+      const u = update.current;
+      if (!u || u.version === skippedVersion.current || updating.current)
+        return;
+      if (noteId.current || phaseRef.current !== "idle") {
+        later("update", UPDATE_RETRY_MS, show);
+        return;
+      }
+      setCard(
+        (c) =>
+          c ?? { kind: "update", key: performance.now(), version: u.version },
+      );
+    };
+    const check = async () => {
+      const r = await commands.getAppSettings().catch(() => null);
+      const s = r?.status === "ok" ? r.data : null;
+      if (!s?.setup_finished || !(s.release_check_enabled ?? true)) return;
+      const u = await findUpdate();
+      if (!u) return;
+      update.current = u;
+      show();
+    };
+    const first = window.setTimeout(check, PREVIEW ? 300 : UPDATE_FIRST_MS);
+    const every = window.setInterval(check, UPDATE_EVERY_MS);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+    };
+  }, [later]);
 
   const dragging = drag !== null;
   // Tell the backend which part of the panel should take the mouse.
@@ -1334,17 +1376,41 @@ const Pill: React.FC = () => {
         />
       )}
 
-      {card && !meetings && mode !== "gone" && mode !== "drag" && (
-        <NoteCard
-          key={card.key}
-          card={card}
-          style={box(cardRect)}
-          hot={cardHot}
-          menu={cardMenu}
-          onMenu={setCardMenu}
-          onClose={closeCard}
-        />
-      )}
+      {card?.kind === "update" &&
+        !meetings &&
+        mode !== "gone" &&
+        mode !== "drag" && (
+          <UpdateCard
+            key={card.key}
+            card={card}
+            update={update.current}
+            style={box(cardRect)}
+            meeting={note}
+            onBusy={(busy) => {
+              updating.current = busy;
+            }}
+            onLater={() => {
+              skippedVersion.current = card.version;
+              closeCard();
+            }}
+          />
+        )}
+
+      {card &&
+        card.kind !== "update" &&
+        !meetings &&
+        mode !== "gone" &&
+        mode !== "drag" && (
+          <NoteCard
+            key={card.key}
+            card={card}
+            style={box(cardRect)}
+            hot={cardHot}
+            menu={cardMenu}
+            onMenu={setCardMenu}
+            onClose={closeCard}
+          />
+        )}
 
       {mistake && (
         <Mistake

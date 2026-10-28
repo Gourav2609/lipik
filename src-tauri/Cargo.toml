@@ -1,6 +1,6 @@
 [package]
 name = "lipik"
-version = "0.1.4"
+version = "0.1.5"
 description = "Lipik"
 authors = ["cjpais"]
 edition = "2021"
@@ -104,6 +104,7 @@ hf-hub = { git = "https://github.com/cjpais/hf-hub", branch = "cancellable-downl
 speakrs = { version = "=0.7.0", default-features = false, features = ["cpu"] }
 ndarray = "0.17"
 rayon = "1"
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"

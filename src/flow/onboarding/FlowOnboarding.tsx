@@ -1,6 +1,7 @@
 import "../flow.css";
 import "./onboarding.css";
 import { useEffect, useState } from "react";
+import { commands } from "@/bindings";
 import { APP_NAME } from "../brand";
 import { Button, LipikMark } from "../ui";
 import { isFlowPreview, LOOK } from "../dev/preview";
@@ -19,7 +20,8 @@ export const hasSeenOnboarding = () => {
   }
 };
 
-const markSeen = () => {
+export const markSeen = () => {
+  commands.markSetupFinished().catch(() => {});
   try {
     localStorage.setItem(SEEN_KEY, "1");
   } catch {
@@ -30,9 +32,11 @@ const markSeen = () => {
 export const FlowOnboarding = ({
   onDone,
   initialStep,
+  again,
 }: {
   onDone: () => void;
   initialStep?: StepId;
+  again?: boolean;
 }) => {
   const theme = useResolvedTheme();
   const [index, setIndex] = useState(() =>
@@ -45,8 +49,15 @@ export const FlowOnboarding = ({
   const Body = step.Component;
 
   useEffect(() => {
-    startDefaultModelSetup();
-  }, []);
+    if (!again) return startDefaultModelSetup();
+    commands
+      .getAppSettings()
+      .then((r) => {
+        if (r.status === "ok" && !r.data.selected_model)
+          startDefaultModelSetup();
+      })
+      .catch(() => {});
+  }, [again]);
 
   const next = () => {
     if (index < STEPS.length - 1) setIndex(index + 1);

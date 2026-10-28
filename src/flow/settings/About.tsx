@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button, LipikMark } from "../ui";
+import { runSetupAgain } from "../onboarding/runAgain";
+import { useFlowStore } from "../state";
 import { SettingsPage } from "./SettingsPage";
 import { Section, SettingRow, SettingsCard } from "./parts";
 import { APP_NAME } from "@/flow/brand";
@@ -15,6 +17,7 @@ const Value = ({ children }: { children: string }) => (
 );
 
 export default function About() {
+  const closeSettings = useFlowStore((s) => s.closeSettings);
   const [version, setVersion] = useState("");
   useEffect(() => {
     getVersion()
@@ -53,6 +56,22 @@ export default function About() {
                 onClick={() => openUrl(HANDY_URL).catch(() => {})}
               >
                 Open
+              </Button>
+            }
+          />
+          <SettingRow
+            title="Setup"
+            description="Go through the first-run steps again. Your settings stay as they are."
+            control={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  closeSettings();
+                  runSetupAgain();
+                }}
+              >
+                Run setup again
               </Button>
             }
           />

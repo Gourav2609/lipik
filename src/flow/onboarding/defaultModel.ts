@@ -86,6 +86,9 @@ export const useModelSetup = (): ModelSetup => {
   }
   if (!model) return { status: "waiting", percent: 0, name: "" };
   const name = model.name;
+  if (currentModel && currentModel !== model.id) {
+    return { status: "ready", percent: 100, name };
+  }
   if (model.id in verifying) return { status: "verifying", percent: 100, name };
   if (model.id in downloading) {
     return {

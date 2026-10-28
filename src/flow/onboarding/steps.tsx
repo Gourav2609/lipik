@@ -19,7 +19,7 @@ import {
   NotebookPen,
   ShieldCheck,
 } from "lucide-react";
-import { events } from "@/bindings";
+import { commands, events } from "@/bindings";
 import { ShortcutInput } from "@/components/settings/ShortcutInput";
 import { useSettings } from "@/hooks/useSettings";
 import { APP_NAME } from "../brand";
@@ -34,7 +34,7 @@ import {
   useCleanupModel,
 } from "../cleanupModel";
 import { AiAppRows, useAiApps } from "../aiApps";
-import { Button, Card, Kbd } from "../ui";
+import { Button, Card, Kbd, TextInput } from "../ui";
 import { retryDefaultModelSetup, useModelSetup } from "./defaultModel";
 import { StepLayout, type StepProps } from "./StepLayout";
 import { useMicLevel } from "./useMicLevel";
@@ -717,6 +717,7 @@ const Privacy = ({ next, back }: StepProps) => (
           "Speech is turned into text on this Mac. Your audio is never uploaded.",
           `Recordings and their text stay in ${APP_NAME}'s data folder so it can learn your voice. You can change this in Settings.`,
           "Clean-up and meeting notes run on a model on this Mac, not in the cloud.",
+          `Every few hours ${APP_NAME} sends an anonymous count: a random ID and the app and macOS versions, so we know how many people use it. Turn it off in Settings, under Privacy.`,
         ].map((line) => (
           <div
             key={line}
@@ -734,6 +735,87 @@ const Privacy = ({ next, back }: StepProps) => (
     }
   />
 );
+
+/* ---------- news by email ---------- */
+
+const News = ({ next, back }: StepProps) => {
+  const [email, setEmail] = useState("");
+  const [wanted, setWanted] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const send = async () => {
+    if (!wanted || !email.trim() || error) return next();
+    setSending(true);
+    const r = await commands.submitUpdateEmail(email, true).catch(() => null);
+    setSending(false);
+    if (r?.status === "ok") next();
+    else setError(r?.error ?? "Couldn't save your email, try again.");
+  };
+  return (
+    <StepLayout
+      eyebrow="Updates"
+      title="Hear about new versions"
+      body={`Get an email when a new version of ${APP_NAME} is out.`}
+      back={back}
+      actions={
+        <>
+          <LinkButton onClick={next}>Skip</LinkButton>
+          <Continue next={send} disabled={sending} />
+        </>
+      }
+      visual={
+        <Card
+          tone="panel"
+          className="flex flex-col gap-[16px] px-[20px] py-[20px]"
+        >
+          <TextInput
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            aria-label="Email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") send();
+            }}
+          />
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={wanted}
+            onClick={() => setWanted(!wanted)}
+            className="flex items-center gap-[12px] text-left text-[15px] leading-[22px]"
+          >
+            <span
+              className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] ${wanted ? "bg-[var(--fk-accent)] text-[var(--fk-accent-text)]" : "shadow-[inset_0_0_0_1px_var(--fk-border-strong)]"}`}
+            >
+              {wanted && <Check size={12} strokeWidth={2.5} />}
+            </span>
+            Email me when a new version is out
+          </button>
+        </Card>
+      }
+    >
+      {error ? (
+        <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+          <CircleAlert
+            size={16}
+            strokeWidth={1.75}
+            className="shrink-0 text-[var(--fk-live)]"
+          />
+          {error} Or press Continue to go on without it.
+        </p>
+      ) : (
+        <p className="text-[13px] leading-[18px] text-[var(--fk-text-faint)]">
+          Only for {APP_NAME} news. No spam; unsubscribe any time.
+        </p>
+      )}
+    </StepLayout>
+  );
+};
 
 /* ---------- done ---------- */
 
@@ -768,6 +850,7 @@ export type StepId =
   | "bar"
   | "ai"
   | "privacy"
+  | "news"
   | "done";
 
 export const STEPS: {
@@ -784,5 +867,6 @@ export const STEPS: {
   { id: "bar", Component: PillStep, skippable: true },
   { id: "ai", Component: AiApps, skippable: true },
   { id: "privacy", Component: Privacy },
+  { id: "news", Component: News },
   { id: "done", Component: Done },
 ];

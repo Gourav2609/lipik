@@ -30,6 +30,16 @@ pub fn is_update_checks_locked() -> bool {
 
 #[tauri::command]
 #[specta::specta]
+pub fn mark_setup_finished(app: AppHandle) {
+    let mut settings = get_settings(&app);
+    if !settings.setup_finished {
+        settings.setup_finished = true;
+        write_settings(&app, settings);
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn get_app_dir_path(app: AppHandle) -> Result<String, String> {
     let app_data_dir = crate::portable::app_data_dir(&app)
         .map_err(|e| format!("Failed to get app data directory: {}", e))?;

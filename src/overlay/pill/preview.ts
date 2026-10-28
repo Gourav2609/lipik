@@ -206,6 +206,9 @@ if (isPillPreview) {
     permAx: [],
     permBoth: [],
     permMicDone: [[3500, () => fire(".perm-action", "click")]],
+    update: [],
+    updateDownloading: [[1000, () => fire(".card-main", "click")]],
+    updateFailed: [[1000, () => fire(".card-main", "click")]],
   };
   const scene = params.get("pillScene") ?? "";
   const side = params.get("side");
@@ -214,6 +217,26 @@ if (isPillPreview) {
   )
     ? 3
     : 200;
+  // The update scenes: an offer of 0.1.6, a download stuck at 45%, a failed one.
+  if (scene.startsWith("update")) {
+    const base = (w.__TAURI_INTERNALS__ as { invoke: Invoke }).invoke;
+    (w.__TAURI_INTERNALS__ as { invoke: Invoke }).invoke = (cmd, args = {}) => {
+      if (cmd === "plugin:updater|check")
+        return Promise.resolve({
+          rid: 1,
+          currentVersion: "0.1.4",
+          version: "0.1.6",
+          rawJson: {},
+        });
+      if (cmd !== "plugin:updater|download_and_install") return base(cmd, args);
+      if (scene === "updateFailed") return Promise.reject("download failed");
+      const send = (args.onEvent as { onmessage: (e: unknown) => void })
+        .onmessage;
+      send({ event: "Started", data: { contentLength: 100 } });
+      send({ event: "Progress", data: { chunkLength: 45 } });
+      return new Promise(() => {});
+    };
+  }
   const mocks: Record<string, (real: unknown) => unknown> = {
     get_available_microphones: () => [
       { index: "default", name: "Default", is_default: true },

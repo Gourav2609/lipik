@@ -30,6 +30,8 @@ import { onboardingPreviewStep, skipOnboarding } from "./flow/dev/preview";
 import {
   FlowOnboarding,
   hasSeenOnboarding,
+  markSeen,
+  onRunSetupAgain,
   startDefaultModelSetup,
   type StepId,
 } from "./flow/onboarding";
@@ -52,6 +54,7 @@ function App() {
   // Set when a returning user's selected model is a retired (ONNX) model that
   // is still on disk: they must update it before the app can transcribe.
   const [migrationModelId, setMigrationModelId] = useState<string | null>(null);
+  const [setupAgain, setSetupAgain] = useState(false);
   const { settings, updateSetting } = useSettings();
   const direction = getLanguageDirection(i18n.language);
   const refreshAudioDevices = useSettingsStore(
@@ -80,6 +83,15 @@ function App() {
   useEffect(() => {
     checkOnboardingStatus();
   }, []);
+
+  useEffect(
+    () =>
+      onRunSetupAgain(() => {
+        setSetupAgain(true);
+        setOnboardingStep("flow");
+      }),
+    [],
+  );
 
   // Initialize RTL direction when language changes
   useEffect(() => {
@@ -253,6 +265,16 @@ function App() {
         settingsResult.data.onboarding_completed === true;
       const currentPlatform = platform();
 
+      // The model is chosen during setup, so someone who quit before the last
+      // step has a model but hasn't finished setup.
+      if (hasCompletedOnboarding && !settingsResult.data.setup_finished) {
+        if (!hasSeenOnboarding()) {
+          setOnboardingStep("flow");
+          return;
+        }
+        markSeen();
+      }
+
       if (hasCompletedOnboarding) {
         // Returning user - check if they need to grant permissions first
         setIsReturningUser(true);
@@ -288,6 +310,7 @@ function App() {
         // who already went through the steps goes straight to the app.
         setIsReturningUser(false);
         if (hasSeenOnboarding()) {
+          markSeen();
           startDefaultModelSetup();
           setOnboardingStep("done");
         } else {
@@ -378,6 +401,7 @@ function App() {
       <FlowOnboarding
         onDone={() => setOnboardingStep("done")}
         initialStep={(onboardingPreviewStep ?? undefined) as StepId | undefined}
+        again={setupAgain}
       />
     );
   } else if (onboardingStep === "accessibility") {

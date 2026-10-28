@@ -1020,9 +1020,30 @@
   justify-content: center;
   transition: background-color 130ms ease-out;
 }
+.card-later {
+  padding: 0 14px;
+  border-left: 1px solid #dcd5c4;
+  background: transparent;
+  color: #12110f;
+  font-size: 14.5px;
+  font-weight: 600;
+  transition: background-color 130ms ease-out;
+}
 .card-main:hover,
-.card-more:hover {
+.card-more:hover,
+.card-later:hover {
   background: #e5ece4;
+}
+.note-card.update .card-icon {
+  color: #8fc2a4;
+}
+.note-card.update.offer .card-text {
+  right: 236px;
+}
+.note-card.update.downloading .card-text,
+.note-card.update.restarting .card-text,
+.note-card.update.restartLater.meeting .card-text {
+  right: 20px;
 }
 .card-close {
   position: absolute;

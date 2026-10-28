@@ -114,10 +114,13 @@ const makeSettings = (theme: "dark" | "light"): AppSettings => ({
   autostart_enabled: true,
   update_checks_enabled: true,
   release_check_enabled: true,
+  usage_ping_enabled: true,
+  install_id: "00000000-0000-4000-8000-000000000000",
   show_whats_new_on_update: false,
   whats_new_last_seen_version: "0.1.1",
   selected_model: MODEL.id,
   onboarding_completed: true,
+  setup_finished: true,
   always_on_microphone: false,
   selected_microphone: null,
   selected_output_device: null,
@@ -162,14 +165,13 @@ const defaults = (theme: "dark" | "light"): Record<string, MockHandler> => {
     is_recording: () => false,
     is_portable: () => false,
     is_update_checks_locked: () => false,
-    check_for_new_release: () =>
+    "plugin:updater|check": () =>
       new URLSearchParams(window.location.search).has("newRelease")
-        ? {
-            version: "0.1.3",
-            url: "https://github.com/Gourav2609/lipik/releases",
-          }
+        ? { rid: 1, currentVersion: "0.1.1", version: "0.1.3", rawJson: {} }
         : null,
     change_release_check_setting: () => null,
+    change_usage_ping_setting: () => null,
+    submit_update_email: () => null,
     check_custom_sounds: () => ({ start: false, stop: false }),
     // ?secureInput=<process> shows the paused-shortcut notice.
     get_secure_input_status: () => {

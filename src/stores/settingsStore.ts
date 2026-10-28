@@ -101,6 +101,8 @@ const settingUpdaters: {
     commands.changeUpdateChecksSetting(value as boolean),
   release_check_enabled: (value) =>
     commands.changeReleaseCheckSetting(value as boolean),
+  usage_ping_enabled: (value) =>
+    commands.changeUsagePingSetting(value as boolean),
   show_whats_new_on_update: (value) =>
     commands.changeShowWhatsNewOnUpdateSetting(value as boolean),
   whats_new_last_seen_version: (value) =>
