@@ -65,6 +65,9 @@ pub struct Attendee {
     pub name: Option<String>,
     pub email: Option<String>,
     pub is_me: bool,
+    /// A room, resource or group, as the calendar marks it.
+    #[serde(default)]
+    pub not_person: bool,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Type, PartialEq)]
@@ -1195,7 +1198,7 @@ impl NotetakerManager {
         if let Err(e) = self.store.save_meeting_voices(id, &voices) {
             log::warn!("Notetaker could not save the voices of {id}: {e}");
         }
-        let profiles = self.store.voice_profiles().unwrap_or_default();
+        let profiles = self.store.voice_profiles(Some(id)).unwrap_or_default();
         for (n, name) in diarize::known_names(speakers, &profiles, &meeting.attendees) {
             diarize::apply_name(segments, &diarize::speaker_key(n), &name);
         }
@@ -1240,12 +1243,23 @@ impl NotetakerManager {
         match ai::summarize(&model, &meeting, &thoughts, &segments) {
             Ok((summary, guesses)) => {
                 let own = self.own_names(&meeting);
+                let invited = diarize::invitees(&meeting.attendees);
+                let (named, verdicts) = diarize::judge_guesses(&segments, &guesses, &own, &invited);
+                log::info!(
+                    "Notetaker named {} speakers of {id} ({} guesses rejected): {:?}",
+                    named.len(),
+                    verdicts.iter().filter(|v| v.rejected.is_some()).count(),
+                    named
+                        .iter()
+                        .map(|n| (n.key.as_str(), n.rule, n.lines.len()))
+                        .collect::<Vec<_>>()
+                );
                 let mut changed = 0;
-                for (key, name) in diarize::names_from_guesses(&segments, &guesses, &own) {
-                    let default = diarize::default_label(&key);
+                for n in named {
+                    let default = diarize::default_label(&n.key);
                     changed += self
                         .store
-                        .name_speaker_if_default(id, &key, &default, &name)?;
+                        .name_speaker_if_default(id, &n.key, &default, &n.name)?;
                 }
                 if changed > 0 {
                     let _ = NotetakerTranscript {
@@ -1365,14 +1379,7 @@ impl NotetakerManager {
 
     /// The user's own names and emails: never a name for someone on the call.
     fn own_names(&self, meeting: &Meeting) -> Vec<String> {
-        let mut own: Vec<String> = meeting
-            .attendees
-            .iter()
-            .filter(|a| a.is_me)
-            .flat_map(|a| [a.name.clone(), a.email.clone()])
-            .flatten()
-            .collect();
-        own.extend(user_full_name());
+        let mut own = own_names_in(meeting);
         own.extend(crate::textflow::dictionary_emails(&self.app));
         own
     }
@@ -1405,7 +1412,7 @@ impl NotetakerManager {
 
     /// How many people have a saved voice.
     pub fn saved_voices(&self) -> Result<u32> {
-        Ok(self.store.voice_profiles()?.len() as u32)
+        Ok(self.store.voice_profiles(None)?.len() as u32)
     }
 
     pub fn forget_voices(&self) -> Result<()> {
@@ -1565,6 +1572,19 @@ fn background_priority() {
     unsafe {
         libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_UTILITY, 0);
     }
+}
+
+/// The user's names and emails from the invite and the Mac account.
+fn own_names_in(meeting: &Meeting) -> Vec<String> {
+    let mut own: Vec<String> = meeting
+        .attendees
+        .iter()
+        .filter(|a| a.is_me)
+        .flat_map(|a| [a.name.clone(), a.email.clone()])
+        .flatten()
+        .collect();
+    own.extend(user_full_name());
+    own
 }
 
 /// The macOS account's full name ("Gourav Sharma"), read once.
@@ -1761,5 +1781,180 @@ mod tests {
         assert!(gate.begin("m2"));
         assert!(!gate.cancelled());
         assert!(gate.waiting());
+    }
+
+    /// Runs the real notes and speaker naming on one stored meeting, by hand.
+    /// Nothing is written to the database; the result goes to a local JSON
+    /// file and only counts are printed.
+    /// LIPIK_TEST_DB=<copy of notetaker.db> LIPIK_TEST_MEETING=<id>
+    /// LIPIK_TEST_OUT=<out.json> cargo test --lib naming_check -- --ignored
+    /// --nocapture. Optional: LIPIK_TEST_OLLAMA_URL, LIPIK_TEST_OLLAMA_MODEL,
+    /// LIPIK_TEST_KEEP_LABELS=1 to start from the stored labels instead of
+    /// "Speaker N" plus voice and calendar naming.
+    #[test]
+    #[ignore]
+    fn naming_check() {
+        use serde_json::{json, Value};
+        use std::collections::HashMap;
+
+        let var = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k} is not set"));
+        let id = var("LIPIK_TEST_MEETING");
+        let store = Store::open_read_only(std::path::Path::new(&var("LIPIK_TEST_DB"))).unwrap();
+        let meeting = store.meeting(&id).unwrap().expect("no such meeting");
+        let stored = store.segments(&id).unwrap();
+        let invited = diarize::invitees(&meeting.attendees);
+        let own = own_names_in(&meeting);
+
+        let mut keys: Vec<String> = stored
+            .iter()
+            .filter(|s| s.speaker_key.starts_with('s'))
+            .map(|s| s.speaker_key.clone())
+            .collect();
+        keys.sort_by_key(|k| k[1..].parse::<usize>().unwrap_or(usize::MAX));
+        keys.dedup();
+        let label_of = |segments: &[Segment], key: &str| {
+            segments
+                .iter()
+                .find(|s| s.speaker_key == key)
+                .map_or_else(|| diarize::default_label(key), |s| s.speaker.clone())
+        };
+
+        let mut segments = stored.clone();
+        let mut rules: HashMap<String, &str> = HashMap::new();
+        if std::env::var("LIPIK_TEST_KEEP_LABELS").is_ok() {
+            for k in &keys {
+                if !diarize::is_default_label(&label_of(&segments, k)) {
+                    rules.insert(k.clone(), "stored");
+                }
+            }
+        } else {
+            for s in segments
+                .iter_mut()
+                .filter(|s| s.speaker_key.starts_with('s'))
+            {
+                s.speaker = diarize::default_label(&s.speaker_key);
+            }
+            let count = keys
+                .iter()
+                .filter_map(|k| k[1..].parse::<usize>().ok())
+                .max()
+                .unwrap_or(0);
+            let speakers = diarize::Speakers {
+                turns: Vec::new(),
+                voices: (1..=count)
+                    .map(|n| store.meeting_voice(&id, &format!("s{n}")).unwrap())
+                    .collect(),
+                speech_ms: vec![0; count],
+            };
+            let profiles = store.voice_profiles(Some(&id)).unwrap();
+            for (n, name) in diarize::known_names(&speakers, &profiles, &meeting.attendees) {
+                let key = diarize::speaker_key(n);
+                let voice = profiles.iter().any(|p| p.name == name);
+                rules.insert(key.clone(), if voice { "voice" } else { "calendar_1to1" });
+                diarize::apply_name(&mut segments, &key, &name);
+            }
+        }
+
+        let model = ai::Model::Ollama(ai::Ollama::new(
+            &std::env::var("LIPIK_TEST_OLLAMA_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string()),
+            &std::env::var("LIPIK_TEST_OLLAMA_MODEL").unwrap_or_else(|_| "qwen3:8b".to_string()),
+        ));
+        if let Some(reason) = model.unavailable_reason() {
+            panic!("notes model unavailable: {reason}");
+        }
+        let thoughts = store.thoughts(&id).unwrap();
+        let started = Instant::now();
+        let (_, guesses) = ai::summarize(&model, &meeting, &thoughts, &segments).unwrap();
+        let took = started.elapsed().as_secs_f32();
+        let (named, verdicts) = diarize::judge_guesses(&segments, &guesses, &own, &invited);
+        for n in &named {
+            rules.insert(
+                n.key.clone(),
+                match n.rule {
+                    diarize::NameRule::Introduction => "introduction",
+                    diarize::NameRule::Addressed => "addressed",
+                },
+            );
+            diarize::apply_name(&mut segments, &n.key, &n.name);
+        }
+
+        let line =
+            |i: usize| json!({ "index": i, "text": segments.get(i).map(|s| s.text.as_str()) });
+        let speakers: Vec<Value> = keys
+            .iter()
+            .map(|k| {
+                let lines: Vec<&Segment> = segments.iter().filter(|s| &s.speaker_key == k).collect();
+                let label = label_of(&segments, k);
+                let speech_ms: i64 = lines.iter().map(|s| (s.end_ms - s.start_ms).max(0)).sum();
+                let evidence: Vec<Value> = named
+                    .iter()
+                    .filter(|n| &n.key == k)
+                    .flat_map(|n| n.lines.iter().map(|&i| line(i)))
+                    .collect();
+                let for_key = |v: &&diarize::GuessVerdict| {
+                    v.key.as_deref() == Some(k.as_str())
+                        || v.speaker.trim() == diarize::default_label(k)
+                };
+                let guesses: Vec<Value> = verdicts
+                    .iter()
+                    .zip(&guesses)
+                    .filter(|(v, _)| for_key(v))
+                    .map(|(v, g)| {
+                        json!({
+                            "guessed": v.guessed,
+                            "as": v.name,
+                            "model_lines": g.lines.iter().map(|&i| line(i)).collect::<Vec<_>>(),
+                            "evidence_lines": v.lines,
+                            "rejected": v.rejected,
+                        })
+                    })
+                    .collect();
+                json!({
+                    "key": k,
+                    "stored_label": label_of(&stored, k),
+                    "label": label,
+                    "speech_s": speech_ms as f64 / 1000.0,
+                    "name": (!diarize::is_default_label(&label)).then_some(&label),
+                    "rule": rules.get(k),
+                    "evidence": evidence,
+                    "guesses": guesses,
+                    "first_segments_ms": lines.iter().take(3).map(|s| [s.start_ms, s.end_ms]).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        let other_guesses: Vec<Value> = verdicts
+            .iter()
+            .filter(|v| {
+                v.key.is_none()
+                    && !keys
+                        .iter()
+                        .any(|k| v.speaker.trim() == diarize::default_label(k))
+            })
+            .map(|v| json!({ "speaker": v.speaker, "guessed": v.guessed, "rejected": v.rejected }))
+            .collect();
+        let out = json!({
+            "meeting": id,
+            "system_offset_ms": meeting.system_offset_ms,
+            "invitees": invited,
+            "notes_model_s": took,
+            "speakers": speakers,
+            "other_guesses": other_guesses,
+        });
+        std::fs::write(
+            var("LIPIK_TEST_OUT"),
+            serde_json::to_string_pretty(&out).unwrap(),
+        )
+        .unwrap();
+        println!(
+            "NAMING invitees={} speakers={} named={} guesses={} rejected={} notes_s={took:.0}",
+            invited.len(),
+            keys.len(),
+            keys.iter()
+                .filter(|k| !diarize::is_default_label(&label_of(&segments, k)))
+                .count(),
+            verdicts.len(),
+            verdicts.iter().filter(|v| v.rejected.is_some()).count(),
+        );
     }
 }

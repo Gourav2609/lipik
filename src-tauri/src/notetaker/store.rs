@@ -407,7 +407,8 @@ impl Store {
     /// One profile per name the user gave a voice: the average of every
     /// meeting voice they named so, under its current label. A corrected name
     /// moves the voice to the new name; a deleted meeting stops counting.
-    pub fn voice_profiles(&self) -> Result<Vec<VoiceProfile>> {
+    /// `except` leaves one meeting's voices out.
+    pub fn voice_profiles(&self, except: Option<&str>) -> Result<Vec<VoiceProfile>> {
         let rows: Vec<(Option<String>, Vec<u8>)> = {
             let conn = self.conn();
             let mut stmt = conn.prepare(
@@ -415,9 +416,10 @@ impl Store {
                          WHERE s.meeting_id = v.meeting_id AND s.speaker_key = v.speaker_key
                          ORDER BY s.id DESC LIMIT 1),
                         v.embedding
-                 FROM meeting_voices v WHERE v.named = 1 ORDER BY v.meeting_id",
+                 FROM meeting_voices v WHERE v.named = 1 AND v.meeting_id IS NOT ?1
+                 ORDER BY v.meeting_id",
             )?;
-            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            let rows = stmt.query_map(params![except], |r| Ok((r.get(0)?, r.get(1)?)))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()?
         };
         let mut by_name: Vec<(String, Vec<f32>, usize)> = Vec::new();
@@ -860,7 +862,7 @@ mod tests {
             Some(vec![1.0, 0.0])
         );
         assert!(
-            store.voice_profiles().unwrap().is_empty(),
+            store.voice_profiles(None).unwrap().is_empty(),
             "nothing named yet"
         );
 
@@ -868,14 +870,14 @@ mod tests {
             store.rename_speaker(id, key, "Priya").unwrap();
             store.set_voice_named(id, key, true).unwrap();
         }
-        let profiles = store.voice_profiles().unwrap();
+        let profiles = store.voice_profiles(None).unwrap();
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].name, "Priya");
         assert_eq!(profiles[0].voice, vec![0.5, 0.5]);
 
         store.rename_speaker("m2", "s1", "Asha").unwrap();
         let mut names: Vec<String> = store
-            .voice_profiles()
+            .voice_profiles(None)
             .unwrap()
             .into_iter()
             .map(|p| p.name)
@@ -884,10 +886,10 @@ mod tests {
         assert_eq!(names, vec!["Asha", "Priya"], "a correction moves the voice");
 
         store.delete("m2").unwrap();
-        assert_eq!(store.voice_profiles().unwrap().len(), 1);
+        assert_eq!(store.voice_profiles(None).unwrap().len(), 1);
         assert_eq!(store.meeting_voice("m2", "s1").unwrap(), None);
         store.forget_voices().unwrap();
-        assert!(store.voice_profiles().unwrap().is_empty());
+        assert!(store.voice_profiles(None).unwrap().is_empty());
         assert_eq!(store.meeting_voice("m1", "s2").unwrap(), None);
     }
 

@@ -87,7 +87,8 @@ mod imp {
     use objc2::runtime::Bool;
     use objc2::{sel, AnyThread};
     use objc2_event_kit::{
-        EKAuthorizationStatus, EKEntityType, EKEvent, EKEventStore, EKParticipant, EKSourceType,
+        EKAuthorizationStatus, EKEntityType, EKEvent, EKEventStore, EKParticipant,
+        EKParticipantType, EKSourceType,
     };
     use objc2_foundation::{NSDate, NSError, NSObjectProtocol};
     use std::sync::mpsc::channel;
@@ -152,6 +153,12 @@ mod imp {
                 name: p.name().map(|n| n.to_string()),
                 email,
                 is_me: p.isCurrentUser(),
+                not_person: matches!(
+                    p.participantType(),
+                    EKParticipantType::Room
+                        | EKParticipantType::Resource
+                        | EKParticipantType::Group
+                ),
             }
         }
     }

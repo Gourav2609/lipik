@@ -7,12 +7,31 @@
 use objc2::msg_send;
 use objc2::runtime::AnyObject;
 use objc2_foundation::NSRect;
+use std::time::Duration;
+use tauri::Manager;
 
 const LEFT: f64 = 16.0;
 const BAR_HEIGHT: f64 = 52.0;
 
 pub fn place(window: &tauri::Window) {
     place_in(window, BAR_HEIGHT);
+}
+
+/// A light/dark switch makes macOS lay the title bar out again a moment
+/// later, which puts the buttons back in its default spot.
+pub fn place_after_theme_change(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        for ms in [0, 60, 250] {
+            std::thread::sleep(Duration::from_millis(ms));
+            if let Some(w) = app.get_webview_window("main") {
+                place(&w.as_ref().window());
+            }
+            if let Some(w) = app.get_webview_window("notepad") {
+                crate::notepad::place_traffic_lights(&w.as_ref().window());
+            }
+        }
+    });
 }
 
 /// Same placement in a top bar `bar_height` pt tall.

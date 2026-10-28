@@ -676,6 +676,8 @@ pub fn apply_window_theme(app: &AppHandle, theme: Theme) {
         }
     }
     crate::notepad::apply_theme(app);
+    #[cfg(target_os = "macos")]
+    crate::traffic_lights::place_after_theme_change(app);
 }
 
 #[tauri::command]

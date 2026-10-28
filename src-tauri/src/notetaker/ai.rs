@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::settings::CleanupEngine;
 use crate::textflow::engine::{self, ENGINE};
 
-use super::diarize::SpeakerGuess;
+use super::diarize::{self, SpeakerGuess};
 use super::{ActionItem, Attendee, Citation, Meeting, NoteSection, NoteSummary, Segment};
 
 const CONTEXT_TOKENS: u32 = 16_384;
@@ -228,18 +228,11 @@ pub fn clock(ms: i64) -> String {
     }
 }
 
-fn attendee_names(attendees: &[Attendee]) -> Vec<String> {
-    attendees
-        .iter()
-        .filter_map(|a| a.name.clone().or_else(|| a.email.clone()))
-        .collect()
-}
-
 fn me_name(attendees: &[Attendee]) -> Option<String> {
     attendees
         .iter()
         .find(|a| a.is_me)
-        .and_then(|a| a.name.clone())
+        .and_then(diarize::display_name)
 }
 
 fn transcript_lines(segments: &[Segment]) -> Vec<String> {
@@ -308,7 +301,7 @@ fn notes_prompt(
     transcript: &str,
     part: Option<(usize, usize)>,
 ) -> String {
-    let attendees = attendee_names(&meeting.attendees);
+    let attendees = diarize::invitees(&meeting.attendees);
     // A made-up name ("Slack call") would only be copied back as the title.
     let name = if meeting.title_auto {
         "untitled; name it after what was discussed"
@@ -345,7 +338,7 @@ fn notes_prompt(
 For 'speakers', only name a 'Speaker N' when the transcript makes it clear who that is: \
 someone says their name right before they speak, or they introduce themselves. \
 'lines' are the line numbers (#index) where that name is said. Never name 'Me' or 'Them'. \
-Use names from the invite list when they match. Leave out anyone you are not sure about.\n\
+Use names from the invite list when they match, even if the transcript spells them differently. Leave out anyone you are not sure about.\n\
 Reply with JSON in this shape:\n{NOTES_SHAPE}"
     ));
     prompt
@@ -712,6 +705,32 @@ mod tests {
         assert!(!prompt.contains("Slack call"));
         let prompt = notes_prompt(&meeting("Data Standup", false), "", "#0 Me: hi", None);
         assert!(prompt.contains("Meeting: Data Standup"));
+    }
+
+    #[test]
+    fn invite_list_shows_names_not_emails_or_rooms() {
+        let person = |email: &str, is_me: bool| Attendee {
+            name: Some(email.to_string()),
+            email: Some(email.to_string()),
+            is_me,
+            ..Default::default()
+        };
+        let mut m = meeting("Data Standup", false);
+        m.attendees = vec![
+            person("priya.shah@example.com", true),
+            person("varun.kapoor@example.com", false),
+            person("kapil@example.com", false),
+            Attendee {
+                name: Some("Office-Room-7 (4)".to_string()),
+                email: Some("c_1188abc@resource.calendar.google.com".to_string()),
+                is_me: false,
+                ..Default::default()
+            },
+        ];
+        let prompt = notes_prompt(&m, "", "#0 Me: hi", None);
+        assert!(prompt.contains("'Me' is Priya Shah.\n"));
+        assert!(prompt.contains("Invited: Varun Kapoor, Kapil\n"));
+        assert!(!prompt.contains("Office"));
     }
 
     #[test]

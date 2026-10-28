@@ -223,7 +223,7 @@ const MAX_LEARNED_WORDS: usize = 5;
 const MAX_PENDING_FIXES: usize = 200;
 const MAX_DIFF_CELLS: usize = 4_000_000;
 
-pub(super) fn is_common_word(word: &str) -> bool {
+pub(crate) fn is_common_word(word: &str) -> bool {
     let lower = word.to_lowercase().replace('’', "'");
     let parts: Vec<&str> = lower.split(['-', '/']).filter(|p| !p.is_empty()).collect();
     !parts.is_empty() && parts.iter().all(|p| COMMON_WORDS.lines().any(|l| l == *p))

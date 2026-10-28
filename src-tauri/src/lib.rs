@@ -1258,6 +1258,8 @@ pub fn run(cli_args: CliArgs) {
                 log::info!("Theme changed to: {:?}", theme);
                 // Re-apply the current tray state with the new theme's icon set
                 utils::refresh_tray_icon(window.app_handle());
+                #[cfg(target_os = "macos")]
+                traffic_lights::place_after_theme_change(window.app_handle());
             }
             _ => {}
         })

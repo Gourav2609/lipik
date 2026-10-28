@@ -1672,7 +1672,11 @@ overlay_style?: OverlayStyle; pill_side?: PillSide; notetaker?: NotetakerSetting
  */
 cleanup_engine?: CleanupEngine | null }
 export type AskAnswer = { thread_id: string; question: ChatMessage; answer: ChatMessage }
-export type Attendee = { name: string | null; email: string | null; is_me: boolean }
+export type Attendee = { name: string | null; email: string | null; is_me: boolean; 
+/**
+ * A room, resource or group, as the calendar marks it.
+ */
+not_person?: boolean }
 export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoApply = { enabled: boolean; transform_id: string | null }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
