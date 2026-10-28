@@ -64,7 +64,7 @@ logo() {
   say "  ${D}लिपिक, Hindi for scribe$R"
   say ""
   type_out "  Free, open-source dictation for your Mac." "$B"
-  type_out "  Speech to text on your Mac. Nothing leaves it." "$D"
+  type_out "  Speech to text on your Mac. Your voice never leaves it." "$D"
   say ""
 }
 
@@ -150,6 +150,16 @@ download() {
   fi
 }
 
+close_lipik() {
+  osascript -e 'tell application "Lipik" to quit' >/dev/null 2>&1 || true
+  i=0
+  while pgrep -xq lipik; do
+    i=$((i + 1))
+    [ $i -gt 40 ] && return 1
+    sleep 0.25
+  done
+}
+
 check_mac() {
   [ -n "$DEMO" ] && { sleep 0.6; return 0; }
   [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = arm64 ]
@@ -212,7 +222,8 @@ logo
 step "Checking your Mac" check_mac ||
   fail "Lipik needs a Mac with Apple silicon (M1 or later)."
 if [ -z "$DEMO" ] && pgrep -xq lipik; then
-  fail "Lipik is open. Quit it first (menu bar icon, then Quit), then run this again."
+  step "Closing the open Lipik" close_lipik ||
+    fail "Couldn't close Lipik. Quit it from its menu bar icon, then run this again."
 fi
 
 step "Finding the latest version" latest_version
