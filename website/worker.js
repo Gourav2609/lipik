@@ -1,6 +1,6 @@
 // lipik.refflux.dev: the static site, plus the usage counts.
 // /api/ping   POST {id, version, os, arch}  every 3 hours from the app
-// /api/email  POST {id, email, updates}     from the setup step
+// /api/email  POST {email, updates}         from the setup step
 // /api/stats  GET                           counts for /stats (no emails)
 // /api/admin/emails  GET, Authorization: Bearer ADMIN_KEY
 // /install.sh is counted, then served from the static files.
@@ -8,7 +8,7 @@
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const VERSION = /^\d{1,3}\.\d{1,3}\.\d{1,3}[0-9A-Za-z.-]{0,16}$/;
-const OS = /^\d{1,2}(\.\d{1,3}){0,2}$/;
+const OS = /^\d{1,2}(\.\d{1,5}){0,3}$/;
 const ARCH = new Set(["arm64", "x86_64"]);
 const EMAIL = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -26,14 +26,30 @@ const json = (body, status = 200) =>
     },
   });
 
+// JSON only: a web page can't send this content type to another site
+// without asking first, so pages can't post on someone's behalf.
 async function readBody(request) {
-  if (Number(request.headers.get("content-length") || 0) > 2048) return null;
+  if (
+    !(request.headers.get("content-type") || "").startsWith("application/json")
+  ) {
+    return null;
+  }
+  const text = await request.text();
+  if (text.length > 2048) return null;
   try {
-    return await request.json();
+    return JSON.parse(text);
   } catch {
     return null;
   }
 }
+
+// Requests per minute from one address; the address is used for this and not kept.
+const limited = async (request, env) => {
+  if (!env.LIMIT) return false;
+  const key = request.headers.get("cf-connecting-ip") || "unknown";
+  const { success } = await env.LIMIT.limit({ key });
+  return !success;
+};
 
 async function ping(request, env) {
   const b = await readBody(request);
@@ -46,7 +62,22 @@ async function ping(request, env) {
   ) {
     return json({ ok: false }, 400);
   }
+  if (await limited(request, env)) return json({ ok: false }, 429);
   const day = today();
+  // A check-in within the hour on the same day changes nothing worth a write.
+  const seen = await env.DB.prepare(
+    "SELECT last_day, last_seen, version FROM installs WHERE id = ?1",
+  )
+    .bind(b.id)
+    .first();
+  if (
+    seen &&
+    seen.last_day === day &&
+    seen.version === b.version &&
+    Date.now() - seen.last_seen < 3600_000
+  ) {
+    return json({ ok: true });
+  }
   const country = String(request.cf?.country || "").slice(0, 2) || "??";
   await env.DB.batch([
     env.DB.prepare(
@@ -66,21 +97,18 @@ async function email(request, env) {
   const address = String(b?.email || "")
     .trim()
     .toLowerCase();
-  if (
-    !b ||
-    !UUID.test(b.id || "") ||
-    address.length > 254 ||
-    !EMAIL.test(address)
-  ) {
+  if (!b || address.length > 254 || !EMAIL.test(address)) {
     return json({ ok: false }, 400);
   }
+  if (await limited(request, env)) return json({ ok: false }, 429);
+  // Only ever adds: nobody can turn someone else's emails off from here.
   const day = today();
   await env.DB.prepare(
     `INSERT INTO emails (email, install_id, updates, first_day, last_day)
-     VALUES (?1, ?2, ?3, ?4, ?4)
-     ON CONFLICT (email) DO UPDATE SET install_id = ?2, updates = ?3, last_day = ?4`,
+     VALUES (?1, '', 1, ?2, ?2)
+     ON CONFLICT (email) DO UPDATE SET last_day = ?2`,
   )
-    .bind(address, b.id, b.updates ? 1 : 0, day)
+    .bind(address, day)
     .run();
   return json({ ok: true });
 }
@@ -205,7 +233,11 @@ export default {
       console.error(e);
       return json({ ok: false }, 500);
     }
-    if (pathname === "/install.sh" && method === "GET") {
+    if (
+      pathname === "/install.sh" &&
+      method === "GET" &&
+      !(await limited(request, env))
+    ) {
       ctx.waitUntil(countInstaller(env).catch((e) => console.error(e)));
     }
     return env.ASSETS.fetch(request);

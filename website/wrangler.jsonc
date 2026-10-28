@@ -15,5 +15,12 @@
       "migrations_dir": "migrations",
     },
   ],
+  "ratelimits": [
+    {
+      "name": "LIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 20, "period": 60 },
+    },
+  ],
   "routes": [{ "pattern": "lipik.refflux.dev", "custom_domain": true }],
 }
