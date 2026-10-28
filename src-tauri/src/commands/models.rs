@@ -107,7 +107,9 @@ pub async fn delete_model(
         // The UI only shows a generic failure toast, so the cause has to be logged.
         error!("Model delete failed for {}: {}", model_id, e);
         e.to_string()
-    })
+    })?;
+    crate::notetaker::note_model_declined(&app_handle, &model_id);
+    Ok(())
 }
 
 /// Shared logic for switching the active model, used by both the Tauri command
@@ -221,10 +223,13 @@ pub async fn is_model_loading(
 #[tauri::command]
 #[specta::specta]
 pub async fn cancel_download(
+    app_handle: AppHandle,
     model_manager: State<'_, Arc<ModelManager>>,
     model_id: String,
 ) -> Result<(), String> {
     model_manager
         .cancel_download(&model_id)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    crate::notetaker::note_model_declined(&app_handle, &model_id);
+    Ok(())
 }

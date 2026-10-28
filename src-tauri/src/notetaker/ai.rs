@@ -17,6 +17,8 @@ const PART_TOKENS: usize = 9_000;
 /// "My notes" sent with each summary call.
 const THOUGHTS_CHARS: usize = 4_000;
 const ASK_CONTEXT_CHARS: usize = 24_000;
+/// Longest wait for one short plain-text reply.
+const TEXT_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Shown while the built-in model downloads; notes are written once it lands.
 pub const NOTES_WAIT_FOR_MODEL: &str =
@@ -77,6 +79,29 @@ impl Model {
             }
             Model::Builtin { .. } => None,
         }
+    }
+
+    /// A plain-text reply to one user message, within 20 s. Asking for JSON
+    /// made the model translate Hinglish lines into English far more often.
+    pub(super) fn chat_text(&self, user: &str) -> Result<String> {
+        let path = match self {
+            Model::Ollama(ollama) => return ollama.chat_text(user),
+            Model::Builtin { path, .. } => path,
+        };
+        let body = engine::chat_body(&[json!({ "role": "user", "content": user })], None);
+        let content = tauri::async_runtime::block_on(async {
+            let request = async {
+                let conn = ENGINE.ensure(path, CONTEXT_TOKENS).await?;
+                let reply = engine::post_chat(&conn, &body, false).await;
+                ENGINE.touch();
+                reply
+            };
+            tokio::time::timeout(TEXT_TIMEOUT, request)
+                .await
+                .map_err(|_| "The AI model took longer than 20 seconds".to_string())?
+        })
+        .map_err(|e| anyhow!(e))?;
+        Ok(without_thinking(&content).to_string())
     }
 
     fn chat_json(&self, system: &str, user: &str) -> Result<Value> {
@@ -169,6 +194,34 @@ impl Ollama {
         })
     }
 
+    fn chat_text(&self, user: &str) -> Result<String> {
+        let body = json!({
+            "model": self.model,
+            "stream": false,
+            "think": false,
+            "options": { "temperature": 0.2 },
+            "messages": [{ "role": "user", "content": user }],
+        });
+        let url = format!("{}/api/chat", self.url);
+        let response: Value = tauri::async_runtime::block_on(async {
+            let client = reqwest::Client::builder().timeout(TEXT_TIMEOUT).build()?;
+            let response = client.post(&url).json(&body).send().await?;
+            let status = response.status();
+            let value: Value = response.json().await?;
+            if !status.is_success() {
+                bail!(
+                    "Ollama returned {status}: {}",
+                    value["error"].as_str().unwrap_or("unknown error")
+                );
+            }
+            Ok::<Value, anyhow::Error>(value)
+        })?;
+        let content = response["message"]["content"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Ollama sent no message"))?;
+        Ok(without_thinking(content).to_string())
+    }
+
     fn chat_json(&self, system: &str, user: &str) -> Result<Value> {
         let body = json!({
             "model": self.model,
@@ -207,11 +260,15 @@ impl Ollama {
     }
 }
 
-fn parse_json_reply(content: &str) -> Result<Value> {
-    let text = match content.find("</think>") {
+fn without_thinking(content: &str) -> &str {
+    match content.find("</think>") {
         Some(end) => &content[end + "</think>".len()..],
         None => content,
-    };
+    }
+}
+
+fn parse_json_reply(content: &str) -> Result<Value> {
+    let text = without_thinking(content);
     let start = text.find('{').ok_or_else(|| anyhow!("Reply had no JSON"))?;
     let end = text
         .rfind('}')

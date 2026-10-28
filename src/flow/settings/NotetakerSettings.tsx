@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   commands,
   type CalendarAccess,
+  type MeetingLanguage,
   type NotetakerSettings as Settings,
 } from "@/bindings";
 import { Button, Toggle } from "../ui";
@@ -35,6 +36,7 @@ const DEFAULTS: Settings = {
   max_recording_minutes: 120,
   ollama_url: "http://127.0.0.1:11434",
   ollama_model: "qwen3:8b",
+  language: "auto",
 };
 
 const NOTIFY_OPTIONS = [
@@ -45,6 +47,19 @@ const NOTIFY_OPTIONS = [
   { value: "300", label: "5 min" },
   { value: "600", label: "10 min" },
 ];
+
+const LANGUAGE_OPTIONS = [
+  { value: "auto", label: "Auto" },
+  { value: "english", label: "English" },
+  { value: "hinglish", label: "Hinglish" },
+];
+
+const LANGUAGE_TEXT: Record<MeetingLanguage, string> = {
+  auto: "Listens for Hindi in each meeting and keeps Hindi words and names when it hears them.",
+  english: "Every meeting is transcribed as English.",
+  hinglish:
+    "Every meeting keeps Hindi words and names, written in Roman letters.",
+};
 
 const LENGTH_OPTIONS = [
   { value: "30", label: "30 min" },
@@ -353,6 +368,19 @@ export default function NotetakerSettings() {
                 checked={s.detect_calls && s.auto_start}
                 disabled={loading || !s.detect_calls}
                 onChange={(on) => update({ auto_start: on })}
+              />
+            }
+          />
+          <SettingRow
+            title="Meeting language"
+            description={LANGUAGE_TEXT[s.language]}
+            control={
+              <Select
+                label="Meeting language"
+                value={s.language}
+                options={LANGUAGE_OPTIONS}
+                disabled={loading}
+                onChange={(v) => update({ language: v as MeetingLanguage })}
               />
             }
           />

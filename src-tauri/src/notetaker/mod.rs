@@ -12,6 +12,8 @@ pub mod commands;
 mod coreaudio;
 mod detect;
 mod diarize;
+mod echo;
+mod hinglish;
 mod live;
 pub mod mcp;
 mod store;
@@ -45,6 +47,19 @@ pub struct NotetakerSettings {
     pub max_recording_minutes: u32,
     pub ollama_url: String,
     pub ollama_model: String,
+    /// What people speak in meetings; Hinglish keeps Hindi words and names
+    /// in the final transcript.
+    pub language: MeetingLanguage,
+}
+
+/// `Auto` decides per meeting by listening for Hindi; see `hinglish`.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MeetingLanguage {
+    #[default]
+    Auto,
+    English,
+    Hinglish,
 }
 
 impl Default for NotetakerSettings {
@@ -56,6 +71,7 @@ impl Default for NotetakerSettings {
             max_recording_minutes: 120,
             ollama_url: "http://127.0.0.1:11434".to_string(),
             ollama_model: "qwen3:8b".to_string(),
+            language: MeetingLanguage::default(),
         }
     }
 }
@@ -336,6 +352,10 @@ pub enum ProcessingStage {
     Speakers,
     Transcribing,
     Summarizing,
+    /// Hindi was heard: the Hinglish speech model is being fetched, or the
+    /// meeting is being transcribed and its notes written again with it.
+    /// The meeting keeps its transcript and notes until then.
+    Improving,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, tauri_specta::Event)]
@@ -393,6 +413,15 @@ pub struct NotetakerManager {
     /// session lock (a permission prompt can keep a device open waiting).
     starting: StartGate,
     processing: Mutex<Vec<String>>,
+    /// Meetings being redone with the Hinglish speech model.
+    improving: Mutex<Vec<String>>,
+    /// Meetings deleted while being redone; the redo stops.
+    cancelled: Mutex<Vec<String>>,
+    /// Meetings whose redo waits for the Hinglish model download.
+    fetch_waiters: Mutex<Vec<String>>,
+    /// Whether a redo started that download (no one else was downloading
+    /// the model then), so a delete may cancel it.
+    fetch_ours: AtomicBool,
     calls: Mutex<Vec<DetectedCall>>,
 }
 
@@ -552,6 +581,10 @@ impl NotetakerManager {
             session: Mutex::new(None),
             starting: StartGate::default(),
             processing: Mutex::new(Vec::new()),
+            improving: Mutex::new(Vec::new()),
+            cancelled: Mutex::new(Vec::new()),
+            fetch_waiters: Mutex::new(Vec::new()),
+            fetch_ours: AtomicBool::new(false),
             calls: Mutex::new(Vec::new()),
         }))
     }
@@ -1045,12 +1078,19 @@ impl NotetakerManager {
                 background_priority();
                 let id = thread_id;
                 let _ = this.store.add_process_attempt(&id);
-                if let Err(e) = this.process(&id, transcribe) {
-                    log::error!("Notetaker processing of {id} failed: {e}");
-                    this.fail(&id, &e.to_string());
-                }
+                let wants_hinglish = match this.process(&id, transcribe) {
+                    Ok(wants) => wants,
+                    Err(e) => {
+                        log::error!("Notetaker processing of {id} failed: {e}");
+                        this.fail(&id, &e.to_string());
+                        false
+                    }
+                };
                 let _ = this.store.clear_process_attempts(&id);
                 this.processing.lock().unwrap().retain(|m| m != &id);
+                if wants_hinglish {
+                    this.improve_with_hinglish(id);
+                }
             });
         if let Err(e) = spawned {
             self.processing.lock().unwrap().retain(|m| m != &id);
@@ -1061,27 +1101,40 @@ impl NotetakerManager {
     }
 
     /// Final transcript of both streams (when `transcribe`), then notes.
-    fn process(&self, id: &str, transcribe: bool) -> Result<()> {
+    /// True when Hindi was likely spoken but the Hinglish speech model isn't
+    /// on this Mac: the caller fetches it and redoes the meeting.
+    fn process(&self, id: &str, transcribe: bool) -> Result<bool> {
         let meeting = self
             .store
             .meeting(id)?
             .ok_or_else(|| anyhow!("Meeting {id} is gone"))?;
         let dir = self.meeting_dir(id);
+        let language = settings(&self.app).language;
+        let improving = self.improving.lock().unwrap().iter().any(|m| m == id);
+        let mut wants_hinglish = false;
 
-        if transcribe {
+        if transcribe && improving {
+            if !self.redo_in_hinglish(id, &meeting, &dir, language)? {
+                return Ok(false);
+            }
+        } else if transcribe {
             let system_wav = dir.join("system.wav");
-            let heard_call = self
-                .store
-                .segments(id)?
-                .iter()
-                .any(|s| s.source == "system");
+            let live = self.store.segments(id)?;
+            let heard_call = live.iter().any(|s| s.source == "system");
+            let hinglish = if language != MeetingLanguage::English {
+                hinglish::engine(&self.app)
+            } else {
+                None
+            };
             let speakers = (system_wav.exists() && heard_call)
                 .then(|| self.find_speakers(id, &system_wav))
                 .flatten();
+            let cleaned_mic = dir.join(CLEANED_MIC);
+            let _ = std::fs::remove_file(&cleaned_mic);
             let sources = [
                 (
                     "mic",
-                    dir.join("mic.wav"),
+                    mic_for_transcript(&dir, &meeting, &cleaned_mic),
                     meeting.mic_offset_ms.unwrap_or(0),
                 ),
                 (
@@ -1091,20 +1144,46 @@ impl NotetakerManager {
                 ),
             ];
             let present: Vec<_> = sources.iter().filter(|(_, p, _)| p.exists()).collect();
+            let hinglish = hinglish.filter(|engine| {
+                if language == MeetingLanguage::Hinglish {
+                    return true;
+                }
+                let streams: Vec<(&str, &std::path::Path, i64)> = present
+                    .iter()
+                    .map(|(s, p, o)| (*s, p.as_path(), *o))
+                    .collect();
+                let share = transcribe::hindi_in_sample(&live, &streams, |audio| {
+                    transcribe::transcribe_side(&self.app, engine, audio)
+                });
+                log::info!("Notetaker heard {share:.2} Hindi words in a sample of {id}");
+                share >= hinglish::PROBE_HINDI
+            });
             let mut results: Vec<(&str, Vec<Segment>)> = Vec::new();
             let mut failed = None;
             for (n, (source, path, offset)) in present.iter().enumerate() {
                 let parts = present.len() as f32;
+                let scale = if hinglish.is_some() {
+                    HEARING_SHARE
+                } else {
+                    1.0
+                };
                 let emit = |fraction: f32| {
-                    let _ = NotetakerProcessing {
-                        meeting_id: id.to_string(),
-                        stage: ProcessingStage::Transcribing,
-                        progress: (n as f32 + fraction) / parts,
-                    }
-                    .emit(&self.app);
+                    self.emit_stage(
+                        id,
+                        ProcessingStage::Transcribing,
+                        scale * (n as f32 + fraction) / parts,
+                    )
                 };
                 let split = speakers.as_ref().filter(|_| *source == "system");
-                match transcribe::transcribe_file(&self.app, path, *offset, source, split, emit) {
+                match transcribe::transcribe_file(
+                    &self.app,
+                    path,
+                    *offset,
+                    source,
+                    split,
+                    hinglish.as_ref(),
+                    emit,
+                ) {
                     Ok(segments) => results.push((*source, segments)),
                     Err(e) => {
                         failed = Some(e);
@@ -1113,6 +1192,9 @@ impl NotetakerManager {
                 }
             }
             transcribe::release_model(&self.app);
+            let _ = std::fs::remove_file(&cleaned_mic);
+            let used_hinglish = hinglish.is_some();
+            drop(hinglish);
             match failed {
                 None => {
                     let (mut mic, mut system) = (Vec::new(), Vec::new());
@@ -1124,6 +1206,17 @@ impl NotetakerManager {
                         }
                     }
                     let mut merged = transcribe::merge_streams(mic, system);
+                    let mut names = diarize::invitees(&meeting.attendees);
+                    names.extend(own_names_in(&meeting));
+                    if used_hinglish {
+                        self.romanize(id, &meeting, &mut merged, &names);
+                    } else if language != MeetingLanguage::English
+                        && hinglish::downloaded_model(&self.app).is_none()
+                    {
+                        wants_hinglish = language == MeetingLanguage::Hinglish
+                            || (!self.dir.join(HINGLISH_MODEL_DELETED).exists()
+                                && hinglish::hindi_likely(&merged, &names));
+                    }
                     if let Some(speakers) = &speakers {
                         self.name_known_speakers(id, &meeting, speakers, &mut merged);
                     }
@@ -1147,18 +1240,284 @@ impl NotetakerManager {
             .emit(&self.app);
         }
         self.store.set_status(id, MeetingStatus::Ready)?;
-        self.write_notes(id)
+        self.write_notes(id)?;
+        Ok(wants_hinglish)
+    }
+
+    /// The meeting's lines heard again by the Hinglish speech model, line by
+    /// line, so every line keeps its speaker and every name the user gave
+    /// stays (renames made meanwhile included). Lines it hears nothing in
+    /// keep their text.
+    /// Under Auto it first samples the meeting like a meeting with the model
+    /// already on the Mac does; when that hears too little Hindi (the English
+    /// transcript only looked like Hindi), nothing changes and it returns
+    /// false.
+    fn redo_in_hinglish(
+        &self,
+        id: &str,
+        meeting: &Meeting,
+        dir: &std::path::Path,
+        language: MeetingLanguage,
+    ) -> Result<bool> {
+        let side = hinglish::engine(&self.app)
+            .ok_or_else(|| anyhow!("The Hinglish speech model did not load"))?;
+        let lines = self.store.segments(id)?;
+        let cleaned_mic = dir.join(CLEANED_MIC);
+        let _ = std::fs::remove_file(&cleaned_mic);
+        let mic = mic_for_transcript(dir, meeting, &cleaned_mic);
+        let system = dir.join("system.wav");
+        let streams = [
+            ("mic", mic.as_path(), meeting.mic_offset_ms.unwrap_or(0)),
+            (
+                "system",
+                system.as_path(),
+                meeting.system_offset_ms.unwrap_or(0),
+            ),
+        ];
+        if language != MeetingLanguage::Hinglish {
+            let share = transcribe::hindi_in_sample(&lines, &streams, |audio| {
+                transcribe::transcribe_side(&self.app, &side, audio)
+            });
+            log::info!(
+                "Notetaker heard {share:.2} Hindi words in a sample of {id} before redoing it"
+            );
+            if share < hinglish::PROBE_HINDI {
+                let _ = std::fs::remove_file(&cleaned_mic);
+                return Ok(false);
+            }
+        }
+        let mut redone = transcribe::redo_lines(
+            &lines,
+            &streams,
+            hinglish::RULES,
+            || transcribe::new_scorer(&self.app),
+            |audio| transcribe::transcribe_side(&self.app, &side, audio),
+            |fraction| {
+                self.emit_stage(id, ProcessingStage::Transcribing, HEARING_SHARE * fraction);
+                !self.cancelled(id)
+            },
+        );
+        let _ = std::fs::remove_file(&cleaned_mic);
+        drop(side);
+        if self.cancelled(id) {
+            return Err(anyhow!("cancelled"));
+        }
+        let mut names = diarize::invitees(&meeting.attendees);
+        names.extend(own_names_in(meeting));
+        self.romanize(id, meeting, &mut redone, &names);
+        {
+            let _renames_wait = self.improving.lock().unwrap();
+            if self.cancelled(id) {
+                return Err(anyhow!("cancelled"));
+            }
+            keep_labels(&mut redone, &self.store.segments(id)?);
+            self.store.replace_final_segments(id, &redone)?;
+        }
+        let _ = NotetakerTranscript {
+            meeting_id: id.to_string(),
+            segments: self.store.segments(id)?,
+            replace: true,
+        }
+        .emit(&self.app);
+        Ok(true)
+    }
+
+    /// Lines with Devanagari in Roman letters, with progress, within
+    /// `hinglish::romanize_time` of the meeting's length; a delete stops it.
+    fn romanize(&self, id: &str, meeting: &Meeting, lines: &mut [Segment], names: &[String]) {
+        let model = ai::Model::for_app(&self.app);
+        let model = model.unavailable_reason().is_none().then_some(&model);
+        let length = meeting.end_ms.unwrap_or(meeting.start_ms) - meeting.start_ms;
+        hinglish::romanize(
+            model,
+            lines,
+            names,
+            hinglish::romanize_time(length),
+            |done| {
+                let progress = HEARING_SHARE + (1.0 - HEARING_SHARE) * done;
+                self.emit_stage(id, ProcessingStage::Transcribing, progress);
+                !self.cancelled(id)
+            },
+        );
+    }
+
+    /// Takes a deleted meeting off the Hinglish model download. True when the
+    /// download is now useless: a redo started it and no other waits for it.
+    fn leave_download(&self, id: &str) -> bool {
+        leave(
+            &mut self.fetch_waiters.lock().unwrap(),
+            id,
+            self.fetch_ours.load(Ordering::Relaxed),
+        )
+    }
+
+    /// Whether Auto may fetch the Hinglish model: the user never deleted it
+    /// nor cancelled its download.
+    fn may_fetch_model(&self) -> bool {
+        settings(&self.app).language == MeetingLanguage::Hinglish
+            || hinglish::downloaded_model(&self.app).is_some()
+            || !self.dir.join(HINGLISH_MODEL_DELETED).exists()
+    }
+
+    /// Whether the meeting was deleted while it was being redone.
+    fn cancelled(&self, id: &str) -> bool {
+        self.cancelled.lock().unwrap().iter().any(|m| m == id)
+    }
+
+    fn emit_stage(&self, id: &str, stage: ProcessingStage, progress: f32) {
+        let improving = self.improving.lock().unwrap().iter().any(|m| m == id);
+        let _ = NotetakerProcessing {
+            meeting_id: id.to_string(),
+            stage: if improving {
+                ProcessingStage::Improving
+            } else {
+                stage
+            },
+            progress,
+        }
+        .emit(&self.app);
+    }
+
+    /// Fetches the Hinglish speech model without asking, then transcribes
+    /// the meeting again with it, names its speakers again and rewrites its
+    /// notes. Until that is done the meeting keeps what it has.
+    fn improve_with_hinglish(self: &Arc<Self>, id: String) {
+        let marker = self.meeting_dir(&id).join(HINGLISH_REDO);
+        if !self.may_fetch_model() {
+            log::info!("Notetaker: the Hinglish model was declined, not redoing {id}");
+            let _ = std::fs::remove_file(&marker);
+            return;
+        }
+        let tries = std::fs::read_to_string(&marker)
+            .ok()
+            .and_then(|t| t.trim().parse::<u32>().ok())
+            .unwrap_or(0);
+        if tries >= MAX_HINGLISH_TRIES {
+            log::warn!("Notetaker gave up redoing {id} in Hinglish after {tries} tries");
+            let _ = std::fs::remove_file(&marker);
+            return;
+        }
+        {
+            let mut improving = self.improving.lock().unwrap();
+            if improving.contains(&id) {
+                return;
+            }
+            improving.push(id.clone());
+        }
+        if let Err(e) = std::fs::write(&marker, (tries + 1).to_string()) {
+            log::warn!("Notetaker could not note the Hinglish redo of {id}: {e}");
+        }
+        let this = self.clone();
+        let thread_id = id.clone();
+        let spawned = std::thread::Builder::new()
+            .name("notetaker-hinglish".into())
+            .spawn(move || {
+                background_priority();
+                let id = thread_id;
+                log::info!(
+                    "Notetaker: Hindi heard in {id}, fetching {}",
+                    hinglish::DOWNLOAD
+                );
+                match this.redo_with_hinglish(&id) {
+                    Ok(()) => {
+                        let _ = std::fs::remove_file(this.meeting_dir(&id).join(HINGLISH_REDO));
+                    }
+                    Err(e) => {
+                        log::warn!("Notetaker could not redo {id} in Hinglish: {e}");
+                        if !this.may_fetch_model() {
+                            let _ = std::fs::remove_file(this.meeting_dir(&id).join(HINGLISH_REDO));
+                        }
+                    }
+                }
+                this.improving.lock().unwrap().retain(|m| m != &id);
+                this.cancelled.lock().unwrap().retain(|m| m != &id);
+                if let Ok(Some(m)) = this.store.meeting(&id) {
+                    let _ = NotetakerNoteReady {
+                        meeting_id: id.clone(),
+                        summary_status: m.summary_status,
+                        summary_error: m.summary_error,
+                    }
+                    .emit(&this.app);
+                }
+            });
+        if let Err(e) = spawned {
+            log::warn!("Notetaker could not start the Hinglish pass: {e}");
+            self.improving.lock().unwrap().retain(|m| m != &id);
+        }
+    }
+
+    fn redo_with_hinglish(&self, id: &str) -> Result<()> {
+        let models = self
+            .app
+            .try_state::<Arc<crate::managers::model::ModelManager>>()
+            .ok_or_else(|| anyhow!("Models are not ready"))?
+            .inner()
+            .clone();
+        let info = models
+            .get_model_info(hinglish::DOWNLOAD)
+            .ok_or_else(|| anyhow!("{} is not in the catalog", hinglish::DOWNLOAD))?;
+        if !info.is_downloaded {
+            let needed = info.size_mb * 1_000_000 + crate::textflow::cleanup_model::SPARE_DISK;
+            let free = crate::textflow::cleanup_model::free_disk(&self.dir);
+            if free.is_some_and(|free| free < needed) {
+                return Err(anyhow!(
+                    "not enough free disk for {} ({} MB free, {} MB needed)",
+                    hinglish::DOWNLOAD,
+                    free.unwrap_or(0) / 1_000_000,
+                    needed / 1_000_000
+                ));
+            }
+        }
+        {
+            let mut waiters = self.fetch_waiters.lock().unwrap();
+            if waiters.is_empty() {
+                self.fetch_ours
+                    .store(!info.is_downloading, Ordering::Relaxed);
+            }
+            waiters.push(id.to_string());
+        }
+        let fetching = Arc::new(AtomicBool::new(true));
+        let ticker = {
+            let (app, id, fetching) = (self.app.clone(), id.to_string(), fetching.clone());
+            std::thread::spawn(move || {
+                while fetching.load(Ordering::Relaxed) {
+                    let _ = NotetakerProcessing {
+                        meeting_id: id.clone(),
+                        stage: ProcessingStage::Improving,
+                        progress: 0.0,
+                    }
+                    .emit(&app);
+                    std::thread::sleep(Duration::from_secs(3));
+                }
+            })
+        };
+        let fetched = tauri::async_runtime::block_on(models.download_model(hinglish::DOWNLOAD));
+        self.fetch_waiters.lock().unwrap().retain(|m| m != id);
+        fetching.store(false, Ordering::Relaxed);
+        let _ = ticker.join();
+        fetched?;
+        loop {
+            if self.cancelled(id) {
+                return Err(anyhow!("cancelled"));
+            }
+            {
+                let mut processing = self.processing.lock().unwrap();
+                if !processing.iter().any(|m| m == id) {
+                    processing.push(id.to_string());
+                    break;
+                }
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
+        let result = self.process(id, true).map(|_| ());
+        self.processing.lock().unwrap().retain(|m| m != id);
+        result
     }
 
     /// Splits the call audio by voice. Any failure (no models, offline on
     /// first use, a crash in the model) keeps one "Them" for the call.
     fn find_speakers(&self, id: &str, wav: &std::path::Path) -> Option<diarize::Speakers> {
-        let _ = NotetakerProcessing {
-            meeting_id: id.to_string(),
-            stage: ProcessingStage::Speakers,
-            progress: 0.0,
-        }
-        .emit(&self.app);
+        self.emit_stage(id, ProcessingStage::Speakers, 0.0);
         let started = Instant::now();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             diarize::detect(&self.app, wav)
@@ -1232,15 +1591,11 @@ impl NotetakerManager {
         if let Some(reason) = model.unavailable_reason() {
             return finish(SummaryStatus::Unavailable, Some(reason));
         }
-        let _ = NotetakerProcessing {
-            meeting_id: id.to_string(),
-            stage: ProcessingStage::Summarizing,
-            progress: 0.0,
-        }
-        .emit(&self.app);
+        self.emit_stage(id, ProcessingStage::Summarizing, 0.0);
 
         let thoughts = self.store.thoughts(id)?;
         match ai::summarize(&model, &meeting, &thoughts, &segments) {
+            Ok(_) if self.cancelled(id) => Ok(()),
             Ok((summary, guesses)) => {
                 let own = self.own_names(&meeting);
                 let invited = diarize::invitees(&meeting.attendees);
@@ -1326,6 +1681,7 @@ impl NotetakerManager {
     /// from their WAV files. One whose processing was cut off twice is marked
     /// failed instead, in case it is what stops the app.
     pub fn resume_unfinished(self: &Arc<Self>) {
+        remove_cleaned_mics(&self.dir, &self.processing.lock().unwrap());
         let Ok(unfinished) = self
             .store
             .meetings_with_status(&[MeetingStatus::Recording, MeetingStatus::Processing])
@@ -1351,6 +1707,14 @@ impl NotetakerManager {
             log::info!("Notetaker finishing interrupted meeting {}", m.id);
             let _ = self.store.set_status(&m.id, MeetingStatus::Processing);
             let _ = self.process_in_background(m.id, true);
+        }
+    }
+
+    /// Hinglish redos cut off by a quit start again.
+    pub fn resume_hinglish_redos(self: &Arc<Self>) {
+        for id in redos_left(&self.dir) {
+            log::info!("Notetaker resuming the Hinglish redo of {id}");
+            self.improve_with_hinglish(id);
         }
     }
 
@@ -1391,7 +1755,9 @@ impl NotetakerManager {
         if name.is_empty() {
             return Err(anyhow!("The name can't be empty"));
         }
-        if self.processing.lock().unwrap().iter().any(|m| m == id) {
+        let improving = self.improving.lock().unwrap();
+        let redoing = improving.iter().any(|m| m == id);
+        if !redoing && self.processing.lock().unwrap().iter().any(|m| m == id) {
             return Err(anyhow!("Speakers can be named once the notes are written"));
         }
         self.store.rename_speaker(id, speaker_key, name)?;
@@ -1401,6 +1767,7 @@ impl NotetakerManager {
         {
             log::warn!("Notetaker could not remember a voice: {e}");
         }
+        drop(improving);
         let _ = NotetakerTranscript {
             meeting_id: id.to_string(),
             segments: self.store.segments(id)?,
@@ -1430,7 +1797,29 @@ impl NotetakerManager {
 
     pub fn delete(self: &Arc<Self>, id: &str) -> Result<()> {
         let _ = self.stop_inner(Some(id), false);
-        if self.processing.lock().unwrap().iter().any(|m| m == id) {
+        let redoing = {
+            let improving = self.improving.lock().unwrap();
+            let redoing = improving.iter().any(|m| m == id);
+            if redoing {
+                self.cancelled.lock().unwrap().push(id.to_string());
+            }
+            redoing
+        };
+        if redoing {
+            if self.leave_download(id) {
+                if let Some(models) = self
+                    .app
+                    .try_state::<Arc<crate::managers::model::ModelManager>>()
+                {
+                    if models
+                        .get_model_info(hinglish::DOWNLOAD)
+                        .is_some_and(|m| m.is_downloading)
+                    {
+                        let _ = models.cancel_download(hinglish::DOWNLOAD);
+                    }
+                }
+            }
+        } else if self.processing.lock().unwrap().iter().any(|m| m == id) {
             return Err(anyhow!("This meeting is still being processed"));
         }
         self.store.delete(id)?;
@@ -1561,6 +1950,116 @@ impl NotetakerManager {
 
     pub fn chat_messages(&self, thread_id: &str) -> Result<Vec<ChatMessage>> {
         self.store.chat_messages(thread_id)
+    }
+}
+
+/// The mic recording with the call taken out, kept only while it is being
+/// transcribed.
+const CLEANED_MIC: &str = "mic-no-echo.wav";
+/// In a meeting's folder while it waits to be redone in Hinglish; holds how
+/// many times the redo was started.
+const HINGLISH_REDO: &str = "hinglish-redo";
+const MAX_HINGLISH_TRIES: u32 = 3;
+/// In the notetaker folder once the user deleted a Hinglish speech model or
+/// cancelled its download: Auto never downloads one again (choosing
+/// Hinglish still does).
+const HINGLISH_MODEL_DELETED: &str = "hinglish-model-deleted";
+/// Share of the progress bar for hearing the audio in a Hinglish pass; the
+/// rest is writing it in Roman letters.
+const HEARING_SHARE: f32 = 0.8;
+
+/// Remembers that the user deleted a Hinglish speech model or cancelled its
+/// download.
+pub fn note_model_declined(app: &AppHandle, model_id: &str) {
+    if !hinglish::MODELS.contains(&model_id) {
+        return;
+    }
+    if let Ok(dir) = crate::portable::app_data_dir(app) {
+        let _ = std::fs::write(dir.join("notetaker").join(HINGLISH_MODEL_DELETED), model_id);
+    }
+}
+
+/// Takes `id` off `waiters`; true when it waited on a download a redo
+/// started (`ours`) and nobody waits any more.
+fn leave(waiters: &mut Vec<String>, id: &str, ours: bool) -> bool {
+    let was_waiting = waiters.iter().any(|m| m == id);
+    waiters.retain(|m| m != id);
+    was_waiting && waiters.is_empty() && ours
+}
+
+/// Meetings whose Hinglish redo has not finished.
+fn redos_left(root: &std::path::Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut ids: Vec<String> = entries
+        .flatten()
+        .filter(|e| e.path().join(HINGLISH_REDO).is_file())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// Every line takes the label its speaker has in `current`, so names the
+/// user gave stay.
+fn keep_labels(lines: &mut [Segment], current: &[Segment]) {
+    let mut labels: std::collections::HashMap<&str, &str> = Default::default();
+    for s in current {
+        labels
+            .entry(s.speaker_key.as_str())
+            .or_insert(s.speaker.as_str());
+    }
+    for line in lines {
+        if let Some(label) = labels.get(line.speaker_key.as_str()) {
+            line.speaker = label.to_string();
+        }
+    }
+}
+
+/// Deletes cleaned mic copies left by a crash, except in meetings `busy` being
+/// processed.
+fn remove_cleaned_mics(root: &std::path::Path, busy: &[String]) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if busy.iter().any(|id| name.to_str() == Some(id)) {
+            continue;
+        }
+        let _ = std::fs::remove_file(entry.path().join(CLEANED_MIC));
+    }
+}
+
+/// mic.wav without the call it heard from the speakers, written to `cleaned`;
+/// mic.wav itself when it heard none or that fails.
+fn mic_for_transcript(
+    dir: &std::path::Path,
+    meeting: &Meeting,
+    cleaned: &std::path::Path,
+) -> PathBuf {
+    let (mic, system) = (dir.join("mic.wav"), dir.join("system.wav"));
+    if !mic.exists() || !system.exists() {
+        return mic;
+    }
+    let mic_starts_later =
+        meeting.mic_offset_ms.unwrap_or(0) - meeting.system_offset_ms.unwrap_or(0);
+    match echo::remove_call_echo(&mic, &system, mic_starts_later, cleaned) {
+        Ok(Some(r)) => {
+            log::info!(
+                "Notetaker took the call out of the mic: {:.0} ms delay, heard in {} windows",
+                r.delay_ms,
+                r.windows
+            );
+            cleaned.to_path_buf()
+        }
+        Ok(None) => mic,
+        Err(e) => {
+            log::warn!("Notetaker could not take the call out of the mic: {e}");
+            let _ = std::fs::remove_file(cleaned);
+            mic
+        }
     }
 }
 
@@ -1706,6 +2205,7 @@ pub fn init(app: &AppHandle) {
         Ok(manager) => {
             app.manage(manager.clone());
             manager.resume_unfinished();
+            manager.resume_hinglish_redos();
             detect::spawn(manager);
         }
         Err(e) => log::error!("Notetaker unavailable: {e}"),
@@ -1715,6 +2215,74 @@ pub fn init(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn redone_lines_keep_the_names_the_user_gave() {
+        let line = |key: &str, speaker: &str, text: &str| Segment {
+            source: "system".into(),
+            speaker: speaker.into(),
+            speaker_key: key.into(),
+            start_ms: 0,
+            end_ms: 1_000,
+            text: text.into(),
+        };
+        let current = vec![
+            line("s1", "Priya Nair", "old"),
+            line("s2", "Speaker 2", "old"),
+        ];
+        let mut redone = vec![
+            line("s1", "Speaker 1", "naya"),
+            line("s2", "Speaker 2", "naya"),
+            line("s3", "Speaker 3", "naya"),
+        ];
+        keep_labels(&mut redone, &current);
+        let labels: Vec<&str> = redone.iter().map(|s| s.speaker.as_str()).collect();
+        assert_eq!(labels, vec!["Priya Nair", "Speaker 2", "Speaker 3"]);
+    }
+
+    #[test]
+    fn a_deleted_meeting_cancels_only_a_download_nobody_else_needs() {
+        let mut waiters = vec!["a".to_string(), "b".to_string()];
+        assert!(!leave(&mut waiters, "a", true), "b still waits");
+        assert!(leave(&mut waiters, "b", true));
+        let mut settings_download = vec!["c".to_string()];
+        assert!(
+            !leave(&mut settings_download, "c", false),
+            "started from Settings"
+        );
+        assert!(!leave(&mut Vec::new(), "d", true), "never waited");
+    }
+
+    #[test]
+    fn unfinished_hinglish_redos_are_found() {
+        let root = tempfile::tempdir().unwrap();
+        for id in ["20261001-090000-aaaa", "20261002-090000-bbbb"] {
+            std::fs::create_dir(root.path().join(id)).unwrap();
+        }
+        std::fs::write(
+            root.path().join("20261002-090000-bbbb").join(HINGLISH_REDO),
+            "1",
+        )
+        .unwrap();
+        assert_eq!(redos_left(root.path()), vec!["20261002-090000-bbbb"]);
+        assert!(redos_left(&root.path().join("missing")).is_empty());
+    }
+
+    #[test]
+    fn removes_leftover_cleaned_mics_except_while_processing() {
+        let root = tempfile::tempdir().unwrap();
+        for id in ["20261001-090000-aaaa", "20261002-090000-bbbb"] {
+            std::fs::create_dir(root.path().join(id)).unwrap();
+            std::fs::write(root.path().join(id).join(CLEANED_MIC), b"x").unwrap();
+            std::fs::write(root.path().join(id).join("mic.wav"), b"x").unwrap();
+        }
+        remove_cleaned_mics(root.path(), &["20261002-090000-bbbb".to_string()]);
+        let a = root.path().join("20261001-090000-aaaa");
+        let b = root.path().join("20261002-090000-bbbb");
+        assert!(!a.join(CLEANED_MIC).exists());
+        assert!(a.join("mic.wav").exists());
+        assert!(b.join(CLEANED_MIC).exists());
+    }
 
     #[test]
     fn idle_streams_show_a_start_in_progress() {
@@ -1790,7 +2358,12 @@ mod tests {
     /// LIPIK_TEST_OUT=<out.json> cargo test --lib naming_check -- --ignored
     /// --nocapture. Optional: LIPIK_TEST_OLLAMA_URL, LIPIK_TEST_OLLAMA_MODEL,
     /// LIPIK_TEST_KEEP_LABELS=1 to start from the stored labels instead of
-    /// "Speaker N" plus voice and calendar naming.
+    /// "Speaker N" plus voice and calendar naming. LIPIK_TEST_QWEN=<Qwen3-ASR
+    /// gguf> with LIPIK_TEST_AUDIO=<folder with copies of mic.wav and
+    /// system.wav> and LIPIK_TRANSCRIBE_WORKER_EXE=<built lipik> first redoes
+    /// the transcript in Hinglish the way a redo does (the result is also
+    /// written to <out>.segments.json). LIPIK_TEST_SEGMENTS=<such a file>
+    /// uses a transcript redone before.
     #[test]
     #[ignore]
     fn naming_check() {
@@ -1801,9 +2374,82 @@ mod tests {
         let id = var("LIPIK_TEST_MEETING");
         let store = Store::open_read_only(std::path::Path::new(&var("LIPIK_TEST_DB"))).unwrap();
         let meeting = store.meeting(&id).unwrap().expect("no such meeting");
-        let stored = store.segments(&id).unwrap();
         let invited = diarize::invitees(&meeting.attendees);
         let own = own_names_in(&meeting);
+        let ollama = || {
+            ai::Ollama::new(
+                &std::env::var("LIPIK_TEST_OLLAMA_URL")
+                    .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string()),
+                &std::env::var("LIPIK_TEST_OLLAMA_MODEL")
+                    .unwrap_or_else(|_| "qwen3:8b".to_string()),
+            )
+        };
+        let saved = std::env::var("LIPIK_TEST_SEGMENTS").ok();
+        let stored = match std::env::var("LIPIK_TEST_QWEN") {
+            _ if saved.is_some() => {
+                let json = std::fs::read_to_string(saved.as_deref().unwrap_or_default()).unwrap();
+                serde_json::from_str(&json).unwrap()
+            }
+            Ok(model) => {
+                let engine = crate::engine_supervisor::EngineSupervisor::new(true);
+                engine
+                    .load(crate::engine_supervisor::LoadSpec {
+                        path: model.into(),
+                        backend: transcribe_cpp::Backend::Auto,
+                        device: crate::engine_supervisor::DeviceSelector::Auto,
+                    })
+                    .unwrap();
+                let run = transcribe_cpp::RunOptions {
+                    language: Some(hinglish::LANGUAGE.to_string()),
+                    ..Default::default()
+                };
+                let dir = PathBuf::from(var("LIPIK_TEST_AUDIO"));
+                let cleaned = dir.join(CLEANED_MIC);
+                let _ = std::fs::remove_file(&cleaned);
+                let mic = mic_for_transcript(&dir, &meeting, &cleaned);
+                println!("NAMING mic audio: {}", mic.display());
+                let system = dir.join("system.wav");
+                let streams = [
+                    ("mic", mic.as_path(), meeting.mic_offset_ms.unwrap_or(0)),
+                    (
+                        "system",
+                        system.as_path(),
+                        meeting.system_offset_ms.unwrap_or(0),
+                    ),
+                ];
+                let lines = store.segments(&id).unwrap();
+                let mut redone = transcribe::redo_lines(
+                    &lines,
+                    &streams,
+                    hinglish::RULES,
+                    || None,
+                    |audio| {
+                        engine
+                            .transcribe(audio, run.clone())
+                            .map(|t| t.text.trim().to_string())
+                            .map_err(|e| anyhow!("{e}"))
+                    },
+                    |_| true,
+                );
+                drop(engine);
+                let names: Vec<String> = invited.iter().chain(&own).cloned().collect();
+                hinglish::romanize(
+                    Some(&ai::Model::Ollama(ollama())),
+                    &mut redone,
+                    &names,
+                    std::time::Duration::from_secs(600),
+                    |_| true,
+                );
+                keep_labels(&mut redone, &lines);
+                std::fs::write(
+                    format!("{}.segments.json", var("LIPIK_TEST_OUT")),
+                    serde_json::to_string_pretty(&redone).unwrap(),
+                )
+                .unwrap();
+                redone
+            }
+            Err(_) => store.segments(&id).unwrap(),
+        };
 
         let mut keys: Vec<String> = stored
             .iter()
@@ -1855,11 +2501,7 @@ mod tests {
             }
         }
 
-        let model = ai::Model::Ollama(ai::Ollama::new(
-            &std::env::var("LIPIK_TEST_OLLAMA_URL")
-                .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string()),
-            &std::env::var("LIPIK_TEST_OLLAMA_MODEL").unwrap_or_else(|_| "qwen3:8b".to_string()),
-        ));
+        let model = ai::Model::Ollama(ollama());
         if let Some(reason) = model.unavailable_reason() {
             panic!("notes model unavailable: {reason}");
         }
@@ -1874,6 +2516,7 @@ mod tests {
                 match n.rule {
                     diarize::NameRule::Introduction => "introduction",
                     diarize::NameRule::Addressed => "addressed",
+                    diarize::NameRule::HandedOver => "handed_over",
                 },
             );
             diarize::apply_name(&mut segments, &n.key, &n.name);
@@ -1940,6 +2583,10 @@ mod tests {
             "notes_model_s": took,
             "speakers": speakers,
             "other_guesses": other_guesses,
+            "hand_overs": diarize::hand_overs(&segments, &invited, &diarize::own_set(&own))
+                .iter()
+                .map(|(i, key, name)| json!({ "line": line(*i), "to": key, "name": name }))
+                .collect::<Vec<_>>(),
         });
         std::fs::write(
             var("LIPIK_TEST_OUT"),

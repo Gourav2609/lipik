@@ -216,7 +216,7 @@ export const useNotepad = () => {
       }),
       events.notetakerProcessing.listen((e) => {
         const p = e.payload;
-        if (p.meeting_id !== idRef.current) return;
+        if (p.meeting_id !== idRef.current || p.stage === "improving") return;
         watching.current = true;
         const next: Step = p.stage === "summarizing" ? 2 : 1;
         setStep((s) => (next > s ? next : s));

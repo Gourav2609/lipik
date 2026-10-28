@@ -594,7 +594,8 @@ export const NoteView = ({
   onChanged: () => void;
   onDeleted: () => void;
 }) => {
-  const { detail, loading, processing, reload } = useMeetingDetail(id);
+  const { detail, loading, processing, improving, reload } =
+    useMeetingDetail(id);
   const [tab, setTab] = useState<NoteTab | null>(initialTab);
   const [title, setTitle] = useState<string | null>(null);
   const [menu, setMenu] = useState<{
@@ -720,6 +721,11 @@ export const NoteView = ({
         </button>
       </div>
       <Tabs value={shownTab} onChange={setTab} live={live} writing={writing} />
+      {improving && (
+        <p className="pt-[12px] text-[13px] leading-[18px] text-[var(--fk-text-muted)]">
+          Hindi heard: improving the transcript…
+        </p>
+      )}
       <div key={shownTab} className="nt-fade pt-[16px]">
         {shownTab === "transcript" && (
           <Transcript

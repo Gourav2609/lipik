@@ -47,7 +47,7 @@ of the meeting.
 | `notetaker-live-text`      | `{ meeting_id, source: "mic" \| "system", speaker, start_ms, text, tentative, active: boolean }` | What one stream is hearing now, sent within ~0.3 s of speech starting (`text` and `tentative` empty: show a "hearing" bubble) and then as the words come (`text` = words the model has settled, `tentative` = words that may still change, show grey). `start_ms` identifies the utterance. `active: false` ends it: drop that bubble. If words were heard, its segment came just before in `notetaker-transcript` with the same `source` and `start_ms`. Plain Tauri event (not in `bindings.ts`): `listen<LiveText>("notetaker-live-text")`.                                                                                                                                                                                                                                                                                      |
 | `notetaker-transcript`     | `{ meeting_id, segments: Segment[], replace: boolean }`                                          | `replace: false`: new live segments to append, one per utterance, when its speaker pauses (~0.7 s; utterances are cut at 30 s). `replace: true`: the full transcript; replace what is shown (after the final pass, and again after speakers are named).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `notetaker-stream-changed` | `{ meeting_id, mic: StreamStatus, system: StreamStatus }`                                        | A stream's state or detail changed while recording (system audio silent → show the hint; a device lost → `unavailable` while it reconnects, then `capturing` again).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `notetaker-processing`     | `{ meeting_id, stage: "speakers" \| "transcribing" \| "summarizing", progress: number }`         | `speakers`: telling the call voices apart, before the final pass (progress 0). During the final pass (progress 0..1) and while the notes are written (progress 0).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `notetaker-processing`     | `{ meeting_id, stage: "speakers" \| "transcribing" \| "summarizing" \| "improving", progress: number }` | `speakers`: telling the call voices apart, before the final pass (progress 0). During the final pass (progress 0..1) and while the notes are written (progress 0). `improving`: Hindi was heard in a finished meeting and it is being redone in Hinglish (every 3 s while the model downloads, then for every step of the redo); the meeting keeps its transcript and notes, so show only a status line. A `notetaker-note-ready` ends it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `notetaker-note-ready`     | `{ meeting_id, summary_status, summary_error: string \| null }`                                  | Processing finished. Re-fetch with `notetaker_get`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Types
@@ -184,12 +184,48 @@ the notes or thoughts).
 | `max_recording_minutes: number` | `120`                    | Recording stops after this many minutes              |
 | `ollama_url: string`            | `http://127.0.0.1:11434` | Ollama server, when the engine is Ollama             |
 | `ollama_model: string`          | `qwen3:8b`               | Model used on that server                            |
+| `language: "auto" \| "english" \| "hinglish"` | `auto`  | Meeting language, see Hinglish meetings below        |
 
 The backend does not show the next meeting in the menu bar.
 
 Notes and Ask use the same engine as clean-up (`cleanup_engine`, see
 `textflow/CONTRACT.md`): the built-in engine (with a 16384-token context and
 JSON output) or Ollama at `ollama_url` with `ollama_model`.
+
+## Hinglish meetings
+
+In Hinglish the final pass uses Qwen3-ASR (1.7B, else 0.6B) beside dictation,
+in pieces of at most 10 s (a piece it can't decode is left out), then the
+clean-up model writes each line with Devanagari in Roman letters. Names of
+invitees and the user written in Devanagari are put in Roman letters before
+and after that step, so the model can't turn them into Hindi words. That
+step waits at most 20 s per line, stops after 3 failed lines in a row, and
+takes at most a tenth of the meeting's length (2 to 10 minutes); lines it
+didn't reach keep their Devanagari. `english` never does any of this.
+`hinglish` always does; without Qwen3-ASR it transcribes as English, then
+downloads Qwen3-ASR 1.7B and redoes the meeting (`improving`). `auto`
+decides per meeting, without asking:
+
+- Qwen3-ASR on the Mac: it hears 6 lines of the live transcript spread over
+  the meeting (up to 10 s each); 15% or more Devanagari words means Hinglish.
+- Not on the Mac: the English transcript is checked. Hindi is likely when
+  7% or more of its words (3+ letters, not all capitals, 200+ words) are
+  neither common English words nor names, and at least 3 words, 0.2% of
+  all, are everyday Hindi words ("hai", "nahi", "matlab", ...). Then the
+  model is downloaded and the meeting redone, unless the user once deleted
+  a Qwen3-ASR model or cancelled its download (`auto` then never downloads
+  it again, and redos waiting from before a quit are dropped).
+
+Under `auto` the redo first samples the meeting with the model the same
+way (6 lines, 15% Devanagari); if that hears too little Hindi, the meeting
+keeps its English transcript and notes. A redo hears each existing line
+again, so speakers and the names the user
+gave them stay (renames made during the redo too); edited titles and "My
+notes" are never touched. It needs the model's size plus 1 GB free on disk.
+A file `hinglish-redo` in the meeting's folder marks a redo until it
+finishes, and on the next launch an unfinished one starts again (at most 3
+tries). Deleting the meeting stops its redo; the download is cancelled
+only when a redo started it and no other meeting's redo waits for it.
 
 ## Speakers
 
@@ -256,7 +292,14 @@ microphone's worker loads when recording starts, system audio's once the call
 plays a sound; each costs about the model's size in memory and stops after 5
 minutes without speech. With a model that can't stream, each utterance is
 decoded when it ends, on the dictation engine, after any dictation in progress.
-The final pass after the meeting replaces the live transcript.
+The final pass after the meeting replaces the live transcript. Before it, the
+call audio the microphone heard from the speakers (no headphones) is taken out
+of mic.wav by audio: the delay is found by cross-correlating the two files, a
+filter per frequency predicts the echo from system.wav and it is subtracted
+(`echo.rs`; about 10 s per hour of audio). The cleaned copy, `mic-no-echo.wav`, is
+transcribed and then deleted (a copy left by a crash is deleted at the next
+launch); mic.wav is never changed. Mic lines that still
+repeat the call's words at the same time are dropped as before.
 
 ## Permissions the UI should explain
 

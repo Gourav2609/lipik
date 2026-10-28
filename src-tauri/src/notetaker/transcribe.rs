@@ -11,7 +11,7 @@ use super::diarize::{self, Speakers};
 use super::Segment;
 use crate::audio_toolkit::SpeechScorer;
 use crate::managers::audio::AudioRecordingManager;
-use crate::managers::transcription::TranscriptionManager;
+use crate::managers::transcription::{SideEngine, TranscriptionManager};
 use crate::settings::get_settings;
 
 static ASR_LOCK: Mutex<()> = Mutex::new(());
@@ -96,6 +96,136 @@ pub fn transcribe_piece(
     }
 }
 
+/// Transcribes one piece with a model loaded beside dictation, never
+/// delaying a dictation.
+pub fn transcribe_side(app: &AppHandle, side: &SideEngine, audio: Vec<f32>) -> Result<String> {
+    let _turn = wait_for_turn(app, None)?;
+    side.engine
+        .transcribe(audio, side.run.clone())
+        .map(|t| t.text.trim().to_string())
+        .map_err(|e| anyhow!("{e}"))
+}
+
+/// Up to `count` lines spread over the meeting, each at least `min_ms` long.
+fn spread<'a>(segments: &'a [Segment], count: usize, min_ms: i64) -> Vec<&'a Segment> {
+    let long: Vec<&Segment> = segments
+        .iter()
+        .filter(|s| s.end_ms - s.start_ms >= min_ms)
+        .collect();
+    if long.len() <= count {
+        return long;
+    }
+    (0..count)
+        .map(|i| long[(2 * i + 1) * long.len() / (2 * count)])
+        .collect()
+}
+
+/// The audio of `[start_ms, end_ms)` from a stream WAV that began at
+/// `offset_ms` on the meeting's clock.
+fn read_span(path: &Path, offset_ms: i64, start_ms: i64, end_ms: i64) -> Result<Vec<f32>> {
+    let mut reader = hound::WavReader::open(path)?;
+    let to_sample = |ms: i64| ((ms - offset_ms).max(0) as u64 * RATE as u64 / 1000) as u32;
+    let from = to_sample(start_ms).min(reader.duration());
+    let len = to_sample(end_ms).saturating_sub(from) as usize;
+    reader.seek(from)?;
+    reader
+        .samples::<i16>()
+        .take(len)
+        .map(|s| Ok(s? as f32 / i16::MAX as f32))
+        .collect()
+}
+
+/// Every line heard again by `hear` from its stream's audio, in pieces cut
+/// by `rules`, each piece keeping its line's speaker key and label. A piece
+/// `hear` fails on counts as heard empty; a line whose audio can't be read
+/// or in which nothing is heard keeps its text. `streams` maps a source to
+/// its WAV and offset; `scorer` makes the speech detector for each line.
+/// `keep_going` gets the share of lines done and can stop the rest, which
+/// then keep their text.
+pub fn redo_lines(
+    lines: &[Segment],
+    streams: &[(&str, &Path, i64)],
+    rules: super::audio::CutRules,
+    scorer: impl Fn() -> Option<Box<dyn SpeechScorer>>,
+    mut hear: impl FnMut(Vec<f32>) -> Result<String>,
+    mut keep_going: impl FnMut(f32) -> bool,
+) -> Vec<Segment> {
+    let mut out = Vec::new();
+    for (n, line) in lines.iter().enumerate() {
+        if !keep_going(n as f32 / lines.len().max(1) as f32) {
+            out.extend(lines[n..].iter().cloned());
+            break;
+        }
+        let audio = streams
+            .iter()
+            .find(|(source, ..)| *source == line.source)
+            .ok_or_else(|| anyhow!("no audio"))
+            .and_then(|(_, path, offset)| read_span(path, *offset, line.start_ms, line.end_ms));
+        let audio = match audio {
+            Ok(audio) => audio,
+            Err(e) => {
+                log::warn!("Notetaker kept a line it could not read again: {e}");
+                out.push(line.clone());
+                continue;
+            }
+        };
+        let mut track = SpeechTrack::new(scorer());
+        track.push(&audio);
+        let mut heard = Vec::new();
+        while let Some(piece) = track.take(rules, true) {
+            let text = match hear(piece.audio.clone()) {
+                Ok(text) => text,
+                Err(e) => {
+                    log::warn!("Notetaker could not hear a piece again: {e}");
+                    continue;
+                }
+            };
+            if text.trim().is_empty() {
+                continue;
+            }
+            let start_ms = line.start_ms + samples_to_ms(piece.start_sample);
+            heard.push(Segment {
+                start_ms,
+                end_ms: (start_ms + samples_to_ms(piece.audio.len() as u64)).min(line.end_ms),
+                text: text.trim().to_string(),
+                ..line.clone()
+            });
+        }
+        if heard.is_empty() {
+            out.push(line.clone());
+        } else {
+            out.extend(heard);
+        }
+    }
+    out
+}
+
+/// Share of Devanagari words when `hear` (Qwen3-ASR) hears a few lines
+/// spread over the meeting. `streams` maps a source to its WAV and offset.
+pub fn hindi_in_sample(
+    live: &[Segment],
+    streams: &[(&str, &Path, i64)],
+    mut hear: impl FnMut(Vec<f32>) -> Result<String>,
+) -> f32 {
+    let mut heard = Vec::new();
+    for s in spread(
+        live,
+        super::hinglish::PROBE_PIECES,
+        super::hinglish::PROBE_MIN_MS,
+    ) {
+        let Some((_, path, offset)) = streams.iter().find(|(source, ..)| *source == s.source)
+        else {
+            continue;
+        };
+        let end = s.end_ms.min(s.start_ms + super::hinglish::PROBE_MAX_MS);
+        match read_span(path, *offset, s.start_ms, end).and_then(&mut hear) {
+            Ok(text) => heard.push(text),
+            Err(e) => log::warn!("Notetaker could not sample a piece for Hindi: {e}"),
+        }
+    }
+    super::hinglish::devanagari_share(heard.iter().map(String::as_str))
+}
+
 /// Applies the user's "unload immediately" setting once the notetaker has no
 /// more pieces to decode.
 pub fn release_model(app: &AppHandle) {
@@ -138,15 +268,22 @@ pub fn piece_segment(
 /// Every piece of speech in a finished stream WAV, transcribed. Reads the file
 /// in blocks so a long meeting is never held in memory. `progress` gets the
 /// fraction of the file done. With `speakers`, pieces also end where the
-/// speaker changes and each line is labelled with its speaker.
+/// speaker changes and each line is labelled with its speaker. With
+/// `hinglish` (Qwen3-ASR), pieces are shorter and go to it instead of the
+/// dictation model.
 pub fn transcribe_file(
     app: &AppHandle,
     path: &Path,
     offset_ms: i64,
     source: &str,
     speakers: Option<&Speakers>,
+    hinglish: Option<&SideEngine>,
     mut progress: impl FnMut(f32),
 ) -> Result<Vec<Segment>> {
+    let rules = match hinglish {
+        Some(_) => super::hinglish::RULES,
+        None => super::audio::FINAL_RULES,
+    };
     let mut reader = hound::WavReader::open(path)?;
     let total = reader.duration().max(1) as f32;
     let mut track = SpeechTrack::new(new_scorer(app));
@@ -165,8 +302,14 @@ pub fn transcribe_file(
         let done = block.is_empty();
         read += block.len();
         track.push(&block);
-        while let Some(piece) = track.take(super::audio::FINAL_RULES, done) {
-            let text = transcribe_piece(app, piece.audio.clone(), None)?;
+        while let Some(piece) = track.take(rules, done) {
+            let text = match hinglish {
+                Some(side) => transcribe_side(app, side, piece.audio.clone()).unwrap_or_else(|e| {
+                    log::warn!("Notetaker skipped a piece Qwen3-ASR could not decode: {e}");
+                    String::new()
+                }),
+                None => transcribe_piece(app, piece.audio.clone(), None)?,
+            };
             if !text.trim().is_empty() {
                 out.push(piece_segment(
                     &piece,
@@ -327,6 +470,127 @@ mod tests {
         );
         let mic = piece_segment(&piece, 0, "mic", "hi".into(), None);
         assert_eq!(mic.speaker_key, "me");
+    }
+
+    #[test]
+    fn redone_lines_keep_their_speakers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("system.wav");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: RATE as u32,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut wav = hound::WavWriter::create(&path, spec).unwrap();
+        for i in 0..30 * RATE {
+            let loud = (i / RATE) % 6 != 5;
+            let x = if loud {
+                (i as f32 * 0.3).sin() * 8_000.0
+            } else {
+                0.0
+            };
+            wav.write_sample(x as i16).unwrap();
+        }
+        wav.finalize().unwrap();
+        let mut renamed = seg("system", 1_000, 25_000, "old words");
+        renamed.speaker = "Priya".into();
+        renamed.speaker_key = "s2".into();
+        let lines = vec![renamed, seg("mic", 0, 2_000, "kept")];
+        let mut heard = 0;
+        let out = redo_lines(
+            &lines,
+            &[("system", path.as_path(), 0)],
+            crate::notetaker::hinglish::RULES,
+            || None,
+            |_| {
+                heard += 1;
+                if heard == 2 {
+                    return Err(anyhow!("output began repeating"));
+                }
+                Ok(format!("piece {heard}"))
+            },
+            |_| true,
+        );
+        let system: Vec<&Segment> = out.iter().filter(|s| s.source == "system").collect();
+        assert!(system.len() >= 3, "{} pieces", system.len());
+        assert!(system
+            .iter()
+            .all(|s| s.speaker == "Priya" && s.speaker_key == "s2"));
+        assert!(system
+            .iter()
+            .all(|s| s.start_ms >= 1_000 && s.end_ms <= 25_000 && s.end_ms - s.start_ms <= 10_500));
+        assert_eq!(out.last().unwrap().text, "kept");
+    }
+
+    #[test]
+    fn the_sample_measures_devanagari_in_what_was_heard() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("system.wav");
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: RATE as u32,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut wav = hound::WavWriter::create(&path, spec).unwrap();
+        for i in 0..60 * RATE {
+            wav.write_sample(((i as f32 * 0.3).sin() * 8_000.0) as i16)
+                .unwrap();
+        }
+        wav.finalize().unwrap();
+        let lines: Vec<Segment> = (0..10)
+            .map(|i| seg("system", i * 6_000, i * 6_000 + 5_000, "x"))
+            .collect();
+        let streams = [("system", path.as_path(), 0)];
+        let mut asked = 0;
+        let english = hindi_in_sample(&lines, &streams, |_| {
+            asked += 1;
+            Ok("so we ship the release on friday".into())
+        });
+        assert_eq!(asked, crate::notetaker::hinglish::PROBE_PIECES);
+        assert!(english < crate::notetaker::hinglish::PROBE_HINDI);
+        let hinglish = hindi_in_sample(&lines, &streams, |_| Ok("तो हम friday को ship करेंगे".into()));
+        assert!(hinglish >= crate::notetaker::hinglish::PROBE_HINDI);
+    }
+
+    #[test]
+    fn a_stopped_redo_keeps_the_lines_left() {
+        let lines = vec![
+            seg("mic", 0, 2_000, "one"),
+            seg("mic", 2_000, 4_000, "two"),
+            seg("mic", 4_000, 6_000, "three"),
+        ];
+        let out = redo_lines(
+            &lines,
+            &[],
+            crate::notetaker::hinglish::RULES,
+            || None,
+            |_| Ok("new".into()),
+            |done| done < 0.3,
+        );
+        let texts: Vec<&str> = out.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(texts, vec!["one", "two", "three"]);
+    }
+
+    #[test]
+    fn samples_are_long_lines_spread_over_the_meeting() {
+        let lines: Vec<Segment> = (0..20)
+            .map(|i| {
+                seg(
+                    "system",
+                    i * 10_000,
+                    i * 10_000 + if i % 2 == 0 { 5_000 } else { 1_000 },
+                    "x",
+                )
+            })
+            .collect();
+        let starts: Vec<i64> = spread(&lines, 3, 2_000)
+            .iter()
+            .map(|s| s.start_ms)
+            .collect();
+        assert_eq!(starts, vec![20_000, 100_000, 160_000]);
+        assert_eq!(spread(&lines[..4], 6, 2_000).len(), 2);
     }
 
     #[test]

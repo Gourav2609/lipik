@@ -268,9 +268,10 @@ impl Drop for StreamWorkerGuard {
     }
 }
 
-/// The selected model loaded a second time, in its own worker process, for
-/// a caller that streams beside dictation (the notetaker's live transcript):
-/// neither ever waits for the other. Dropping it stops the worker.
+/// A model loaded a second time, in its own worker process, for a caller
+/// that runs beside dictation (the notetaker's live transcript, or its
+/// Hinglish final pass): neither ever waits for the other. Dropping it stops
+/// the worker.
 pub struct SideEngine {
     pub engine: EngineSupervisor,
     pub run: RunOptions,
@@ -1196,6 +1197,40 @@ impl TranscriptionManager {
             "Side streaming engine loaded '{}' on '{}'",
             model_id, info.backend
         );
+        Ok(SideEngine { engine, run })
+    }
+
+    /// Loads `model_id`, which need not be the selected model, in a new
+    /// [`SideEngine`] for batch runs with the language hint `language`.
+    pub fn side_batch_engine(&self, model_id: &str, language: &str) -> Result<SideEngine> {
+        let settings = get_settings(&self.app_handle);
+        let path = self.model_manager.get_model_path(model_id)?;
+        let (backend, device) = match resolve_gpu_device(
+            settings.transcribe_accelerator,
+            settings.transcribe_gpu_device.as_deref(),
+        ) {
+            Some(key) => (Backend::Auto, DeviceSelector::Key(key)),
+            None => (
+                select_transcribe_backend(settings.transcribe_accelerator),
+                DeviceSelector::Auto,
+            ),
+        };
+        let engine = EngineSupervisor::new(!transcribe_gpu_disabled_for_host());
+        let info = engine
+            .load(LoadSpec {
+                path,
+                backend,
+                device,
+            })
+            .map_err(|e| anyhow::anyhow!("Failed to load model {}: {}", model_id, e))?;
+        info!(
+            "Side batch engine loaded '{}' on '{}'",
+            model_id, info.backend
+        );
+        let run = RunOptions {
+            language: Some(language.to_string()),
+            ..Default::default()
+        };
         Ok(SideEngine { engine, run })
     }
 

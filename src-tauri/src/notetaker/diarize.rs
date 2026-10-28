@@ -404,7 +404,7 @@ const SAME_NAME_SPELLING: f64 = 0.6;
 const MIN_FUZZY_NAME_CHARS: usize = 3;
 /// Everyday Hindi and Hinglish words that sound like names ("rahi" like
 /// Raahi), never taken for a misspelt name.
-const HINGLISH_WORDS: &[&str] = &[
+pub(super) const HINGLISH_WORDS: &[&str] = &[
     "karna", "karne", "karo", "kar", "kara", "kare", "karte", "karta", "karti", "mera", "meri",
     "mere", "tera", "teri", "tere", "kya", "kaun", "kabhi", "kahan", "kaise", "kitna", "abhi",
     "aaj", "kal", "haan", "nahi", "bhai", "yaar", "accha", "achha", "theek", "thik", "matlab",
@@ -606,7 +606,7 @@ fn sounds_like_name(word: &str, first: &str) -> bool {
 /// ("Gourav" and "Gaurav", "Deepak" and "Dipak", "Priya" and "Pria") while
 /// every consonant and vowel sound stays apart ("Rajesh" is not "Rakesh",
 /// "Komal" is not "Kamal"). Vowels are capitals, consonants lowercase.
-fn name_sound(word: &str) -> Vec<char> {
+pub(super) fn name_sound(word: &str) -> Vec<char> {
     let c: Vec<char> = word
         .to_lowercase()
         .chars()
@@ -795,6 +795,297 @@ pub fn known_names(
     names
 }
 
+/// A voice counts as answering a name said before it only if it talks at
+/// least `HANDOVER_TALK_MS` within `HANDOVER_WINDOW_MS` after that line: a
+/// "Yeah." from someone else between the name and the person named is not
+/// the person named.
+const HANDOVER_WINDOW_MS: i64 = 15_000;
+const HANDOVER_TALK_MS: i64 = 3_000;
+/// How near a call line must be to a microphone line to be its echo.
+const ECHO_NEAR_MS: i64 = 3_000;
+/// Words soon after a name that hand that person the floor ("Varun aap
+/// bata do", "Varun aap bolo").
+const HANDOVER_WORDS: &[&str] = &["bata", "batao", "bataiye", "bataye", "bolo", "boliye"];
+/// Word pairs that do the same ("Varun, go ahead", "Varun your update").
+const HANDOVER_PAIRS: &[(&str, &str)] = &[
+    ("go", "ahead"),
+    ("go", "next"),
+    ("your", "turn"),
+    ("your", "update"),
+    ("any", "update"),
+    ("you", "next"),
+];
+
+/// The first call-audio line by another voice in the window after line
+/// `i`. Microphone lines between are skipped: without headphones they are
+/// often the call heard again.
+fn next_voice(segments: &[Segment], i: usize) -> Option<&Segment> {
+    let line = segments.get(i)?;
+    segments[i + 1..]
+        .iter()
+        .take_while(|s| s.start_ms < line.end_ms + HANDOVER_WINDOW_MS)
+        .find(|s| s.source != "mic" && s.speaker_key != line.speaker_key)
+}
+
+/// How long `key` talks in the window after line `i` ends.
+fn talk_after(segments: &[Segment], i: usize, key: &str) -> i64 {
+    let Some(line) = segments.get(i) else {
+        return 0;
+    };
+    let (from, to) = (line.end_ms, line.end_ms + HANDOVER_WINDOW_MS);
+    segments[i + 1..]
+        .iter()
+        .take_while(|s| s.start_ms < to)
+        .filter(|s| s.speaker_key == key)
+        .map(|s| (s.end_ms.min(to) - s.start_ms.max(from)).max(0))
+        .sum()
+}
+
+/// A word of a line with what surrounds it, for telling whether a name in
+/// it is someone spoken to.
+struct LineWord {
+    lower: String,
+    capitalised: bool,
+    /// Which sentence of the line (split at . ? ! and ।).
+    sentence: usize,
+    /// The first character before and after the word that is not a space.
+    before: Option<char>,
+    after: Option<char>,
+}
+
+fn ends_sentence(c: char) -> bool {
+    matches!(c, '.' | '?' | '!' | '।')
+}
+
+/// The words of `text`, as `words` splits it, with their surroundings.
+fn line_words(text: &str) -> Vec<LineWord> {
+    let mut spans: Vec<(usize, usize)> = Vec::new();
+    let mut start = None;
+    for (i, c) in text.char_indices() {
+        match (word_char(c), start) {
+            (true, None) => start = Some(i),
+            (false, Some(st)) => {
+                spans.push((st, i));
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(st) = start {
+        spans.push((st, text.len()));
+    }
+    let mut sentence = 0;
+    let mut out = Vec::new();
+    for (k, &(st, en)) in spans.iter().enumerate() {
+        let gap_before = &text[spans.get(k.wrapping_sub(1)).map_or(0, |p| p.1)..st];
+        if k > 0 && gap_before.chars().any(ends_sentence) {
+            sentence += 1;
+        }
+        let word = &text[st..en];
+        out.push(LineWord {
+            lower: word.to_lowercase(),
+            capitalised: word.chars().next().is_some_and(char::is_uppercase),
+            sentence,
+            before: text[..st].trim_end().chars().last(),
+            after: text[en..].trim_start().chars().next(),
+        });
+    }
+    out
+}
+
+/// Words that may come before a name spoken to ("but Varun, ...").
+const FILLERS: &[&str] = &[
+    "but", "so", "and", "okay", "ok", "haan", "acha", "achha", "yes", "yeah", "right", "now",
+    "chalo",
+];
+
+/// Whether the word at `at` starts its sentence, or follows at most two
+/// fillers that start it ("but Varun", "okay so Varun", "theek hai Varun").
+fn after_fillers(ws: &[LineWord], at: usize) -> bool {
+    let here = ws[at].sentence;
+    let mut i = at;
+    let mut fillers = 0;
+    while i > 0 && ws[i - 1].sentence == here {
+        let two = i >= 2
+            && ws[i - 2].sentence == here
+            && matches!(ws[i - 2].lower.as_str(), "theek" | "thik")
+            && ws[i - 1].lower == "hai";
+        if two {
+            i -= 2;
+        } else if FILLERS.contains(&ws[i - 1].lower.as_str()) {
+            i -= 1;
+        } else {
+            return false;
+        }
+        fillers += 1;
+        if fillers > 2 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Whether the name at `at` hands its person the floor, within its own
+/// sentence: a hand-over word or pair in the next three words ("Varun aap
+/// bata do", "Varun your update"), "over to Varun", or Varun spoken to:
+/// starting the sentence (after at most two fillers) with "," or "?" right
+/// after it, also after "ji"/"bhai" ("Varun, any update?", "Varun?",
+/// "but Varun, ...", "Varun ji, ..."), or ending
+/// it right after a comma ("Any questions, Varun?", "Thanks, Varun ji.").
+/// A name in a statement or plain question ("Varun did that", "Did you
+/// sync with Varun?") is not.
+fn addressed(ws: &[LineWord], at: usize) -> bool {
+    let here = ws[at].sentence;
+    let same = |i: usize| ws.get(i).filter(|w| w.sentence == here);
+    let word = |i: usize| same(i).map(|w| w.lower.as_str());
+    let starts = after_fillers(ws, at);
+    let honorific = matches!(word(at + 1), Some("ji" | "bhai"));
+    let last = if honorific { at + 1 } else { at };
+    let handed = (at + 1..at + 4).any(|i| {
+        word(i).is_some_and(|w| HANDOVER_WORDS.contains(&w))
+            || word(i)
+                .zip(word(i + 1))
+                .is_some_and(|pair| HANDOVER_PAIRS.contains(&pair))
+    });
+    handed
+        || (at >= 2 && word(at - 2) == Some("over") && word(at - 1) == Some("to"))
+        || (starts && matches!(ws[last].after, Some(',' | '?')))
+        || (ws[at].before == Some(',') && same(last + 1).is_none())
+}
+
+/// A microphone line that repeats the call (no headphones): a call line
+/// within 3 s of it says the name `first` and shares at least half of its
+/// words.
+fn is_echo(segments: &[Segment], i: usize, first: &str) -> bool {
+    let line = &segments[i];
+    if line.source != "mic" {
+        return false;
+    }
+    let mine: HashSet<String> = words(&line.text).into_iter().collect();
+    if mine.is_empty() {
+        return false;
+    }
+    segments.iter().any(|s| {
+        s.source != "mic"
+            && s.start_ms < line.end_ms + ECHO_NEAR_MS
+            && s.end_ms > line.start_ms - ECHO_NEAR_MS
+            && {
+                let theirs: HashSet<String> = words(&s.text).into_iter().collect();
+                theirs
+                    .iter()
+                    .any(|w| w == first || sounds_like_name(w, first))
+                    && mine.intersection(&theirs).count() * 2 >= mine.len()
+            }
+    })
+}
+
+/// Every (line, voice, invitee) where a line hands an invitee the floor and
+/// that voice speaks next (see `next_voice`) and answers (see
+/// `HANDOVER_TALK_MS`).
+pub(super) fn hand_overs(
+    segments: &[Segment],
+    invited: &[String],
+    own: &HashSet<String>,
+) -> Vec<(usize, String, String)> {
+    let mut out = Vec::new();
+    for (i, line) in segments.iter().enumerate() {
+        let Some(next) = next_voice(segments, i) else {
+            continue;
+        };
+        if !next.speaker_key.starts_with('s')
+            || talk_after(segments, i, &next.speaker_key) < HANDOVER_TALK_MS
+        {
+            continue;
+        }
+        let ws = line_words(&line.text);
+        for name in invited {
+            let Some(first) = first_word(name).filter(|f| !own.contains(f)) else {
+                continue;
+            };
+            if is_echo(segments, i, &first) {
+                continue;
+            }
+            let shared = invited
+                .iter()
+                .any(|other| other != name && first_word(other).as_deref() == Some(&first));
+            let surname = surname(name);
+            let called = (0..ws.len()).any(|p| {
+                let w = &ws[p];
+                let heard =
+                    w.lower == first || (w.capitalised && sounds_like_name(&w.lower, &first));
+                let full = !shared
+                    || (!surname.is_empty()
+                        && surname
+                            .iter()
+                            .enumerate()
+                            .all(|(k, s)| ws.get(p + 1 + k).is_some_and(|w| &w.lower == s)));
+                heard && full && addressed(&ws, p)
+            });
+            if called {
+                out.push((i, next.speaker_key.clone(), name.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// Names given from hand-overs alone, with no model guess: an invitee goes
+/// to voice V when at least two hand-overs to them are answered by V, at
+/// least two thirds of all their answered hand-overs are answered by V, and
+/// V answers no hand-over to anyone else. Only voices still on their default
+/// label, never a name a voice already has or the user's.
+fn handed_names(
+    segments: &[Segment],
+    hand_overs: &[(usize, String, String)],
+    own: &HashSet<String>,
+) -> Vec<Naming> {
+    let taken = named_labels(segments);
+    let on_default = |key: &str| {
+        segments
+            .iter()
+            .any(|s| s.speaker_key == key && s.speaker == default_label(key))
+    };
+    let mut out: Vec<Naming> = Vec::new();
+    let mut names: Vec<&String> = hand_overs.iter().map(|(_, _, n)| n).collect();
+    names.sort();
+    names.dedup();
+    for name in names {
+        let to_name: Vec<&(usize, String, String)> =
+            hand_overs.iter().filter(|(_, _, n)| n == name).collect();
+        let mut keys: Vec<&String> = to_name.iter().map(|(_, k, _)| k).collect();
+        keys.sort();
+        keys.dedup();
+        for key in keys {
+            let lines: Vec<usize> = to_name
+                .iter()
+                .filter(|(_, k, _)| k == key)
+                .map(|(i, ..)| *i)
+                .collect();
+            let elsewhere = hand_overs
+                .iter()
+                .any(|(_, k, n)| k == key && !same_person(n, name));
+            if lines.len() >= 2
+                && lines.len() * 3 >= to_name.len() * 2
+                && !elsewhere
+                && on_default(key)
+                && !own.contains(&name.trim().to_lowercase())
+                && !taken.iter().any(|t| same_person(t, name))
+                && !out
+                    .iter()
+                    .any(|n| n.key == *key || same_person(&n.name, name))
+            {
+                out.push(Naming {
+                    key: key.clone(),
+                    name: name.clone(),
+                    rule: NameRule::HandedOver,
+                    lines,
+                });
+            }
+        }
+    }
+    out
+}
+
 /// A name the notes model offered for one speaker label, with the transcript
 /// lines (indexes) where it says that name.
 #[derive(Clone, Debug, PartialEq)]
@@ -806,7 +1097,7 @@ pub struct SpeakerGuess {
 
 /// A letter, digit or Indic sign: the vowel signs and virama of Devanagari
 /// and other Indic scripts are marks, not letters, but belong to the word.
-fn word_char(c: char) -> bool {
+pub(super) fn word_char(c: char) -> bool {
     c.is_alphanumeric()
         || matches!(c, '\u{0300}'..='\u{036F}' | '\u{0900}'..='\u{0DFF}')
             && !matches!(c, '\u{0964}' | '\u{0965}')
@@ -824,6 +1115,8 @@ fn words(text: &str) -> Vec<String> {
 pub enum NameRule {
     Introduction,
     Addressed,
+    /// Hand-overs alone, without a model guess.
+    HandedOver,
 }
 
 /// A name given to a speaker, with the lines that back it.
@@ -850,8 +1143,10 @@ pub struct GuessVerdict {
 /// Names from the notes model, kept only when the evidence holds up: the
 /// name is said in at least two of the lines it points to, each either that
 /// speaker introducing themselves (merely saying the name counts for nothing)
-/// or someone else saying it right before that speaker talks (being
-/// addressed). A name on the invite is written as
+/// or someone else saying it right before that speaker is the next voice on
+/// the call and goes on talking (being addressed). A voice addressed or handed the floor under
+/// two different names gets none; see also `handed_names`, which needs no
+/// guess and which a guess never overrides. A name on the invite is written as
 /// invited, may be heard misspelt as a capitalised word, and one
 /// introduction is enough for it.
 /// Never the user's own name (`own`: names and emails) or an email, never a
@@ -877,12 +1172,12 @@ pub fn judge_guesses(
         }
     }
 
-    let points_at = |i: usize, key: &str| {
+    let points_at = |i: usize, key: &str, first: &str| {
         segments.get(i).is_some_and(|s| {
             s.speaker_key == key
-                || segments
-                    .get(i + 1)
-                    .is_some_and(|next| next.speaker_key == key)
+                || (next_voice(segments, i).is_some_and(|next| next.speaker_key == key)
+                    && talk_after(segments, i, key) >= HANDOVER_TALK_MS
+                    && !is_echo(segments, i, first))
         })
     };
     struct Evidence {
@@ -947,7 +1242,7 @@ pub fn judge_guesses(
                 });
             let mut mentioned = false;
             for &i in &g.lines {
-                let Some(line) = segments.get(i).filter(|_| points_at(i, key)) else {
+                let Some(line) = segments.get(i).filter(|_| points_at(i, key, &first)) else {
                     continue;
                 };
                 let raw: Vec<&str> = line
@@ -998,9 +1293,35 @@ pub fn judge_guesses(
             verdicts[g].rejected = Some(why);
         }
     };
+    let mut handed: HashMap<String, Vec<String>> = HashMap::new();
+    for e in evidence.values() {
+        if e.lines.iter().any(|&i| segments[i].speaker_key != e.key) {
+            handed
+                .entry(e.key.clone())
+                .or_default()
+                .push(e.name.clone());
+        }
+    }
+    let hand_overs = hand_overs(segments, invited, &own);
+    for (_, key, name) in &hand_overs {
+        handed.entry(key.clone()).or_default().push(name.clone());
+    }
+    let fixed = handed_names(segments, &hand_overs, &own);
+    let confused: HashSet<String> = handed
+        .into_iter()
+        .filter(|(_, names)| {
+            names
+                .iter()
+                .any(|a| names.iter().any(|b| !same_person(a, b)))
+        })
+        .map(|(key, _)| key)
+        .collect();
+
     let mut scored: Vec<Evidence> = Vec::new();
     for e in evidence.into_values() {
-        if e.lines.len() >= 2 || (e.invited && e.introduced) {
+        if confused.contains(&e.key) {
+            reject(&e, "addressed under two different names");
+        } else if e.lines.len() >= 2 || (e.invited && e.introduced) {
             scored.push(e);
         } else if e.invited {
             reject(&e, "one line that is not an introduction");
@@ -1015,9 +1336,9 @@ pub fn judge_guesses(
         })
     };
     scored.sort_by(|a, b| b.lines.len().cmp(&a.lines.len()).then(a.key.cmp(&b.key)));
-    let mut keys = HashSet::new();
-    let mut picked: Vec<String> = Vec::new();
-    let mut out = Vec::new();
+    let mut keys: HashSet<String> = fixed.iter().map(|n| n.key.clone()).collect();
+    let mut picked: Vec<String> = fixed.iter().map(|n| n.name.clone()).collect();
+    let mut out = fixed;
     for e in &scored {
         if keys.contains(&e.key) {
             reject(e, "a stronger name won for this speaker");
@@ -1050,7 +1371,7 @@ pub fn judge_guesses(
 }
 
 /// The user's names and emails, whole and by first word, lowercased.
-fn own_set(own_names: &[String]) -> HashSet<String> {
+pub(super) fn own_set(own_names: &[String]) -> HashSet<String> {
     let mut own: HashSet<String> = HashSet::new();
     for v in own_names {
         own.insert(v.trim().to_lowercase());
@@ -1276,7 +1597,7 @@ mod tests {
 
     #[test]
     fn guessed_names_need_two_lines_and_never_the_user() {
-        let segments = vec![
+        let segments = spaced(vec![
             seg("me", "Priya, can you share the deck?"),
             seg("s1", "Sure, sharing now."),
             seg("me", "Thanks Priya, and the numbers?"),
@@ -1284,7 +1605,7 @@ mod tests {
             seg("s2", "Hi, I'm Ravi from finance."),
             seg("s2", "Gourav, the budget is fine."),
             seg("me", "Gourav here, thanks."),
-        ];
+        ]);
         let me = vec![
             "Gourav Sharma".to_string(),
             "gourav@example.com".to_string(),
@@ -1353,6 +1674,356 @@ mod tests {
         assert!(
             names_from_guesses(&segments, &[guess("Asha"), guess("Bela")], &[], &[]).is_empty()
         );
+    }
+
+    /// Lines one after another, 5 s each.
+    fn spaced(lines: Vec<Segment>) -> Vec<Segment> {
+        lines
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| Segment {
+                start_ms: i as i64 * 5_000,
+                end_ms: (i as i64 + 1) * 5_000,
+                ..s
+            })
+            .collect()
+    }
+
+    /// Lines one after another, each `ms` long.
+    fn timed(lines: &[(&str, &str, i64)]) -> Vec<Segment> {
+        let mut at = 0;
+        lines
+            .iter()
+            .map(|&(key, text, ms)| {
+                let s = Segment {
+                    start_ms: at,
+                    end_ms: at + ms,
+                    ..seg(key, text)
+                };
+                at += ms;
+                s
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_short_reply_after_a_hand_over_is_not_the_person_named() {
+        let call = |reply_ms: i64| {
+            timed(&[
+                ("s1", "Priya aap bata do, kal kya hua?", 3_000),
+                ("s2", "Yeah.", reply_ms),
+                ("s1", "Okay, so the release moved to Friday and the numbers look fine to me, nothing else from my side today.", 16_000),
+                ("s1", "Priya, your update?", 2_000),
+                ("s2", "Yeah.", reply_ms),
+                ("s1", "Theek hai, then we close the sprint on Monday and start the planning after lunch.", 16_000),
+                ("s3", "So yesterday I finished the dashboard and today I am writing the tests for the export.", 12_000),
+            ])
+        };
+        let invited = invited(&["Priya Nair", "Rohan Das"]);
+        let guesses = [guess("Speaker 2", "Priya", &[0, 3])];
+        assert!(names_from_guesses(&call(2_000), &guesses, &[], &invited).is_empty());
+        assert_eq!(
+            names_from_guesses(&call(5_000), &guesses, &[], &invited),
+            vec![("s2".to_string(), "Priya Nair".to_string())]
+        );
+    }
+
+    #[test]
+    fn a_voice_handed_two_names_gets_none() {
+        let mut lines = vec![
+            ("s1", "Priya aap bata do.", 3_000),
+            (
+                "s2",
+                "Sure, the dashboard is done and the tests pass.",
+                6_000,
+            ),
+            ("s1", "Thanks Priya, aur kuch? Aap bolo.", 3_000),
+            ("s2", "No, that is all from me for today.", 6_000),
+        ];
+        let invited = invited(&["Priya Nair", "Rohan Das"]);
+        let guesses = [guess("Speaker 2", "Priya", &[0, 2])];
+        assert_eq!(
+            names_from_guesses(&timed(&lines), &guesses, &[], &invited),
+            vec![("s2".to_string(), "Priya Nair".to_string())]
+        );
+        lines.extend([
+            ("s1", "Rohan, your update?", 3_000),
+            (
+                "s2",
+                "I fixed the login bug and started on the export.",
+                7_000,
+            ),
+        ]);
+        assert!(names_from_guesses(&timed(&lines), &guesses, &[], &invited).is_empty());
+    }
+
+    #[test]
+    fn a_microphone_line_between_does_not_hide_the_next_voice() {
+        let lines = timed(&[
+            ("s1", "Priya aap bata do.", 3_000),
+            ("me", "Priya aap bata.", 1_000),
+            (
+                "s2",
+                "Sure, the dashboard is done and the tests pass.",
+                6_000,
+            ),
+            ("s1", "Thanks Priya, aur kuch? Aap bolo.", 3_000),
+            ("s2", "No, that is all from me for today.", 6_000),
+        ]);
+        let invited = invited(&["Priya Nair"]);
+        assert_eq!(
+            names_from_guesses(
+                &lines,
+                &[guess("Speaker 2", "Priya", &[0, 3])],
+                &[],
+                &invited
+            ),
+            vec![("s2".to_string(), "Priya Nair".to_string())]
+        );
+    }
+
+    #[test]
+    fn repeated_hand_overs_name_a_voice_without_a_guess() {
+        let invited = invited(&["Mohan Rao", "Priya Nair"]);
+        let call =
+            |lines: &[(&str, &str, i64)]| names_from_guesses(&timed(lines), &[], &[], &invited);
+        let three = [
+            ("s1", "Mohan, aap bata do.", 3_000),
+            ("s4", "The export is done and the tests pass now.", 6_000),
+            ("s1", "Okay. Mohan, your update on billing?", 3_000),
+            ("s3", "Sorry, I was on mute, one second please.", 5_000),
+            ("s1", "Theek hai. Mohan aap bolo.", 3_000),
+            (
+                "s4",
+                "Billing ships on Friday, nothing else from me.",
+                6_000,
+            ),
+        ];
+        assert_eq!(
+            call(&three),
+            vec![("s4".to_string(), "Mohan Rao".to_string())]
+        );
+        assert!(call(&three[..2]).is_empty(), "one hand-over is not enough");
+        let two_names = [
+            ("s1", "Mohan, aap bata do.", 3_000),
+            ("s4", "The export is done and the tests pass now.", 6_000),
+            ("s1", "Priya, your update?", 3_000),
+            (
+                "s4",
+                "Billing ships on Friday, nothing else from me.",
+                6_000,
+            ),
+        ];
+        assert!(call(&two_names).is_empty());
+    }
+
+    #[test]
+    fn a_guess_never_overrides_names_from_hand_overs() {
+        let invited = invited(&["Mohan Rao", "Priya Nair"]);
+        let lines = timed(&[
+            ("s1", "Mohan, aap bata do.", 3_000),
+            ("s4", "The export is done and the tests pass now.", 6_000),
+            ("s1", "Thanks Mohan. Mohan, aur kuch?", 3_000),
+            ("s4", "No, that is all from me for today.", 6_000),
+            ("s4", "Hi, I'm Priya.", 2_000),
+            ("s4", "Priya here.", 2_000),
+        ]);
+        let names = names_from_guesses(
+            &lines,
+            &[guess("Speaker 4", "Priya", &[4, 5])],
+            &[],
+            &invited,
+        );
+        assert_eq!(names, vec![("s4".to_string(), "Mohan Rao".to_string())]);
+    }
+
+    fn addressed_at(text: &str, name: &str) -> bool {
+        let ws = line_words(text);
+        let p = ws.iter().position(|w| w.lower == name).unwrap();
+        addressed(&ws, p)
+    }
+
+    #[test]
+    fn a_name_spoken_to_is_found_by_its_punctuation() {
+        assert!(addressed_at("Varun, any update?", "varun"));
+        assert!(addressed_at("Varun?", "varun"));
+        assert!(addressed_at("Okay. Varun, kya scene hai?", "varun"));
+        assert!(addressed_at("Any questions, Varun?", "varun"));
+        assert!(!addressed_at("Any questions Varun?", "varun"));
+        assert!(addressed_at("That's it from me, Varun.", "varun"));
+        assert!(addressed_at("Varun ji aap bataiye", "varun"));
+        assert!(addressed_at("Thanks, Varun ji?", "varun"));
+        assert!(addressed_at("Varun bhai, kya hua", "varun"));
+        assert!(!addressed_at("Varun bhai kya hua", "varun"));
+        assert!(!addressed_at("Did you sync with Varun?", "varun"));
+        assert!(addressed_at("but Varun, I think you can take it", "varun"));
+        assert!(addressed_at("Okay so Varun, any blockers?", "varun"));
+        assert!(addressed_at("Theek hai Varun, aage?", "varun"));
+        assert!(!addressed_at("but Varun will send it", "varun"));
+        assert!(!addressed_at("okay so yes Varun, any blockers?", "varun"));
+        assert!(!addressed_at("I think Varun, maybe later", "varun"));
+        assert!(!addressed_at("Varun will send you the deck.", "varun"));
+        assert!(!addressed_at("Varun shared your numbers too.", "varun"));
+        assert!(addressed_at("Varun, go ahead.", "varun"));
+        assert!(addressed_at("Okay Varun your turn", "varun"));
+        assert!(!addressed_at("Varun did that yesterday.", "varun"));
+        assert!(!addressed_at("We should ask Varun about it.", "varun"));
+        assert!(!addressed_at("Ask Varun.", "varun"));
+        assert!(!addressed_at("I told Varun, and then we left.", "varun"));
+        assert!(!addressed_at("I'll sync with Varun.", "varun"));
+        assert!(!addressed_at("I'll sync with Varun", "varun"));
+    }
+
+    #[test]
+    fn hand_over_words_count_only_in_the_names_sentence() {
+        assert!(!addressed_at("Thanks Varun. Priya, your update?", "varun"));
+        assert!(addressed_at("Thanks Varun. Priya, your update?", "priya"));
+        let invited = invited(&["Varun Rao", "Priya Nair"]);
+        let lines = timed(&[
+            ("s1", "Thanks Varun. Priya, your update?", 3_000),
+            ("s4", "The export is done and the tests pass now.", 6_000),
+        ]);
+        let found: Vec<String> = hand_overs(&lines, &invited, &HashSet::new())
+            .into_iter()
+            .map(|(_, _, name)| name)
+            .collect();
+        assert_eq!(found, vec!["Priya Nair".to_string()]);
+    }
+
+    #[test]
+    fn plain_questions_and_statements_twice_name_nobody() {
+        let invited = invited(&["Mohan Rao"]);
+        for (a, b) in [
+            ("Did you sync with Mohan?", "Okay. Did you sync with Mohan?"),
+            (
+                "Mohan will send you the deck.",
+                "Mohan shared your numbers too.",
+            ),
+        ] {
+            let lines = timed(&[
+                ("s1", a, 3_000),
+                ("s4", "The export is done and the tests pass now.", 6_000),
+                ("s1", b, 3_000),
+                ("s4", "No, that is all from me for today.", 6_000),
+            ]);
+            assert!(
+                names_from_guesses(&lines, &[], &[], &invited).is_empty(),
+                "{a}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_mic_line_is_an_echo_only_if_the_call_said_the_name() {
+        let invited = invited(&["Priya Nair"]);
+        let mut lines = timed(&[
+            ("s1", "Okay aap bata do na.", 3_000),
+            (
+                "s2",
+                "Sure, the dashboard is done and the tests pass.",
+                6_000,
+            ),
+        ]);
+        lines.insert(
+            1,
+            Segment {
+                start_ms: 500,
+                end_ms: 2_900,
+                ..seg("me", "Priya aap bata do")
+            },
+        );
+        assert_eq!(hand_overs(&lines, &invited, &HashSet::new()).len(), 1);
+    }
+
+    #[test]
+    fn a_plain_statement_twice_names_nobody() {
+        let invited = invited(&["Mohan Rao"]);
+        let lines = timed(&[
+            ("s1", "I'll sync with Mohan.", 3_000),
+            ("s4", "The export is done and the tests pass now.", 6_000),
+            ("s1", "Okay, I'll sync with Mohan.", 3_000),
+            ("s4", "No, that is all from me for today.", 6_000),
+        ]);
+        assert!(names_from_guesses(&lines, &[], &[], &invited).is_empty());
+    }
+
+    #[test]
+    fn an_echo_on_the_microphone_counts_once() {
+        let invited = invited(&["Priya Nair"]);
+        let mut lines = timed(&[
+            ("s1", "Priya aap bata do.", 3_000),
+            (
+                "s2",
+                "Sure, the dashboard is done and the tests pass.",
+                6_000,
+            ),
+        ]);
+        lines.insert(
+            1,
+            Segment {
+                start_ms: 500,
+                end_ms: 2_900,
+                ..seg("me", "Priya aap bata do")
+            },
+        );
+        assert_eq!(hand_overs(&lines, &invited, &HashSet::new()).len(), 1);
+        assert!(names_from_guesses(&lines, &[], &[], &invited).is_empty());
+    }
+
+    #[test]
+    fn a_shared_first_name_needs_the_surname() {
+        let invited = invited(&["Mohan Rao", "Mohan Das"]);
+        let call = |a: &str, b: &str| {
+            names_from_guesses(
+                &timed(&[
+                    ("s1", a, 3_000),
+                    ("s4", "The export is done and the tests pass now.", 6_000),
+                    ("s1", b, 3_000),
+                    ("s4", "No, that is all from me for today.", 6_000),
+                ]),
+                &[],
+                &[],
+                &invited,
+            )
+        };
+        assert!(call("Mohan, your update?", "Mohan, aap bolo.").is_empty());
+        assert_eq!(
+            call("Mohan Rao, your update?", "Okay. Mohan Rao, aap bolo."),
+            vec![("s4".to_string(), "Mohan Rao".to_string())]
+        );
+    }
+
+    #[test]
+    fn being_spoken_to_twice_names_a_voice() {
+        let invited = invited(&["Mohan Rao"]);
+        let lines = timed(&[
+            ("s1", "Okay. Mohan, any update?", 3_000),
+            ("s4", "The export is done and the tests pass now.", 6_000),
+            ("s1", "Good. Any questions, Mohan?", 3_000),
+            ("s4", "No, that is all from me for today.", 6_000),
+        ]);
+        assert_eq!(
+            names_from_guesses(&lines, &[], &[], &invited),
+            vec![("s4".to_string(), "Mohan Rao".to_string())]
+        );
+        let mentioned = timed(&[
+            ("s1", "Mohan did the export yesterday.", 3_000),
+            ("s4", "The export is done and the tests pass now.", 6_000),
+            ("s1", "We should ask Mohan about billing.", 3_000),
+            ("s4", "No, that is all from me for today.", 6_000),
+        ]);
+        assert!(names_from_guesses(&mentioned, &[], &[], &invited).is_empty());
+    }
+
+    #[test]
+    fn hand_over_words_follow_the_name() {
+        assert!(addressed_at("Varun aap bata do", "varun"));
+        assert!(addressed_at("okay over to Varun and then lunch", "varun"));
+        assert!(!addressed_at("any questions Varun", "varun"));
+        assert!(!addressed_at(
+            "I think Varun will also get it done",
+            "varun"
+        ));
     }
 
     fn names_from_guesses(
@@ -1430,12 +2101,12 @@ mod tests {
 
     #[test]
     fn misspelt_name_said_before_a_speaker_names_the_invitee() {
-        let segments = vec![
+        let segments = spaced(vec![
             seg("me", "Thanks Gotam, can you take the next one?"),
             seg("s2", "Sure, the pipeline is done."),
             seg("s1", "Okay Gotam, what about the dashboard?"),
             seg("s2", "It ships on Friday."),
-        ];
+        ]);
         let names = names_from_guesses(
             &segments,
             &[guess("Speaker 2", "Gotam", &[0, 2])],
@@ -1587,12 +2258,12 @@ mod tests {
     fn devanagari_names_stay_whole_words() {
         let people = invited(&["प्रिया शर्मा"]);
         let addressed = |text: &str| {
-            let segments = vec![
+            let segments = spaced(vec![
                 seg("me", text),
                 seg("s1", "ठीक है"),
                 seg("me", text),
                 seg("s1", "हाँ"),
-            ];
+            ]);
             names_from_guesses(
                 &segments,
                 &[guess("Speaker 1", "प्रिया", &[0, 2])],

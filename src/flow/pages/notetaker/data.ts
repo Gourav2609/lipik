@@ -259,6 +259,7 @@ export const useMeetingDetail = (id: string) => {
   const [detail, setDetail] = useState<MeetingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<Processing | null>(null);
+  const [improving, setImproving] = useState(false);
   const latest = useRef(0);
   const live = useRef<Segment[]>([]);
   const replaced = useRef<Segment[] | null>(null);
@@ -287,6 +288,7 @@ export const useMeetingDetail = (id: string) => {
   useEffect(() => {
     setLoading(true);
     setProcessing(null);
+    setImproving(false);
     live.current = [];
     replaced.current = null;
     reload();
@@ -310,11 +312,14 @@ export const useMeetingDetail = (id: string) => {
       }),
       events.notetakerProcessing.listen(({ payload }) => {
         if (payload.meeting_id !== id) return;
-        setProcessing({ stage: payload.stage, progress: payload.progress });
+        if (payload.stage === "improving") setImproving(true);
+        else
+          setProcessing({ stage: payload.stage, progress: payload.progress });
       }),
       events.notetakerNoteReady.listen(({ payload }) => {
         if (payload.meeting_id !== id) return;
         setProcessing(null);
+        setImproving(false);
         reload();
       }),
       events.notetakerState.listen(reload),
@@ -322,7 +327,7 @@ export const useMeetingDetail = (id: string) => {
     return () => stops.forEach((s) => void s.then((stop) => stop()));
   }, [id, reload]);
 
-  return { detail, loading, processing, reload };
+  return { detail, loading, processing, improving, reload };
 };
 
 const DAY = 24 * 60 * 60 * 1000;

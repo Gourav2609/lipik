@@ -504,10 +504,10 @@ pub fn cancel_pull_unless(model: &str) {
 }
 
 /// Room the download needs besides the model itself.
-const SPARE_DISK: u64 = 1_000_000_000;
+pub(crate) const SPARE_DISK: u64 = 1_000_000_000;
 
 #[cfg(unix)]
-fn free_disk(dir: &std::path::Path) -> Option<u64> {
+pub(crate) fn free_disk(dir: &std::path::Path) -> Option<u64> {
     use std::os::unix::ffi::OsStrExt;
     let path = std::ffi::CString::new(dir.as_os_str().as_bytes()).ok()?;
     let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
@@ -519,7 +519,7 @@ fn free_disk(dir: &std::path::Path) -> Option<u64> {
 }
 
 #[cfg(not(unix))]
-fn free_disk(_dir: &std::path::Path) -> Option<u64> {
+pub(crate) fn free_disk(_dir: &std::path::Path) -> Option<u64> {
     None
 }
 

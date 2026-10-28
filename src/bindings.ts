@@ -1833,6 +1833,10 @@ export type MeetingDetail = { meeting: Meeting; segments: Segment[];
  * The user's own notes ("My notes"), markdown.
  */
 thoughts: string; summary: NoteSummary | null }
+/**
+ * `Auto` decides per meeting by listening for Hindi; see `hinglish`.
+ */
+export type MeetingLanguage = "auto" | "english" | "hinglish"
 export type MeetingStatus = "recording" | "processing" | "ready" | "failed"
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
@@ -1893,7 +1897,12 @@ notify_before_seconds: number;
 /**
  * Recording stops by itself after this long.
  */
-max_recording_minutes: number; ollama_url: string; ollama_model: string }
+max_recording_minutes: number; ollama_url: string; ollama_model: string; 
+/**
+ * What people speak in meetings; Hinglish keeps Hindi words and names
+ * in the final transcript.
+ */
+language: MeetingLanguage }
 export type NotetakerState = { recording: boolean; meeting_id: string | null }
 export type NotetakerStatus = { recording: boolean; 
 /**
@@ -1945,7 +1954,13 @@ export type ProcessingStage =
 /**
  * Telling the voices on the call apart (before transcribing).
  */
-"speakers" | "transcribing" | "summarizing"
+"speakers" | "transcribing" | "summarizing" | 
+/**
+ * Hindi was heard: the Hinglish speech model is being fetched, or the
+ * meeting is being transcribed and its notes written again with it.
+ * The meeting keeps its transcript and notes until then.
+ */
+"improving"
 export type RecordingRetentionPeriod = "never" | 
 /**
  * Keep every recording and transcript; same as `Never` (never delete).
