@@ -1743,7 +1743,12 @@ progress: CleanupModelPull | null;
 /**
  * The built-in model's download size in bytes; 0 with Ollama.
  */
-size: number }
+size: number; 
+/**
+ * Why the last download of `model` failed, kept until the next attempt,
+ * so a screen opened later can still say so.
+ */
+failed: string | null }
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type DailyWords = { 

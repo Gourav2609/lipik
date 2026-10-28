@@ -84,6 +84,7 @@ export const useCleanupModel = () => {
     answered.current = true;
     if (n < oldest.current) return;
     setStatus(s);
+    if (s.failed) setError({ model: s.model, text: s.failed });
     if (s.progress) setProgress(s.progress);
   }, []);
 

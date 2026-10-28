@@ -383,6 +383,9 @@ const Cleanup = ({ next, back }: StepProps) => {
   const { view, engine, model, size, progress, error, download, cancel } =
     useCleanupModel();
   const ready = view === "ready";
+  // The download runs in the app, not on this screen, and clean-up turns on
+  // by itself when it lands, so setup doesn't have to wait for 5 GB.
+  const underway = view === "downloading" || view === "verifying";
   const builtin = engine === "builtin";
   return (
     <StepLayout
@@ -391,7 +394,7 @@ const Cleanup = ({ next, back }: StepProps) => {
       body="Clean-up removes “um”, applies “no, wait” corrections and fixes punctuation, on this Mac."
       back={back}
       actions={
-        ready ? (
+        ready || underway ? (
           <Continue next={next} />
         ) : (
           <>
@@ -451,6 +454,13 @@ const Cleanup = ({ next, back }: StepProps) => {
       {view === "downloading" && (
         <PullProgress progress={progress} onCancel={cancel} />
       )}
+      {underway && (
+        <p className="mt-[12px] text-[13px] leading-[18px] text-[var(--fk-text-muted)]">
+          You can go on: the download keeps going in the background. Dictation
+          works right away, and clean-up turns on by itself when the model is
+          ready.
+        </p>
+      )}
       {view === "verifying" && (
         <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
           <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
@@ -472,7 +482,7 @@ const Cleanup = ({ next, back }: StepProps) => {
           </Button>
         </div>
       )}
-      {!ready && view !== "checking" && (
+      {!ready && !underway && view !== "checking" && (
         <p className="mt-[16px] text-[13px] leading-[18px] text-[var(--fk-text-faint)]">
           {CLEANUP_SKIP_NOTE}
         </p>

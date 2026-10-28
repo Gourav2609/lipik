@@ -30,6 +30,7 @@ const status = (): CleanupModelStatus => {
   return {
     engine,
     builtin_available: true,
+    failed: null,
     state,
     model: builtin
       ? BUILTIN.model

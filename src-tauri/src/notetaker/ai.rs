@@ -18,6 +18,10 @@ const PART_TOKENS: usize = 9_000;
 const THOUGHTS_CHARS: usize = 4_000;
 const ASK_CONTEXT_CHARS: usize = 24_000;
 
+/// Shown while the built-in model downloads; notes are written once it lands.
+pub const NOTES_WAIT_FOR_MODEL: &str =
+    "The AI model is still downloading. Notes will be written by themselves when it's ready.";
+
 /// The model that writes notes and answers questions: the built-in engine
 /// or Ollama, whichever the engine setting picks for clean-up.
 pub enum Model {
@@ -29,6 +33,17 @@ impl Model {
     pub fn for_app(app: &tauri::AppHandle) -> Self {
         let settings = crate::settings::get_settings(app);
         match crate::textflow::cleanup_model::engine_from(app, &settings) {
+            // Clean-up still undecided and the built-in model on its way:
+            // notes wait for it rather than blaming a missing Ollama.
+            CleanupEngine::Ollama
+                if settings.cleanup_engine.is_none()
+                    && crate::textflow::cleanup_model::builtin_downloading() =>
+            {
+                Model::Builtin {
+                    path: engine::model_path(app).unwrap_or_default(),
+                    name: engine::builtin_model().name.to_string(),
+                }
+            }
             CleanupEngine::Ollama => Model::Ollama(Ollama::new(
                 &settings.notetaker.ollama_url,
                 &settings.notetaker.ollama_model,
@@ -52,10 +67,14 @@ impl Model {
     pub fn unavailable_reason(&self) -> Option<String> {
         match self {
             Model::Ollama(ollama) => ollama.unavailable_reason(),
-            Model::Builtin { path, .. } if !path.is_file() => Some(
-                "The AI model isn't downloaded yet. Download it in Settings → Meetings."
-                    .to_string(),
-            ),
+            Model::Builtin { path, .. } if !path.is_file() => {
+                Some(if crate::textflow::cleanup_model::builtin_downloading() {
+                    NOTES_WAIT_FOR_MODEL.to_string()
+                } else {
+                    "The AI model isn't downloaded yet. Download it in Settings → Meetings."
+                        .to_string()
+                })
+            }
             Model::Builtin { .. } => None,
         }
     }
@@ -274,7 +293,7 @@ Write in the language the meeting was mostly held in. Be concrete: names, number
 Never invent facts that are not in the transcript. Reply with JSON only.";
 
 const NOTES_SHAPE: &str = r#"{
-  "title": "short meeting title (max 8 words)",
+  "title": "short title naming what was discussed (max 8 words), never just the app or the word meeting",
   "overview": "2-4 sentences: what the meeting was about and where it landed",
   "sections": [{"heading": "topic", "bullets": ["what was said about it"]}],
   "key_points": ["the most important points"],
@@ -290,9 +309,15 @@ fn notes_prompt(
     part: Option<(usize, usize)>,
 ) -> String {
     let attendees = attendee_names(&meeting.attendees);
+    // A made-up name ("Slack call") would only be copied back as the title.
+    let name = if meeting.title_auto {
+        "untitled; name it after what was discussed"
+    } else {
+        meeting.title.as_str()
+    };
     let mut prompt = format!(
         "Meeting: {}\nDate: {}\n",
-        meeting.title,
+        name,
         chrono::DateTime::from_timestamp_millis(meeting.start_ms)
             .map(|d| d
                 .with_timezone(&chrono::Local)
@@ -458,7 +483,11 @@ pub fn summarize(
 Merge them into one set of notes for the whole meeting. Combine sections on the same topic, \
 remove repeats, keep every decision and action item. Leave 'speakers' empty.\n\
 Reply with JSON in this shape:\n{NOTES_SHAPE}",
-            meeting.title,
+            if meeting.title_auto {
+                "untitled; name it after what was discussed"
+            } else {
+                meeting.title.as_str()
+            },
             serde_json::to_string_pretty(&merged)?
         );
         notes_from(&model.chat_json(NOTES_SYSTEM, &prompt)?, "the merged notes")?.summary
@@ -656,6 +685,34 @@ and transcripts. 'Me' is the user. Answer in the language of the question. Reply
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn meeting(title: &str, title_auto: bool) -> Meeting {
+        Meeting {
+            id: "m".to_string(),
+            title: title.to_string(),
+            title_auto,
+            start_ms: 0,
+            end_ms: None,
+            app: Some("Slack".to_string()),
+            bundle_id: None,
+            calendar_event_id: None,
+            attendees: Vec::new(),
+            folder: None,
+            status: crate::notetaker::MeetingStatus::Ready,
+            summary_status: crate::notetaker::SummaryStatus::Ready,
+            summary_error: None,
+            mic_offset_ms: None,
+            system_offset_ms: None,
+        }
+    }
+
+    #[test]
+    fn made_up_title_is_not_shown_to_the_model() {
+        let prompt = notes_prompt(&meeting("Slack call", true), "", "#0 Me: hi", None);
+        assert!(!prompt.contains("Slack call"));
+        let prompt = notes_prompt(&meeting("Data Standup", false), "", "#0 Me: hi", None);
+        assert!(prompt.contains("Meeting: Data Standup"));
+    }
 
     #[test]
     fn built_in_notes_request_asks_for_json_without_thinking() {

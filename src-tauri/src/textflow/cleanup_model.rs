@@ -48,7 +48,13 @@ pub struct CleanupModelStatus {
     pub progress: Option<CleanupModelPull>,
     /// The built-in model's download size in bytes; 0 with Ollama.
     pub size: u64,
+    /// Why the last download of `model` failed, kept until the next attempt,
+    /// so a screen opened later can still say so.
+    pub failed: Option<String>,
 }
+
+/// The model whose last download failed, and why.
+static LAST_FAILURE: Mutex<Option<(String, String)>> = Mutex::new(None);
 
 /// Download progress of the clean-up model, in bytes over all its files.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, Type, Event)]
@@ -275,6 +281,11 @@ fn default_engine(builtin: BuiltinFile, ollama: Option<bool>) -> (CleanupEngine,
 /// built-in model makes the built-in engine the choice, and Ollama is asked
 /// again every 30 s in case it starts later. Builds or Macs without the
 /// built-in engine use Ollama.
+/// Whether the built-in model is downloading right now.
+pub fn builtin_downloading() -> bool {
+    PULLS.lock().unwrap().builtin_running()
+}
+
 pub fn pick_engine(app: &AppHandle) {
     if !ENGINE.is_available() || crate::settings::get_settings(app).cleanup_engine.is_some() {
         return;
@@ -344,9 +355,22 @@ pub async fn cleanup_model_status(app: AppHandle) -> CleanupModelStatus {
     } else {
         0
     };
+    let failed = |model: &str| {
+        LAST_FAILURE
+            .lock()
+            .unwrap()
+            .as_ref()
+            .filter(|(m, _)| m == model)
+            .map(|(_, e)| e.clone())
+    };
     let status = |state, model: String, progress| CleanupModelStatus {
         engine,
         builtin_available: ENGINE.is_available(),
+        failed: if state == CleanupModelState::NoModel {
+            failed(&model)
+        } else {
+            None
+        },
         state,
         model,
         progress,
@@ -394,6 +418,7 @@ pub async fn pull_cleanup_model(app: AppHandle) -> Result<bool, String> {
         }
         CleanupEngine::Ollama => ollama.model.clone(),
     };
+    *LAST_FAILURE.lock().unwrap() = None;
     let generation = PULLS.lock().unwrap().start(engine, &model);
     let result = match engine {
         CleanupEngine::Builtin => download_builtin(&app, engine::builtin_model(), generation).await,
@@ -406,11 +431,18 @@ pub async fn pull_cleanup_model(app: AppHandle) -> Result<bool, String> {
             if super::uses_llm(&app) {
                 llm::warm_up(&app);
             }
+            if let Some(notetaker) = tauri::Manager::try_state::<
+                std::sync::Arc<crate::notetaker::NotetakerManager>,
+            >(&app)
+            {
+                notetaker.write_notes_that_waited();
+            }
             Ok(true)
         }
         Ok(false) => Ok(false),
         Err(e) => {
             log::warn!("cleanup model: download of {model} failed: {e}");
+            *LAST_FAILURE.lock().unwrap() = Some((model, e.clone()));
             Err(e)
         }
     }

@@ -1289,6 +1289,25 @@ impl NotetakerManager {
         self.process_in_background(id.to_string(), transcribe)
     }
 
+    /// Writes the notes of meetings that ended while the AI model was still
+    /// downloading.
+    pub fn write_notes_that_waited(self: &Arc<Self>) {
+        let Ok(meetings) = self.store.meetings_with_status(&[MeetingStatus::Ready]) else {
+            return;
+        };
+        for m in meetings {
+            if m.summary_status == SummaryStatus::Unavailable
+                && m.summary_error.as_deref() == Some(ai::NOTES_WAIT_FOR_MODEL)
+            {
+                log::info!(
+                    "Notetaker: writing notes for {} now the model is here",
+                    m.id
+                );
+                let _ = self.regenerate(&m.id);
+            }
+        }
+    }
+
     /// Meetings left recording or processing by a crash or quit are finished
     /// from their WAV files. One whose processing was cut off twice is marked
     /// failed instead, in case it is what stops the app.
