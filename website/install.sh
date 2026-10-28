@@ -113,16 +113,16 @@ bar() {
   fill=$((done_ * width / total))
   [ "$fill" -gt "$width" ] && fill=$width
   i=0 s=""
-  while [ $i -lt $fill ]; do s="$s━"; i=$((i + 1)); done
+  while [ $i -lt $fill ]; do s="${s}━"; i=$((i + 1)); done
   t=""
-  while [ $i -lt $width ]; do t="$t━"; i=$((i + 1)); done
+  while [ $i -lt $width ]; do t="${t}━"; i=$((i + 1)); done
   printf "\r  %b↓%b Downloading Lipik%s  %b%s%b%s%b  %s / %s MB\033[K" \
     "$G3" "$R" "$VERSION_LABEL" "$G3" "$s" "$D" "$t" "$R" "$(mb "$done_")" "$(mb "$total")"
 }
 
 download() {
   if [ -n "$DEMO" ]; then
-    total=23697408 got=0
+    total=22597658 got=0
     while [ -n "$FANCY" ] && [ $got -lt $total ]; do
       bar "$got" "$total"
       got=$((got + 1048576))
