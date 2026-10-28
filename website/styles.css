@@ -4152,3 +4152,56 @@ s.sl-g {
     font-size: 14.5px;
   }
 }
+
+/* One-line Terminal install */
+.term {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  margin-top: 18px;
+  padding: 8px 8px 8px 16px;
+  background: var(--pill);
+  color: #e6f1ea;
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+}
+.download .term {
+  margin: 22px auto 0;
+  max-width: 560px;
+}
+.term code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  font:
+    13.5px/1.6 ui-monospace,
+    "SF Mono",
+    Menlo,
+    monospace;
+  text-align: left;
+}
+.term-p {
+  color: var(--sage);
+  margin-right: 8px;
+  user-select: none;
+}
+.term-copy {
+  flex: none;
+  padding: 8px 13px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--sage);
+  color: var(--pill);
+  font: 600 12.5px/1 var(--sans);
+  cursor: pointer;
+}
+.term-copy:hover {
+  background: #b7dbc6;
+}
+.term-copy:focus-visible {
+  outline: 2px solid var(--sage);
+  outline-offset: 2px;
+}
