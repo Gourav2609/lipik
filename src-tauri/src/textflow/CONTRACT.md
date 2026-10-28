@@ -13,7 +13,7 @@ Rust lives in `src-tauri/src/textflow/`. Commands are tauri-specta commands, so
 | Scratchpad notes                                      | `scratchpad.db` (SQLite, table `notes`)              | Note bodies can be long and are saved often; one row per note.                                                                                                                                                                                                                  |
 | Insights numbers                                      | `history.db`, new columns on `transcription_history` | Next to each dictation's audio and text.                                                                                                                                                                                                                                        |
 
-On the first run `textflow.json` is created and Handy's existing
+On the first run `textflow.json` is created and Lipik's existing
 `custom_words` are imported as dictionary words. A `textflow.json` that can't
 be read or parsed is moved to `textflow.json.bad-<unix time>` and the words
 are imported again from `custom_words`; nothing overwrites the bad file.
@@ -40,7 +40,7 @@ Replacement = { id: string; from: string; to: string; auto_learned: boolean }
 - Duplicates (same words, ignoring case and punctuation) are rejected with an
   error message ready to show. Phrases with symbols ("C#", "C++", ".NET")
   are compared on their exact characters, so "C#" and "C++" are different.
-- Every change to `words` rewrites Handy's `custom_words` setting, which the
+- Every change to `words` rewrites Lipik's `custom_words` setting, which the
   transcriber already uses (vocabulary prompt or fuzzy correction). The
   rewrite waits 300 ms so a bulk import writes the settings once.
 - Replacements apply after transcription, whole words only, ignoring case.
@@ -472,7 +472,7 @@ installs. Settings schema 3 moves stores on the old default
 | `pill_hidden_until()`            | `number \| null`: unix ms the pill is hidden until.                                                                                                                          |
 | `paste_last_transcript()`        | `Result<null>`: pastes the latest non-empty transcript (final text) into the focused app.                                                                                    |
 | `open_main_page(page: string)`   | `Result<null>`: shows the main window and emits `flow-open-page` (payload: page id) to it.                                                                                   |
-| microphones                      | Use Handy's existing `get_available_microphones()` and `set_selected_microphone(device_name)` (`"default"` = system default).                                                |
+| microphones                      | Use Lipik's existing `get_available_microphones()` and `set_selected_microphone(device_name)` (`"default"` = system default).                                                |
 
 Events:
 
@@ -484,7 +484,7 @@ Events:
 
 ## Order after transcription
 
-replacements -> snippets -> (Handy post-process, only for the
+replacements -> snippets -> (the built-in post-process, only for the
 post-process shortcut) or style clean-up (if on) -> transform auto-apply (if
 on) -> history -> paste / popup.
 

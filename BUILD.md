@@ -1,8 +1,8 @@
 # Building Lipik
 
 Lipik is built and tested on macOS (Apple silicon and Intel). The Windows and
-Linux build code comes from [Handy](https://github.com/cjpais/Handy) and is
-not tested here; Handy's own BUILD.md covers those platforms.
+Linux build code comes from the upstream app credited in README.md and is not
+tested here; that project's own BUILD.md covers those platforms.
 
 ## You need
 

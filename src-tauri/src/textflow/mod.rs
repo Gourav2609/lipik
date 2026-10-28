@@ -4,6 +4,13 @@
 pub mod cleanup_model;
 pub mod commands;
 mod context;
+
+/// The bundle id of the app in front, from the system rather than
+/// Accessibility, so it is known for every app.
+pub fn front_bundle_id() -> Option<String> {
+    context::front_app().bundle_id
+}
+
 pub mod engine;
 mod gate;
 pub mod hindi;
@@ -18,7 +25,8 @@ mod text;
 pub mod transforms;
 
 pub use pipeline::{
-    auto_transform, clean_up, prepare, record_meta, uses_llm, waits_on_llm, DictationMeta, Target,
+    auto_transform, clean_up, end_sentence, prepare, record_meta, uses_llm, waits_on_llm,
+    DictationMeta, Target,
 };
 
 use store::{DictionaryWord, TextFlow};

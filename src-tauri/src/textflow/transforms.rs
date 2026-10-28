@@ -219,7 +219,7 @@ enum Saved {
 }
 
 /// What the clipboard held before the copy. An image is read only when there
-/// is no text, as Handy's paste does.
+/// is no text, as Lipik's paste does.
 fn save_clipboard(app: &AppHandle) -> Saved {
     let clipboard = app.clipboard();
     if let Some(text) = clipboard.read_text().ok().filter(|t| !t.is_empty()) {
@@ -243,7 +243,7 @@ fn restore(app: &AppHandle, saved: Saved) {
 fn send_copy(app: &AppHandle) -> Result<(), String> {
     use enigo::{Direction, Key, Keyboard};
 
-    // kVK_ANSI_C: the physical C key, as Handy used for V before it resolved
+    // kVK_ANSI_C: the physical C key, as Lipik used for V before it resolved
     // the keyboard layout.
     #[cfg(target_os = "macos")]
     let (modifier, c_key) = (Key::Meta, Key::Other(8));

@@ -65,8 +65,8 @@ pub fn validate_shortcut(raw: &str) -> Result<(), String> {
     }
 
     // The name check above passes side-specific modifiers such as
-    // `option_left`, which the handy-keys recorder saves but the accelerator
-    // parser rejects. Parse here so a binding carried over from handy-keys is
+    // `option_left`, which the lipik-keys recorder saves but the accelerator
+    // parser rejects. Parse here so a binding carried over from lipik-keys is
     // reset to the default instead of failing to register.
     raw.parse::<Shortcut>()
         .map(|_| ())
@@ -112,7 +112,7 @@ pub fn register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<()
             if scut == &shortcut {
                 let shortcut_string = scut.into_string();
                 let is_pressed = event.state == ShortcutState::Pressed;
-                // Mirrors the handy-keys event log line; the distinct prefix
+                // Mirrors the lipik-keys event log line; the distinct prefix
                 // makes it possible to tell which backend fired a shortcut
                 // (e.g. when diagnosing the Secure Input fallback)
                 debug!(

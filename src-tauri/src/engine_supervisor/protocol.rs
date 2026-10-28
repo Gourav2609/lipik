@@ -1,4 +1,4 @@
-//! Wire protocol between Handy and its transcribe.cpp worker process.
+//! Wire protocol between Lipik and its transcribe.cpp worker process.
 //!
 //! Strict request/response: every [`Request`] gets exactly one [`Response`].
 //! Each message is one frame: `[u32 json_len][json][u32 pcm_len][pcm bytes]`
@@ -154,7 +154,7 @@ pub struct LoadedInfo {
     pub capabilities: Capabilities,
     pub supports_initial_prompt: bool,
     /// Whether the model handles audio longer than its native window in one
-    /// run (whisper today); other models' long audio is chunked by Handy.
+    /// run (whisper today); other models' long audio is chunked by Lipik.
     pub supports_long_form: bool,
     pub supports_vocabulary: bool,
 }

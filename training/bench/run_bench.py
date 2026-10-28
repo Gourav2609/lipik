@@ -17,10 +17,10 @@ from pathlib import Path
 HERE = Path(__file__).parent
 APP = HERE / "app"
 RUNS = HERE / "runs"
-PARAKEET = "handy-computer/parakeet-unified-en-0.6b-gguf/parakeet-unified-en-0.6b-Q8_0.gguf"
-WHISPER = "handy-computer/whisper-large-v3-turbo-gguf/whisper-large-v3-turbo-Q8_0.gguf"
-QWEN06 = "handy-computer/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q8_0.gguf"
-QWEN17 = "handy-computer/Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q8_0.gguf"
+PARAKEET = "lipik/parakeet-unified-en-0.6b-gguf/parakeet-unified-en-0.6b-Q8_0.gguf"
+WHISPER = "lipik/whisper-large-v3-turbo-gguf/whisper-large-v3-turbo-Q8_0.gguf"
+QWEN06 = "lipik/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q8_0.gguf"
+QWEN17 = "lipik/Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q8_0.gguf"
 
 CONFIGS = {
     "parakeet-en": (PARAKEET, "en"),

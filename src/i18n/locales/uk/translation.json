@@ -483,7 +483,7 @@
       "updateChecks": {
         "label": "Перевірка оновлень",
         "description": "Автоматично перевіряти наявність нових версій {{appName}}",
-        "lockedDescription": "Вимкнено системною конфігурацією (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Вимкнено системною конфігурацією (LIPIK_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "Звукова тема",

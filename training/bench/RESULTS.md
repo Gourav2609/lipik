@@ -169,7 +169,7 @@ cp ../../src-tauri/target/debug/lipik app/lipik   # refresh the portable copy
 printf 'Lipik Portable Mode' > app/portable
 ln -f models/*.gguf app/Data/models/              # plus the Parakeet and Whisper GGUFs
                                     # (Whisper turbo was deleted after this run; get it from
-                                    # handy-computer/whisper-large-v3-turbo-gguf)
+                                    # lipik/whisper-large-v3-turbo-gguf)
 python3 run_bench.py [config ...]   # ~38 min for all 8 configs
 python3 score.py                    # prints the tables
 ```

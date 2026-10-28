@@ -2,7 +2,7 @@ use rodio::cpal;
 
 /// The CPAL host feedback sounds play through. On Linux, uses ALSA host. On
 /// other platforms, uses the default host. Microphone capture picks its own
-/// host inside handy-recorder.
+/// host inside lipik-recorder.
 pub fn get_cpal_host() -> cpal::Host {
     #[cfg(target_os = "linux")]
     {

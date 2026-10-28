@@ -22,22 +22,17 @@ pub mod speakers;
 use download::DOWNLOAD_STALL_TIMEOUT;
 pub(crate) use download::{HttpDownloadEvent, HttpDownloadOutcome};
 
-/// Where a model comes from and how Handy obtains it — the routing discriminant
+/// Where a model comes from and how Lipik obtains it — the routing discriminant
 /// for downloading and on-disk resolution.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub enum ModelSource {
-    /// Direct HTTP download from a URL (current blob.handy.computer hosting).
-    Url {
-        url: String,
-        /// Expected SHA-256 for integrity verification; `None` skips it.
-        sha256: Option<String>,
-    },
     /// A file inside a Hugging Face Hub repo, fetched via hf-hub into the shared
     /// HF cache (so other tools reuse it). The file within the repo is
     /// [`ModelInfo::filename`].
     HuggingFace { repo_id: String, revision: String },
-    /// Already present on disk — a user-provided custom model, or one discovered
-    /// in a shared cache. Nothing to download.
+    /// Already present on disk — a user-provided custom model, a legacy
+    /// whisper.cpp `.bin` model, or one discovered in a shared cache. Nothing to
+    /// download.
     Local,
 }
 
@@ -104,9 +99,8 @@ fn canonicalize_supported_languages(languages: Vec<String>) -> Vec<String> {
     canonical
 }
 
-/// One downloadable quantization of a catalog model. (Its sha256, the trust
-/// anchor for mirror downloads, stays in the catalog: see
-/// `catalog::mirror_fallbacks`.)
+/// One downloadable quantization of a catalog model. (Its sha256 stays in the
+/// catalog: see `catalog::file_digest`.)
 #[derive(Debug, Clone)]
 pub struct QuantFile {
     pub filename: String,
@@ -378,17 +372,39 @@ fn hf_snapshot_paths(caches: &[Cache], repo_id: &str, revision: &str) -> Vec<Pat
 }
 
 /// Include dangling pointers so deleting a model cleans up all of its copies.
+/// Copies in the repo a catalog model was first published in count too, when
+/// they hold the catalog's bytes, so moving the catalog never forces a new
+/// download.
 fn hf_cached_paths_in(
     caches: &[Cache],
     repo_id: &str,
     revision: &str,
     filename: &str,
 ) -> Vec<PathBuf> {
-    hf_snapshot_paths(caches, repo_id, revision)
-        .into_iter()
-        .map(|snapshot| snapshot.join(filename))
-        .filter(|path| path.is_file() || path.is_symlink())
-        .collect()
+    let in_repo = |repo: &str| {
+        hf_snapshot_paths(caches, repo, revision)
+            .into_iter()
+            .map(|snapshot| snapshot.join(filename))
+            .filter(|path| path.is_file() || path.is_symlink())
+    };
+    let mut paths: Vec<PathBuf> = in_repo(repo_id).collect();
+    if let Some(legacy) = crate::catalog::legacy_repo(repo_id) {
+        paths.extend(in_repo(&legacy).filter(|path| is_catalog_copy(path, repo_id, filename)));
+    }
+    paths
+}
+
+/// Whether `path` holds the catalog's bytes for `filename`. A cache pointer
+/// links to a blob named after its sha256; a plain file (hf-hub on Windows
+/// without symlinks) is checked by size.
+fn is_catalog_copy(path: &Path, repo_id: &str, filename: &str) -> bool {
+    let Some((size, sha256)) = crate::catalog::file_digest(repo_id, filename) else {
+        return false;
+    };
+    match fs::read_link(path) {
+        Ok(blob) => blob.file_name().is_some_and(|name| name == sha256),
+        Err(_) => path.metadata().is_ok_and(|m| m.len() == size),
+    }
 }
 
 /// The `models--org--name` dir a cached file lives in.
@@ -507,7 +523,7 @@ fn local_caps(probe: &CapabilityProbe) -> LocalCaps {
     }
 }
 
-/// Bridges hf-hub's async download progress to Handy's `model-download-progress`
+/// Bridges hf-hub's async download progress to Lipik's `model-download-progress`
 /// event. hf-hub clones the reporter, so shared state lives behind an `Arc`.
 #[derive(Clone)]
 struct HfDownloadProgress {
@@ -651,8 +667,8 @@ struct RetiredOnnxModel {
     /// or for GigaAM before #1088, a single `.onnx` file.
     disk_names: &'static [&'static str],
     size_mb: u64,
-    /// Hugging Face repo of the catalog model that replaces it.
-    replacement_repo: &'static str,
+    /// Catalog id of the model that replaces it.
+    replacement: &'static str,
 }
 
 const RETIRED_ONNX_MODELS: &[RetiredOnnxModel] = &[
@@ -661,77 +677,77 @@ const RETIRED_ONNX_MODELS: &[RetiredOnnxModel] = &[
         name: "Parakeet V2",
         disk_names: &["parakeet-tdt-0.6b-v2-int8"],
         size_mb: 451,
-        replacement_repo: "handy-computer/parakeet-tdt-0.6b-v2-gguf",
+        replacement: "parakeet-tdt-0.6b-v2",
     },
     RetiredOnnxModel {
         id: "parakeet-tdt-0.6b-v3",
         name: "Parakeet V3",
         disk_names: &["parakeet-tdt-0.6b-v3-int8"],
         size_mb: 456,
-        replacement_repo: "handy-computer/parakeet-tdt-0.6b-v3-gguf",
+        replacement: "parakeet-tdt-0.6b-v3",
     },
     RetiredOnnxModel {
         id: "moonshine-base",
         name: "Moonshine Base",
         disk_names: &["moonshine-base"],
         size_mb: 55,
-        replacement_repo: "handy-computer/moonshine-base-gguf",
+        replacement: "canary-180m-flash",
     },
     RetiredOnnxModel {
         id: "moonshine-tiny-streaming-en",
         name: "Moonshine V2 Tiny",
         disk_names: &["moonshine-tiny-streaming-en"],
         size_mb: 31,
-        replacement_repo: "handy-computer/moonshine-streaming-tiny-gguf",
+        replacement: "canary-180m-flash",
     },
     RetiredOnnxModel {
         id: "moonshine-small-streaming-en",
         name: "Moonshine V2 Small",
         disk_names: &["moonshine-small-streaming-en"],
         size_mb: 99,
-        replacement_repo: "handy-computer/moonshine-streaming-small-gguf",
+        replacement: "canary-180m-flash",
     },
     RetiredOnnxModel {
         id: "moonshine-medium-streaming-en",
         name: "Moonshine V2 Medium",
         disk_names: &["moonshine-medium-streaming-en"],
         size_mb: 192,
-        replacement_repo: "handy-computer/moonshine-streaming-medium-gguf",
+        replacement: "canary-180m-flash",
     },
     RetiredOnnxModel {
         id: "sense-voice-int8",
         name: "SenseVoice",
         disk_names: &["sense-voice-int8"],
         size_mb: 152,
-        replacement_repo: "handy-computer/SenseVoiceSmall-gguf",
+        replacement: "SenseVoiceSmall",
     },
     RetiredOnnxModel {
         id: "gigaam-v3-e2e-ctc",
         name: "GigaAM v3",
         disk_names: &["giga-am-v3-int8", "giga-am-v3.int8.onnx"],
         size_mb: 151,
-        replacement_repo: "handy-computer/gigaam-v3-e2e-ctc-gguf",
+        replacement: "gigaam-v3-e2e-ctc",
     },
     RetiredOnnxModel {
         id: "canary-180m-flash",
         name: "Canary 180M Flash",
         disk_names: &["canary-180m-flash"],
         size_mb: 146,
-        replacement_repo: "handy-computer/canary-180m-flash-gguf",
+        replacement: "canary-180m-flash",
     },
     RetiredOnnxModel {
         id: "canary-1b-v2",
         name: "Canary 1B v2",
         disk_names: &["canary-1b-v2"],
         size_mb: 691,
-        replacement_repo: "handy-computer/canary-1b-v2-gguf",
+        replacement: "canary-1b-v2",
     },
     RetiredOnnxModel {
         id: "cohere-int8",
         name: "Cohere",
         disk_names: &["cohere-int8"],
         size_mb: 1708,
-        replacement_repo: "handy-computer/cohere-transcribe-03-2026-gguf",
+        replacement: "cohere-transcribe-03-2026",
     },
 ];
 
@@ -767,6 +783,9 @@ impl ModelManager {
 
         let mut available_models = HashMap::new();
 
+        // Legacy whisper.cpp `.bin` models. They are no longer downloadable (the
+        // catalog's GGUFs replace them); an entry stays only while its file is
+        // in the models dir.
         // Whisper supported languages (99 languages from tokenizer)
         let whisper_languages: Vec<String> = vec![
             "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca", "nl", "ar",
@@ -789,13 +808,7 @@ impl ModelManager {
                 name: "Whisper Small".to_string(),
                 description: "Fast and fairly accurate.".to_string(),
                 filename: "ggml-small.bin".to_string(),
-                source: ModelSource::Url {
-                    url: "https://blob.handy.computer/ggml-small.bin".to_string(),
-                    sha256: Some(
-                        "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"
-                            .to_string(),
-                    ),
-                },
+                source: ModelSource::Local,
                 size_mb: 465,
                 is_downloaded: false,
                 is_downloading: false,
@@ -820,13 +833,7 @@ impl ModelManager {
                 name: "Whisper Medium".to_string(),
                 description: "Good accuracy, medium speed".to_string(),
                 filename: "whisper-medium-q4_1.bin".to_string(),
-                source: ModelSource::Url {
-                    url: "https://blob.handy.computer/whisper-medium-q4_1.bin".to_string(),
-                    sha256: Some(
-                        "79283fc1f9fe12ca3248543fbd54b73292164d8df5a16e095e2bceeaaabddf57"
-                            .to_string(),
-                    ),
-                },
+                source: ModelSource::Local,
                 size_mb: 469,
                 is_downloaded: false,
                 is_downloading: false,
@@ -850,13 +857,7 @@ impl ModelManager {
                 name: "Whisper Turbo".to_string(),
                 description: "Balanced accuracy and speed.".to_string(),
                 filename: "ggml-large-v3-turbo.bin".to_string(),
-                source: ModelSource::Url {
-                    url: "https://blob.handy.computer/ggml-large-v3-turbo.bin".to_string(),
-                    sha256: Some(
-                        "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69"
-                            .to_string(),
-                    ),
-                },
+                source: ModelSource::Local,
                 size_mb: 1549,
                 is_downloaded: false,
                 is_downloading: false,
@@ -880,13 +881,7 @@ impl ModelManager {
                 name: "Whisper Large".to_string(),
                 description: "Good accuracy, but slow.".to_string(),
                 filename: "ggml-large-v3-q5_0.bin".to_string(),
-                source: ModelSource::Url {
-                    url: "https://blob.handy.computer/ggml-large-v3-q5_0.bin".to_string(),
-                    sha256: Some(
-                        "d75795ecff3f83b5faa89d1900604ad8c780abd5739fae406de19f23ecd98ad1"
-                            .to_string(),
-                    ),
-                },
+                source: ModelSource::Local,
                 size_mb: 1031,
                 is_downloaded: false,
                 is_downloading: false,
@@ -911,13 +906,7 @@ impl ModelManager {
                 description: "Optimized for Taiwanese Mandarin. Code-switching support."
                     .to_string(),
                 filename: "breeze-asr-q5_k.bin".to_string(),
-                source: ModelSource::Url {
-                    url: "https://blob.handy.computer/breeze-asr-q5_k.bin".to_string(),
-                    sha256: Some(
-                        "8efbf0ce8a3f50fe332b7617da787fb81354b358c288b008d3bdef8359df64c6"
-                            .to_string(),
-                    ),
-                },
+                source: ModelSource::Local,
                 size_mb: 1030,
                 is_downloaded: false,
                 is_downloading: false,
@@ -992,11 +981,11 @@ impl ModelManager {
     /// Seed every bundled catalog default into the registry (additive).
     /// Alternate quants are discovered from disk instead.
     ///
-    /// Catalog (`.gguf`, `HuggingFace`) and legacy (`.bin`/ONNX, `Url`) entries
-    /// stay SEPARATE — different files, ids, and runtimes. Nothing is merged or
-    /// removed; the UI just hides not-on-disk `Url` entries to deprecate legacy
-    /// downloads, while already-downloaded ones stay runnable. Runs before the
-    /// on-disk scans so a cached model dedups onto its catalog entry.
+    /// Catalog (`.gguf`, `HuggingFace`) and legacy (`.bin`, `Local`) entries
+    /// stay SEPARATE — different files, ids, and runtimes. Nothing is merged;
+    /// legacy entries leave the registry when their file isn't on disk, while
+    /// already-downloaded ones stay runnable. Runs before the on-disk scans so a
+    /// cached model dedups onto its catalog entry.
     fn seed_catalog_models(available_models: &mut HashMap<String, ModelInfo>) {
         use std::collections::hash_map::Entry;
         let mut added = 0usize;
@@ -1022,7 +1011,7 @@ impl ModelManager {
     }
 
     /// Re-run the local discovery scans (custom models dir + shared HF cache) so
-    /// models dropped in or downloaded outside Handy show up without a restart.
+    /// models dropped in or downloaded outside Lipik show up without a restart.
     /// The merge is additive: only new ids are inserted, so existing entries keep
     /// their values — including runtime-probed capabilities from
     /// [`Self::set_runtime_capabilities`]. It then runs [`Self::update_download_status`],
@@ -1154,11 +1143,13 @@ impl ModelManager {
         RETIRED_ONNX_MODELS
             .iter()
             .filter(|model| self.is_retired_on_disk(model))
-            .map(|model| RetiredModel {
-                id: model.id.to_string(),
-                name: model.name.to_string(),
-                size_mb: model.size_mb,
-                replacement_repo: model.replacement_repo.to_string(),
+            .filter_map(|model| {
+                Some(RetiredModel {
+                    id: model.id.to_string(),
+                    name: model.name.to_string(),
+                    size_mb: model.size_mb,
+                    replacement_repo: crate::catalog::repository_of(model.replacement)?.to_string(),
+                })
             })
             .collect()
     }
@@ -1197,7 +1188,7 @@ impl ModelManager {
 
         for model in models.values_mut() {
             if let ModelSource::HuggingFace { repo_id, revision } = &model.source {
-                // A models-dir copy counts too: mirror-fallback downloads land
+                // A models-dir copy counts too: older mirror downloads landed
                 // there, and it makes manual drop-ins of catalog files work.
                 let local_path = self.models_dir.join(&model.filename);
                 let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
@@ -1230,9 +1221,9 @@ impl ModelManager {
                 model.partial_size = 0;
             }
 
-            // Custom entries are discovered from files and have no download
-            // source. Once their file is gone, keeping the entry would offer a
-            // Download action that can never succeed.
+            // Custom and legacy entries have no download source. Once their
+            // file is gone, keeping the entry would offer a Download action
+            // that can never succeed.
             if !model.is_downloaded
                 && !downloading_ids.contains(&model.id)
                 && Self::disappears_when_missing(model)
@@ -1257,16 +1248,24 @@ impl ModelManager {
         })
     }
 
-    /// Entries discovered exclusively from disk should disappear with their
-    /// files. Catalog defaults remain so the UI can offer them for download.
+    /// Entries that can't be downloaded should disappear with their files.
+    /// Catalog defaults remain so the UI can offer them for download.
     fn disappears_when_missing(model: &ModelInfo) -> bool {
-        model.is_custom
-            || match &model.source {
-                ModelSource::HuggingFace { repo_id, .. } => {
-                    Self::is_catalog_alternate_quant(repo_id, &model.filename)
-                }
-                _ => false,
+        match &model.source {
+            ModelSource::HuggingFace { repo_id, .. } => {
+                model.is_custom || Self::is_catalog_alternate_quant(repo_id, &model.filename)
             }
+            ModelSource::Local => true,
+        }
+    }
+
+    /// The id a selection saved before the catalog moved to Lipik's repos
+    /// should take: the new id only when the old file counts as that catalog
+    /// model. Otherwise the old id stays, so a file with other bytes keeps
+    /// loading under the entry the cache scan lists it as.
+    fn moved_selection(models: &HashMap<String, ModelInfo>, selected: &str) -> Option<String> {
+        crate::catalog::current_model_id(selected)
+            .filter(|id| Self::selected_model_is_available(models, id))
     }
 
     fn selected_model_is_available(models: &HashMap<String, ModelInfo>, model_id: &str) -> bool {
@@ -1323,6 +1322,16 @@ impl ModelManager {
 
     fn auto_select_model_if_needed(&self) -> Result<()> {
         let mut settings = get_settings(&self.app_handle);
+
+        let moved = {
+            let models = self.available_models.lock().unwrap();
+            Self::moved_selection(&models, &settings.selected_model)
+        };
+        if let Some(id) = moved {
+            info!("Selected model moved to {}", id);
+            settings.selected_model = id;
+            write_settings(&self.app_handle, settings.clone());
+        }
 
         // A model cannot remain selected after its files disappear. Catalog
         // entries stay in the registry so they can be downloaded again, so
@@ -1496,7 +1505,7 @@ impl ModelManager {
 
             // Probe GGUF headers for advertised capabilities so a dropped-in
             // model surfaces streaming / translation / languages just like a
-            // Handy-downloaded one. Legacy `.bin` files have no GGUF header, so
+            // Lipik-downloaded one. Legacy `.bin` files have no GGUF header, so
             // they stay "unknown" until transcribe-cpp reconciles them at load.
             let probe = if is_gguf {
                 GgufHeaderProber.probe_file(&path)
@@ -1540,7 +1549,7 @@ impl ModelManager {
     }
 
     /// Discover transcribe-cpp-compatible GGUF models already present in the
-    /// shared Hugging Face cache, so models downloaded by Handy (or any other
+    /// shared Hugging Face cache, so models downloaded by Lipik (or any other
     /// tool) appear in "Your Models" without re-downloading. Only architectures
     /// transcribe-cpp recognises are surfaced; arbitrary (e.g. LLM) GGUFs that
     /// share the cache are ignored.
@@ -1587,10 +1596,11 @@ impl ModelManager {
                 continue;
             };
             // Reverse hf-hub's `org/name` -> `models--org--name` folder naming.
-            let repo_id = rest.replace("--", "/");
+            let folder_repo = rest.replace("--", "/");
+            let current_repo = crate::catalog::current_repo(&folder_repo);
 
             let caches = [Cache::new(cache_root.to_path_buf())];
-            for snapshot in hf_snapshot_paths(&caches, &repo_id, "main") {
+            for snapshot in hf_snapshot_paths(&caches, &folder_repo, "main") {
                 let Some(revision) = snapshot.file_name().and_then(|name| name.to_str()) else {
                     continue;
                 };
@@ -1603,6 +1613,14 @@ impl ModelManager {
                     if !fname.ends_with(".gguf") || !file.path().is_file() {
                         continue;
                     }
+                    let path = snapshot.join(&fname);
+                    // A legacy repo's file belongs to the catalog entry that took
+                    // the repo over only when it holds the catalog's bytes; any
+                    // other file there stays listed under the repo it is in.
+                    let repo_id = match current_repo {
+                        Some(repo) if is_catalog_copy(&path, repo, &fname) => repo.to_string(),
+                        _ => folder_repo.clone(),
+                    };
                     if known_hf.contains(&(repo_id.clone(), fname.clone())) {
                         continue;
                     }
@@ -1633,7 +1651,6 @@ impl ModelManager {
                         continue;
                     }
 
-                    let path = snapshot.join(&fname);
                     let probe = prober.probe_file(&path);
                     // Only surface models transcribe-cpp recognises.
                     if probe.verdict != Compatibility::Compatible {
@@ -1684,6 +1701,31 @@ impl ModelManager {
     /// hf-hub, reporting progress through the same `model-download-progress`
     /// event the URL path uses. Uses hf-hub's stock cache, but deliberately
     /// disables authentication because every catalog repository is public.
+    /// Waits for the running transfer of `model_id` to end, then reports
+    /// whether the file arrived.
+    async fn wait_for_download(
+        &self,
+        model_id: &str,
+        repo_id: &str,
+        revision: &str,
+        filename: &str,
+    ) -> Result<()> {
+        loop {
+            let running = self.cancel_flags.lock().unwrap().contains_key(model_id);
+            if !running {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        if hf_cached_path(repo_id, revision, filename).is_some()
+            || self.models_dir.join(filename).exists()
+        {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("The download of {model_id} did not finish"))
+        }
+    }
+
     async fn download_hf_model(
         &self,
         model_info: &ModelInfo,
@@ -1694,13 +1736,35 @@ impl ModelManager {
         let filename = model_info.filename.clone();
 
         // Already in the shared cache (possibly from another tool), or dropped
-        // into the models dir (mirror fallback / manual install)? Done.
+        // into the models dir (older mirror download / manual install)? Done.
         if hf_cached_path(&repo_id, &revision, &filename).is_some()
             || self.models_dir.join(&filename).exists()
         {
             self.update_download_status()?;
             let _ = self.app_handle.emit("model-download-complete", &model_id);
             return Ok(());
+        }
+
+        // One transfer per model. The cancel token is registered only by a
+        // running transfer and removed when it ends, so it marks one reliably
+        // (`is_downloading` is rewritten by status refreshes). A second request
+        // waits for that transfer instead of starting another: setup screens
+        // can ask many times a second, and each extra transfer opens more
+        // connections until the Mac runs out of open files.
+        let cancel_token = CancellationToken::new();
+        let already_running = {
+            let mut flags = self.cancel_flags.lock().unwrap();
+            let running = flags.contains_key(&model_id);
+            if !running {
+                flags.insert(model_id.clone(), cancel_token.clone());
+            }
+            running
+        };
+        if already_running {
+            info!("Download of {model_id} already running; waiting for it");
+            return self
+                .wait_for_download(&model_id, &repo_id, &revision, &filename)
+                .await;
         }
 
         // Mark downloading; the guard resets the flag on any error path.
@@ -1713,11 +1777,6 @@ impl ModelManager {
 
         // Register a cancellation token so `cancel_download` can abort this
         // transfer promptly. The guard removes it on every exit path.
-        let cancel_token = CancellationToken::new();
-        {
-            let mut flags = self.cancel_flags.lock().unwrap();
-            flags.insert(model_id.clone(), cancel_token.clone());
-        }
 
         let mut cleanup = DownloadCleanup {
             available_models: &self.available_models,
@@ -1772,8 +1831,8 @@ impl ModelManager {
             let progress = HfDownloadProgress::new(self.app_handle.clone(), model_id.clone());
 
             // hf-hub has no internal timeouts, so a wedged connection would
-            // otherwise hang this attempt forever and neither the retry loop
-            // nor the mirror fallback would ever fire. The watchdog cancels a
+            // otherwise hang this attempt forever and the retry loop would
+            // never fire. The watchdog cancels a
             // per-attempt child token when progress goes stale; a user cancel
             // on the parent propagates through the same child.
             let attempt_token = cancel_token.child_token();
@@ -1836,7 +1895,7 @@ impl ModelManager {
                     // the connection pool a brief pause, then retry once using
                     // the known-compatible single-stream path. A sequential
                     // stall already cost DOWNLOAD_STALL_TIMEOUT, so further
-                    // retries would likely just repeat it — use the mirror.
+                    // retries would likely just repeat it.
                     if stream_count == 1 || attempt >= ATTEMPT_STREAMS.len() {
                         break Some(err);
                     }
@@ -1895,44 +1954,11 @@ impl ModelManager {
                 "HF download failed for {} after {} attempt(s): {:?}",
                 model_id, attempt, hf_error
             );
-            let mirrors = crate::catalog::mirror_fallbacks(&model_id);
-            if mirrors.is_empty() {
-                return Err(anyhow::anyhow!(
-                    "Hugging Face download failed after {} attempt(s): {}",
-                    attempt,
-                    hf_error
-                ));
-            }
-            let mut completed = false;
-            for mirror in &mirrors {
-                info!("Falling back to mirror for {}: {}", model_id, mirror.url);
-                match self
-                    .download_from_mirror(&model_id, &filename, mirror, cancel_token.clone())
-                    .await
-                {
-                    Ok(true) => {
-                        completed = true;
-                        break;
-                    }
-                    Ok(false) => {
-                        info!("Mirror download cancelled for: {}", model_id);
-                        return Ok(());
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Mirror download failed for {} from {}: {:?}",
-                            model_id, mirror.url, e
-                        );
-                    }
-                }
-            }
-            if !completed {
-                return Err(anyhow::anyhow!(
-                    "Download failed from Hugging Face ({}) and {} mirror(s)",
-                    hf_error,
-                    mirrors.len()
-                ));
-            }
+            return Err(anyhow::anyhow!(
+                "Hugging Face download failed after {} attempt(s): {}",
+                attempt,
+                hf_error
+            ));
         }
 
         cleanup.disarmed = true;
@@ -1941,47 +1967,6 @@ impl ModelManager {
         let _ = self.app_handle.emit("model-download-complete", &model_id);
         info!("HF model {} downloaded", model_id);
         Ok(())
-    }
-
-    /// Direct-HTTP download of a catalog model's file from a mirror into the
-    /// models dir (HF-model resolution accepts that location too). Returns
-    /// `Ok(true)` on completion, `Ok(false)` if cancelled (partial kept).
-    async fn download_from_mirror(
-        &self,
-        model_id: &str,
-        filename: &str,
-        mirror: &crate::catalog::MirrorFile,
-        cancel_token: CancellationToken,
-    ) -> Result<bool> {
-        fs::create_dir_all(&self.models_dir)?;
-        let model_path = self.models_dir.join(filename);
-        let partial_path = self.models_dir.join(format!("{}.partial", filename));
-
-        if model_path.exists() {
-            return Ok(true);
-        }
-
-        match self
-            .download_http_resumable(
-                model_id,
-                &mirror.url,
-                &partial_path,
-                Some(mirror.size_bytes),
-                Some(&mirror.sha256),
-                &cancel_token,
-            )
-            .await?
-        {
-            HttpDownloadOutcome::Cancelled => Ok(false),
-            HttpDownloadOutcome::Completed => {
-                fs::rename(&partial_path, &model_path)?;
-                info!(
-                    "Mirror download of {} completed and verified ({:?})",
-                    model_id, model_path
-                );
-                Ok(true)
-            }
-        }
     }
 
     pub async fn download_model(&self, model_id: &str) -> Result<()> {
@@ -1993,102 +1978,13 @@ impl ModelManager {
         let model_info =
             model_info.ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
 
-        let (url, expected_sha256) = match &model_info.source {
-            ModelSource::Url { url, sha256 } => (url.clone(), sha256.clone()),
+        match &model_info.source {
             ModelSource::HuggingFace { repo_id, revision } => {
-                return self
-                    .download_hf_model(&model_info, repo_id.clone(), revision.clone())
-                    .await;
+                self.download_hf_model(&model_info, repo_id.clone(), revision.clone())
+                    .await
             }
-            ModelSource::Local => {
-                return Err(anyhow::anyhow!("No download source for model"));
-            }
-        };
-        let model_path = self.models_dir.join(&model_info.filename);
-        let partial_path = self
-            .models_dir
-            .join(format!("{}.partial", &model_info.filename));
-
-        // Don't download if complete version already exists
-        if model_path.exists() {
-            // Clean up any partial file that might exist
-            if partial_path.exists() {
-                let _ = fs::remove_file(&partial_path);
-            }
-            self.update_download_status()?;
-            return Ok(());
+            ModelSource::Local => Err(anyhow::anyhow!("No download source for model")),
         }
-
-        // Mark as downloading
-        {
-            let mut models = self.available_models.lock().unwrap();
-            if let Some(model) = models.get_mut(model_id) {
-                model.is_downloading = true;
-            }
-        }
-
-        // Create cancellation token for this download
-        let cancel_token = CancellationToken::new();
-        {
-            let mut flags = self.cancel_flags.lock().unwrap();
-            flags.insert(model_id.to_string(), cancel_token.clone());
-        }
-
-        // Guard ensures is_downloading and cancel_flags are cleaned up on every
-        // error path. Disarmed only on success (which sets is_downloaded = true).
-        let mut cleanup = DownloadCleanup {
-            available_models: &self.available_models,
-            cancel_flags: &self.cancel_flags,
-            model_id: model_id.to_string(),
-            disarmed: false,
-        };
-
-        // URL sources carry no authoritative size, so the helper falls back to
-        // the server's content-length for progress and completeness checks.
-        match self
-            .download_http_resumable(
-                model_id,
-                &url,
-                &partial_path,
-                None,
-                expected_sha256.as_deref(),
-                &cancel_token,
-            )
-            .await?
-        {
-            HttpDownloadOutcome::Cancelled => {
-                info!("Download cancelled for: {}", model_id);
-                // Keep partial file for resume functionality.
-                // Guard handles is_downloading + cancel_flags cleanup on drop.
-                return Ok(());
-            }
-            HttpDownloadOutcome::Completed => {}
-        }
-
-        fs::rename(&partial_path, &model_path)?;
-
-        // Disarm the guard — success path does its own cleanup because it
-        // additionally sets is_downloaded = true.
-        cleanup.disarmed = true;
-        {
-            let mut models = self.available_models.lock().unwrap();
-            if let Some(model) = models.get_mut(model_id) {
-                model.is_downloading = false;
-                model.is_downloaded = true;
-                model.partial_size = 0;
-            }
-        }
-        self.cancel_flags.lock().unwrap().remove(model_id);
-
-        // Emit completion event
-        let _ = self.app_handle.emit("model-download-complete", model_id);
-
-        info!(
-            "Successfully downloaded model {} to {:?}",
-            model_id, model_path
-        );
-
-        Ok(())
     }
 
     pub fn delete_model(&self, model_id: &str) -> Result<()> {
@@ -2114,7 +2010,7 @@ impl ModelManager {
             // removed before it stay removed, and the entry keeps reading as
             // downloaded while any copy remains.
             let mut deleted = Self::delete_hf_cache_file(repo_id, revision, &model_info.filename)?;
-            // Also remove a models-dir copy (mirror fallback / manual drop-in)
+            // Also remove a models-dir copy (older mirror download / manual drop-in)
             // and any resumable partial next to it.
             for path in [
                 self.models_dir.join(&model_info.filename),
@@ -2127,7 +2023,7 @@ impl ModelManager {
                     deleted = true;
                 }
             }
-            // Files already missing (e.g. removed outside Handy) is not a failure —
+            // Files already missing (e.g. removed outside Lipik) is not a failure —
             // deleting is idempotent, so this still needs to fall through and clear
             // the stale "Downloaded" entry rather than erroring out and leaving it stuck.
             if !deleted {
@@ -2170,7 +2066,7 @@ impl ModelManager {
             deleted_something = true;
         }
 
-        // Files already missing (e.g. removed outside Handy) is not a failure —
+        // Files already missing (e.g. removed outside Lipik) is not a failure —
         // deleting is idempotent, so this still needs to fall through and clear
         // the stale "Downloaded" entry rather than erroring out and leaving it stuck.
         if !deleted_something {
@@ -2251,7 +2147,7 @@ impl ModelManager {
             if let Some(path) = hf_cached_path(repo_id, revision, &model_info.filename) {
                 return Ok(path);
             }
-            // Mirror-fallback download or manual drop-in in the models dir.
+            // Older mirror download or manual drop-in in the models dir.
             // The complete file only ever appears after verification, so a
             // stale `.partial` alongside it is leftover noise, not a veto —
             // clear it rather than declaring the model missing.
@@ -2348,7 +2244,7 @@ mod tests {
         let legacy = TempDir::new().unwrap();
         let expected = add_cached_model(
             legacy.path(),
-            "handy-computer/test-model",
+            "acme/test-model",
             "old-revision",
             "model.gguf",
         );
@@ -2358,12 +2254,7 @@ mod tests {
         ];
 
         assert_eq!(
-            hf_cached_path_in(
-                &caches,
-                "handy-computer/test-model",
-                "old-revision",
-                "model.gguf"
-            ),
+            hf_cached_path_in(&caches, "acme/test-model", "old-revision", "model.gguf"),
             Some(expected)
         );
     }
@@ -2372,30 +2263,15 @@ mod tests {
     fn test_hf_cached_path_prefers_active_cache() {
         let active = TempDir::new().unwrap();
         let legacy = TempDir::new().unwrap();
-        let expected = add_cached_model(
-            active.path(),
-            "handy-computer/test-model",
-            "revision",
-            "model.gguf",
-        );
-        add_cached_model(
-            legacy.path(),
-            "handy-computer/test-model",
-            "revision",
-            "model.gguf",
-        );
+        let expected = add_cached_model(active.path(), "acme/test-model", "revision", "model.gguf");
+        add_cached_model(legacy.path(), "acme/test-model", "revision", "model.gguf");
         let caches = vec![
             Cache::new(active.path().to_path_buf()),
             Cache::new(legacy.path().to_path_buf()),
         ];
 
         assert_eq!(
-            hf_cached_path_in(
-                &caches,
-                "handy-computer/test-model",
-                "revision",
-                "model.gguf"
-            ),
+            hf_cached_path_in(&caches, "acme/test-model", "revision", "model.gguf"),
             Some(expected)
         );
     }
@@ -2419,11 +2295,13 @@ mod tests {
         path
     }
 
-    fn catalog_model(id_prefix: &str) -> &'static ModelDescriptor {
+    /// The catalog descriptor of a catalog id (`"whisper-large-v3"`).
+    fn catalog_model(id: &str) -> &'static ModelDescriptor {
+        let repo = crate::catalog::repository_of(id).unwrap_or_else(|| panic!("catalog has {id}"));
         crate::catalog::CATALOG
             .iter()
-            .find(|d| d.id.starts_with(id_prefix))
-            .unwrap_or_else(|| panic!("catalog has {id_prefix}"))
+            .find(|d| matches!(&d.source, ModelSource::HuggingFace { repo_id, .. } if repo_id == repo))
+            .unwrap()
     }
 
     fn hf_source(desc: &ModelDescriptor) -> (&str, &str) {
@@ -2439,23 +2317,18 @@ mod tests {
         let mut registry = HashMap::new();
         ModelManager::seed_catalog_models(&mut registry);
         for retired in RETIRED_ONNX_MODELS {
-            let replacement = registry
-                .values()
-                .find(|info| {
-                    matches!(&info.source, ModelSource::HuggingFace { repo_id, .. }
-                        if repo_id == retired.replacement_repo)
-                })
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{}: replacement {} is not offered",
-                        retired.id, retired.replacement_repo
-                    )
-                });
+            let repo = crate::catalog::repository_of(retired.replacement).unwrap_or_else(|| {
+                panic!(
+                    "{}: replacement {} is not offered",
+                    retired.id, retired.replacement
+                )
+            });
             assert!(
-                !crate::catalog::mirror_fallbacks(&replacement.id).is_empty(),
-                "{}: replacement {} has no mirror fallback",
+                registry.values().any(|info| matches!(&info.source,
+                    ModelSource::HuggingFace { repo_id, .. } if repo_id == repo)),
+                "{}: replacement {} is not in the registry",
                 retired.id,
-                replacement.id
+                repo
             );
         }
     }
@@ -2484,9 +2357,195 @@ mod tests {
         assert!(hf_cached_path_in(&caches, repo, &revision, "model.gguf").is_none());
     }
 
+    /// A catalog model already on Lipik's repos, with its default file.
+    fn lipik_model() -> (&'static ModelDescriptor, String, &'static QuantFile) {
+        let desc = catalog_model("parakeet-unified-en-0.6b");
+        let (repo, _) = hf_source(desc);
+        let legacy = crate::catalog::legacy_repo(repo).expect("catalog repo is on lipik/");
+        assert_eq!(legacy, "handy-computer/parakeet-unified-en-0.6b-gguf");
+        (desc, legacy, desc.default_file().unwrap())
+    }
+
+    /// `add_cached_blob` with the blob named after `sha256`.
+    #[cfg(unix)]
+    fn add_cached_blob_named(
+        cache: &Path,
+        repo_id: &str,
+        commit: &str,
+        filename: &str,
+        sha256: &str,
+    ) -> PathBuf {
+        let repo_dir = cache.join(format!("models--{}", repo_id.replace('/', "--")));
+        let blob = repo_dir.join("blobs").join(sha256);
+        fs::create_dir_all(blob.parent().unwrap()).unwrap();
+        fs::write(&blob, b"model").unwrap();
+        let pointer = repo_dir.join("snapshots").join(commit).join(filename);
+        fs::create_dir_all(pointer.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(format!("../../blobs/{sha256}"), &pointer).unwrap();
+        pointer
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_model_downloaded_from_the_legacy_repo_counts_and_loads() {
+        let (desc, legacy, file) = lipik_model();
+        let (repo, revision) = hf_source(desc);
+        let (_, sha256) = crate::catalog::file_digest(repo, &file.filename).unwrap();
+        let cache = TempDir::new().unwrap();
+        let caches = vec![Cache::new(cache.path().to_path_buf())];
+        let old_commit = "7e948f21b7bdbac698d3318db9d350f1096f3b6c";
+        let pointer =
+            add_cached_blob_named(cache.path(), &legacy, old_commit, &file.filename, sha256);
+
+        // Status and loading both resolve through this lookup.
+        assert_eq!(
+            hf_cached_path_in(&caches, repo, revision, &file.filename),
+            Some(pointer.clone())
+        );
+
+        // The cache scan files it under the catalog entry, not as a second model.
+        let mut models = HashMap::new();
+        ModelManager::seed_catalog_models(&mut models);
+        let before = models.len();
+        ModelManager::discover_hf_cache_models_in(cache.path(), &mut models);
+        assert_eq!(models.len(), before);
+        assert!(!models.contains_key(&format!("{legacy}/{}", file.filename)));
+
+        // Deleting the model removes the legacy copy too.
+        assert!(
+            ModelManager::delete_hf_cache_file_in(&caches, repo, revision, &file.filename).unwrap()
+        );
+        assert!(fs::symlink_metadata(&pointer).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_legacy_repo_file_with_other_bytes_is_not_the_catalog_model() {
+        let (desc, legacy, file) = lipik_model();
+        let (repo, revision) = hf_source(desc);
+        let cache = TempDir::new().unwrap();
+        let caches = vec![Cache::new(cache.path().to_path_buf())];
+        add_cached_blob_named(
+            cache.path(),
+            &legacy,
+            "old",
+            &file.filename,
+            &"c".repeat(64),
+        );
+        let plain = add_unreferenced_snapshot_file(cache.path(), &legacy, "main", &file.filename);
+        write_synthetic_gguf(&plain, "parakeet", &["en"]);
+
+        assert_eq!(
+            hf_cached_path_in(&caches, repo, revision, &file.filename),
+            None
+        );
+
+        // Still listed, and runnable, under the repo it is in.
+        let mut models = HashMap::new();
+        ModelManager::seed_catalog_models(&mut models);
+        ModelManager::discover_hf_cache_models_in(cache.path(), &mut models);
+        let listed = &models[&format!("{legacy}/{}", file.filename)];
+        assert!(listed.is_downloaded);
+        assert!(
+            matches!(&listed.source, ModelSource::HuggingFace { repo_id, .. } if *repo_id == legacy)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_selection_moves_only_when_the_old_file_is_the_catalog_model() {
+        let (desc, legacy, file) = lipik_model();
+        let (repo, revision) = hf_source(desc);
+        let (_, sha256) = crate::catalog::file_digest(repo, &file.filename).unwrap();
+        let old_id = format!("{legacy}/{}", file.filename);
+        let registry = |cache: &TempDir| {
+            let caches = vec![Cache::new(cache.path().to_path_buf())];
+            let mut models = HashMap::new();
+            ModelManager::seed_catalog_models(&mut models);
+            ModelManager::discover_hf_cache_models_in(cache.path(), &mut models);
+            for model in models.values_mut() {
+                if let ModelSource::HuggingFace { repo_id, revision } = &model.source {
+                    model.is_downloaded =
+                        hf_cached_path_in(&caches, repo_id, revision, &model.filename).is_some();
+                }
+            }
+            models
+        };
+
+        // Same bytes: the selection takes the lipik id.
+        let cache = TempDir::new().unwrap();
+        add_cached_blob_named(cache.path(), &legacy, "old", &file.filename, sha256);
+        assert_eq!(
+            ModelManager::moved_selection(&registry(&cache), &old_id),
+            Some(desc.id.clone())
+        );
+
+        // Other bytes: the selection stays and the old file still loads.
+        let cache = TempDir::new().unwrap();
+        let plain = add_unreferenced_snapshot_file(cache.path(), &legacy, "main", &file.filename);
+        write_synthetic_gguf(&plain, "parakeet", &["en"]);
+        let models = registry(&cache);
+        assert_eq!(ModelManager::moved_selection(&models, &old_id), None);
+        assert!(ModelManager::selected_model_is_available(&models, &old_id));
+        let ModelSource::HuggingFace {
+            repo_id,
+            revision: snapshot,
+        } = &models[&old_id].source
+        else {
+            panic!("listed from the HF cache");
+        };
+        let caches = vec![Cache::new(cache.path().to_path_buf())];
+        assert_eq!(
+            hf_cached_path_in(&caches, repo_id, snapshot, &file.filename),
+            Some(plain)
+        );
+        assert!(hf_cached_path_in(&caches, repo, revision, &file.filename).is_none());
+    }
+
+    #[test]
+    fn test_plain_legacy_file_of_the_catalog_size_counts() {
+        let (desc, legacy, file) = lipik_model();
+        let (repo, revision) = hf_source(desc);
+        let cache = TempDir::new().unwrap();
+        let caches = vec![Cache::new(cache.path().to_path_buf())];
+        let path = add_unreferenced_snapshot_file(cache.path(), &legacy, "main", &file.filename);
+        File::create(&path)
+            .unwrap()
+            .set_len(file.size_bytes)
+            .unwrap();
+
+        assert_eq!(
+            hf_cached_path_in(&caches, repo, revision, &file.filename),
+            Some(path)
+        );
+    }
+
+    #[test]
+    fn test_fresh_download_comes_from_lipik() {
+        let (desc, _, file) = lipik_model();
+        let mut models = HashMap::new();
+        ModelManager::seed_catalog_models(&mut models);
+        let ModelSource::HuggingFace { repo_id, revision } = &models[&desc.id].source else {
+            panic!("catalog models download from Hugging Face");
+        };
+        let api = ApiBuilder::new().with_token(None).build().unwrap();
+        let repo = api.repo(Repo::with_revision(
+            repo_id.clone(),
+            RepoType::Model,
+            revision.clone(),
+        ));
+        assert_eq!(
+            repo.url(&file.filename),
+            format!(
+                "https://huggingface.co/lipik/parakeet-unified-en-0.6b-gguf/resolve/{revision}/{}",
+                file.filename
+            )
+        );
+    }
+
     #[test]
     fn test_old_q5_is_discovered_and_survives_deleting_all_q8_copies() {
-        let desc = catalog_model("handy-computer/whisper-large-v3-gguf/");
+        let desc = catalog_model("whisper-large-v3");
         let (repo, revision) = hf_source(desc);
         let q5 = desc.files.iter().find(|f| f.quant == "Q5_K_M").unwrap();
         let q8 = desc.default_file().unwrap();
@@ -2570,7 +2629,7 @@ mod tests {
         // fail the delete, not report success while the model stays on disk.
         use std::os::unix::fs::PermissionsExt;
 
-        let desc = catalog_model("handy-computer/canary-180m-flash-gguf/");
+        let desc = catalog_model("canary-180m-flash");
         let (repo_id, revision) = hf_source(desc);
         let filename = &desc.default_file().unwrap().filename;
         let caches_in = |cache: &TempDir| vec![Cache::new(cache.path().to_path_buf())];
@@ -2708,10 +2767,7 @@ mod tests {
                 name: "Whisper Small".to_string(),
                 description: "Test".to_string(),
                 filename: "ggml-small.bin".to_string(),
-                source: ModelSource::Url {
-                    url: "https://example.com".to_string(),
-                    sha256: None,
-                },
+                source: ModelSource::Local,
                 size_mb: 100,
                 is_downloaded: false,
                 is_downloading: false,
@@ -2943,12 +2999,10 @@ mod tests {
         // repo under other casing. On a case-sensitive filesystem only that
         // casing finds the file again, so it must not take the catalog's.
         let filename = "SenseVoiceSmall-Q8_0.gguf";
-        let folder_repo = "handy-computer/sensevoicesmall-gguf";
-        assert!(crate::catalog::file_in_catalog(
-            filename,
-            Some("handy-computer/SenseVoiceSmall-gguf")
-        )
-        .is_some());
+        let catalog_repo = crate::catalog::repository_of("SenseVoiceSmall").unwrap();
+        let folder_repo = catalog_repo.to_lowercase();
+        let folder_repo = folder_repo.as_str();
+        assert!(crate::catalog::file_in_catalog(filename, Some(catalog_repo)).is_some());
 
         let cache = TempDir::new().unwrap();
         let path = add_cached_model(cache.path(), folder_repo, "main", filename);
@@ -2974,7 +3028,7 @@ mod tests {
         let root = tmp.path();
 
         // ASR repo: a whisper gguf -> should be discovered.
-        let repo = root.join("models--handy-computer--whisper-test");
+        let repo = root.join("models--acme--whisper-test");
         fs::create_dir_all(repo.join("snapshots").join("abc123")).unwrap();
         fs::create_dir_all(repo.join("refs")).unwrap();
         fs::write(repo.join("refs").join("main"), "abc123").unwrap();
@@ -3001,12 +3055,12 @@ mod tests {
         let mut models = HashMap::new();
         ModelManager::discover_hf_cache_models_in(root, &mut models);
 
-        let id = "handy-computer/whisper-test/whisper-q8.gguf";
+        let id = "acme/whisper-test/whisper-q8.gguf";
         let m = models.get(id).expect("whisper gguf should be discovered");
         assert!(m.is_downloaded);
         assert!(
             matches!(&m.source, ModelSource::HuggingFace { repo_id, revision }
-            if repo_id == "handy-computer/whisper-test" && revision == "abc123")
+            if repo_id == "acme/whisper-test" && revision == "abc123")
         );
         assert_eq!(
             m.supported_languages,

@@ -289,7 +289,7 @@ fn extract_punctuation(word: &str) -> (&str, &str) {
 
 /// Evidence for the language of the text being cleaned.
 ///
-/// This intentionally describes the transcription output, not Handy's UI
+/// This intentionally describes the transcription output, not Lipik's UI
 /// language. Unknown output languages fail closed: built-in filler removal is
 /// skipped rather than applying a language profile speculatively.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -319,7 +319,7 @@ impl OutputLanguageEvidence {
     }
 }
 
-/// Filler tokens that are not lexical words in any language Handy's models can
+/// Filler tokens that are not lexical words in any language Lipik's models can
 /// output, so removing them cannot corrupt text regardless of the (possibly
 /// unknown) output language. Kept deliberately conservative: anything that is a
 /// real word somewhere ("um" pt/de, "ha" es, "ah"/"eh" interjections, "mm"
@@ -351,6 +351,12 @@ pub fn builtin_filler_words(lang: &str) -> impl Iterator<Item = &'static str> {
 }
 
 static MULTI_SPACE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s{2,}").unwrap());
+
+/// Spellings speech models give the app's own name. None is a word in English
+/// or Hindi ("lipik", clerk, is, so it stays), so each becomes "Lipik".
+static APP_NAME_MISSPELLINGS: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)\b(?:lipic|lipick|lippik|lippic|lippick|leepik|lipeek|lippeek)\b").unwrap()
+});
 
 /// Collapses repeated words (3+ repetitions) to a single instance.
 /// E.g., "wh wh wh wh" -> "wh", "I I I I" -> "I"
@@ -542,6 +548,9 @@ pub fn remove_filler_words(
 /// does not also disable the existing repeated-word and whitespace cleanup.
 pub fn normalize_transcription_output(text: &str) -> String {
     let mut normalized = collapse_stutters(text);
+    normalized = APP_NAME_MISSPELLINGS
+        .replace_all(&normalized, "Lipik")
+        .to_string();
 
     // Clean up multiple spaces to single space
     normalized = MULTI_SPACE_PATTERN
@@ -683,6 +692,31 @@ mod tests {
         let text = "  Uhm, so I was, uh, thinking about this  ";
         let result = filter_transcription_output(text, "en", &None);
         assert_eq!(result, "So I was, thinking about this");
+    }
+
+    #[test]
+    fn test_app_name_misspellings_become_lipik() {
+        for heard in ["lipic", "Lippik", "Lippic", "LIPICK"] {
+            assert_eq!(normalize_transcription_output(heard), "Lipik", "{heard}");
+        }
+        assert_eq!(
+            normalize_transcription_output("I dictate with lippic every day"),
+            "I dictate with Lipik every day"
+        );
+        for text in [
+            "the Olympic games",
+            "an elliptic curve",
+            "lapak lo",
+            "a lapis stone",
+            "Mr Lipsky",
+            "lip pick",
+            "lipstick",
+            "my lips",
+            "main ek lipik hoon",
+            "Rue Lepic",
+        ] {
+            assert_eq!(normalize_transcription_output(text), text);
+        }
     }
 
     #[test]
@@ -1063,10 +1097,10 @@ mod tests {
 
     #[test]
     fn test_apply_custom_words_handles_unicode_punctuation() {
-        let text = "「Handee。」";
-        let custom_words = vec!["Handy".to_string()];
+        let text = "「Lipick。」";
+        let custom_words = vec!["Lipik".to_string()];
         let result = apply_custom_words(text, &custom_words, 0.5);
-        assert_eq!(result, "「Handy。」");
+        assert_eq!(result, "「Lipik。」");
     }
 
     #[test]

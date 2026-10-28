@@ -38,6 +38,11 @@ pub fn current() -> AppContext {
         .unwrap_or_else(|| capture(false))
 }
 
+/// Whether `bundle_id` is a web browser.
+pub fn is_browser(bundle_id: &str) -> bool {
+    BROWSERS.contains(&bundle_id)
+}
+
 const BROWSERS: &[&str] = &[
     "com.google.Chrome",
     "com.google.Chrome.canary",

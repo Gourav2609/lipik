@@ -1,7 +1,7 @@
 //! Shared direct-HTTP model download transport.
 //!
-//! Both legacy URL models and Hugging Face mirror fallbacks use this module;
-//! source-specific orchestration and finalization remain in the parent module.
+//! The speaker models and the built-in clean-up model use this module;
+//! source-specific orchestration and finalization remain with the callers.
 
 use super::{DownloadProgress, ModelManager};
 use anyhow::Result;
@@ -14,15 +14,14 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::time::{Duration, Instant};
-use tauri::Emitter;
 
-/// Bound on connection setup for direct HTTP downloads (mirror + URL models).
+/// Bound on connection setup for direct HTTP downloads.
 const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// No headers, body bytes, or hf-hub progress for this long means the transfer
 /// is wedged, not slow: direct downloads error out (keeping the partial for
 /// resume) and HF attempts are cancelled by a watchdog — either way the retry
-/// loop and mirror fallback take over instead of hanging forever.
+/// loop takes over instead of hanging forever.
 pub(super) const DOWNLOAD_STALL_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Start offset of a `Content-Range: bytes <start>-<end>/<total>` header.
@@ -31,7 +30,7 @@ fn content_range_start(value: &str) -> Option<u64> {
     range.split('-').next()?.trim().parse().ok()
 }
 
-/// How a [`ModelManager::download_http_resumable`] call ended, cancellation
+/// How a [`ModelManager::download_http_resumable_with_events`] call ended, cancellation
 /// being an outcome (partial kept, no error surfaced) rather than a failure.
 #[derive(Debug)]
 pub(crate) enum HttpDownloadOutcome {
@@ -119,45 +118,8 @@ impl ModelManager {
         Ok(())
     }
 
-    /// [`Self::download_http_resumable_with_events`] wired to the Tauri event
-    /// bus — the production entry point.
-    pub(super) async fn download_http_resumable(
-        &self,
-        model_id: &str,
-        url: &str,
-        partial_path: &Path,
-        expected_size: Option<u64>,
-        expected_sha256: Option<&str>,
-        cancel_token: &CancellationToken,
-    ) -> Result<HttpDownloadOutcome> {
-        let app_handle = self.app_handle.clone();
-        let id = model_id.to_string();
-        Self::download_http_resumable_with_events(
-            model_id,
-            url,
-            partial_path,
-            expected_size,
-            expected_sha256,
-            cancel_token,
-            &move |event| {
-                let _ = match event {
-                    HttpDownloadEvent::Progress(progress) => {
-                        app_handle.emit("model-download-progress", progress)
-                    }
-                    HttpDownloadEvent::VerificationStarted => {
-                        app_handle.emit("model-verification-started", &id)
-                    }
-                    HttpDownloadEvent::VerificationCompleted => {
-                        app_handle.emit("model-verification-completed", &id)
-                    }
-                };
-            },
-        )
-        .await
-    }
-
-    /// The one resumable HTTP downloader, shared by the mirror fallback and
-    /// URL-sourced models (and the built-in clean-up model): fetch `url` into
+    /// The one resumable HTTP downloader, shared by the speaker models and the
+    /// built-in clean-up model: fetch `url` into
     /// `partial_path`, resuming what's already there, and leave verified bytes in `partial_path` on success —
     /// finalizing (rename / extract) is the caller's job. Takes progress and
     /// verification notifications as a callback instead of touching Tauri, so
@@ -373,8 +335,7 @@ impl ModelManager {
             }
         }
 
-        // The catalog hash is the trust anchor: for a mirror (an untrusted
-        // host) this verification is what makes the fallback safe at all.
+        // The pinned hash is the trust anchor for whatever host served the bytes.
         Self::verify_file_with_events(model_id, partial_path, expected_sha256, emit).await?;
         Ok(HttpDownloadOutcome::Completed)
     }

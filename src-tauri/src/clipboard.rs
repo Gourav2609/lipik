@@ -1,7 +1,7 @@
 use crate::input::{self, EnigoState};
 #[cfg(target_os = "linux")]
 use crate::settings::TypingTool;
-use crate::settings::{get_settings, AutoSubmitKey, ClipboardHandling, PasteMethod};
+use crate::settings::{get_settings, AppSettings, AutoSubmitKey, ClipboardHandling, PasteMethod};
 use enigo::{Direction, Enigo, Key, Keyboard};
 use log::info;
 use std::process::Command;
@@ -23,7 +23,7 @@ static PASTE_LOCK: Mutex<()> = Mutex::new(());
 /// Runs `f` with the shared Enigo on the main thread and waits for its result.
 ///
 /// Paste runs on a worker thread so the main thread stays free while it
-/// sleeps, which lets Handy's own windows handle a paste aimed at them. Input
+/// sleeps, which lets Lipik's own windows handle a paste aimed at them. Input
 /// injection hops back here because macOS's TIS keyboard layout APIs must run
 /// on the main thread. Tauri runs the closure inline when already on the main
 /// thread, so nested calls can't deadlock.
@@ -366,7 +366,7 @@ fn detect_ydotool_key_syntax() -> YdotoolKeySyntax {
                     syntax
                 })
             } else {
-                // Preserve Handy's existing behavior and compatibility with current ydotool.
+                // Preserve Lipik's existing behavior and compatibility with current ydotool.
                 log::warn!(
                     "Could not recognize ydotool key --help output (exit status {:?}); using raw-keycode syntax",
                     output.status.code()
@@ -454,7 +454,7 @@ fn type_text_via_xdotool(text: &str) -> Result<(), String> {
     // `--clearmodifiers` restores the modifiers that were held when xdotool
     // started. If the user releases one while xdotool is typing, that synthetic
     // restore can leave the modifier latched on the XTEST keyboard (#1817).
-    // Release both sides of Handy's supported push-style modifiers to clear any
+    // Release both sides of Lipik's supported push-style modifiers to clear any
     // stale restore. Lock keys are intentionally excluded because key events
     // toggle them.
     //
@@ -818,11 +818,40 @@ fn needs_leading_space(before: Option<char>, text: &str) -> bool {
     !matches!(before, '.' | ':') || first.is_uppercase() || first.is_ascii_digit()
 }
 
+/// The app, time and last character of Lipik's last paste.
+static LAST_PASTE: Mutex<Option<(String, std::time::Instant, char)>> = Mutex::new(None);
+
+/// The character before the caret. Accessibility answers in many apps; when
+/// an app won't, the end of Lipik's own last paste into the same app counts,
+/// but only if no key was pressed and no mouse button clicked since, so the
+/// caret can't have moved (Enter, typing or a click elsewhere reset it).
+fn char_before_caret(app: Option<&str>) -> Option<char> {
+    if let Some(answer) = crate::pill::char_before_caret() {
+        log::debug!("leading space: Accessibility says {answer:?}");
+        return answer;
+    }
+    let last = LAST_PASTE
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    let Some((last_app, at, last_char)) = last else {
+        log::debug!("leading space: no Accessibility answer and no earlier paste");
+        return None;
+    };
+    let idle = crate::pill::seconds_since_user_input();
+    let same_app = app == Some(last_app.as_str());
+    let untouched = same_app && idle.is_some_and(|idle| idle > at.elapsed().as_secs_f64());
+    log::debug!(
+        "leading space: no Accessibility answer; app {app:?} (last {last_app}), idle {idle:?}, \
+         last paste {:.1}s ago -> {untouched}",
+        at.elapsed().as_secs_f64()
+    );
+    untouched.then_some(last_char)
+}
+
 /// `text` with a space in front when the caret sits right after other text.
-/// Apps that don't tell Accessibility what is before the caret get no space.
-fn with_leading_space(text: String) -> String {
-    let before = crate::pill::char_before_caret().flatten();
-    if needs_leading_space(before, &text) {
+fn with_leading_space(text: String, app: Option<&str>) -> String {
+    if needs_leading_space(char_before_caret(app), &text) {
         format!(" {text}")
     } else {
         text
@@ -835,9 +864,6 @@ fn with_leading_space(text: String) -> String {
 pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
     let _paste = PASTE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let settings = get_settings(&app_handle);
-    let paste_method = settings.paste_method;
-    let paste_delay_ms = settings.paste_delay_ms;
-    let paste_delay_after_ms = settings.paste_delay_after_ms;
 
     // Append trailing space if setting is enabled
     let text = if settings.append_trailing_space {
@@ -845,11 +871,30 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
     } else {
         text
     };
-    let text = if paste_method == PasteMethod::None {
+    // From the system, not Accessibility, so a swipe to another app counts.
+    let app = crate::textflow::front_bundle_id();
+    let text = if settings.paste_method == PasteMethod::None {
         text
     } else {
-        with_leading_space(text)
+        with_leading_space(text, app.as_deref())
     };
+    let pasted = deliver(text.clone(), app_handle, &settings);
+    // After an auto-submit Enter the field is empty again: forget the paste.
+    let submitted = should_send_auto_submit(settings.auto_submit, settings.paste_method);
+    *LAST_PASTE.lock().unwrap_or_else(PoisonError::into_inner) =
+        match (&pasted, app, text.chars().next_back()) {
+            (Ok(()), Some(app), Some(last)) if !submitted => {
+                Some((app, std::time::Instant::now(), last))
+            }
+            _ => None,
+        };
+    pasted
+}
+
+fn deliver(text: String, app_handle: AppHandle, settings: &AppSettings) -> Result<(), String> {
+    let paste_method = settings.paste_method;
+    let paste_delay_ms = settings.paste_delay_ms;
+    let paste_delay_after_ms = settings.paste_delay_after_ms;
 
     info!(
         "Using paste method: {:?}, delay before: {}ms, delay after: {}ms",
@@ -1080,7 +1125,7 @@ e.g. 28:1 28:0 means pressing on the Enter button on a standard US keyboard.
         use std::thread;
 
         let script_path = std::env::temp_dir().join(format!(
-            "handy-external-script-{}-{}.sh",
+            "lipik-external-script-{}-{}.sh",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

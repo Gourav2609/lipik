@@ -1,6 +1,6 @@
 use super::{AudioFrameCallback, CaptureSink, CaptureVad, LevelCallback, VadPolicy};
 use crate::audio_toolkit::vad::{VadFrame, VoiceActivityDetector};
-use handy_recorder::{AudioChunk, Sink};
+use lipik_recorder::{AudioChunk, Sink};
 use std::sync::{mpsc, Arc, Mutex};
 
 /// Keeps frames whose first sample is non-zero, and records how the sink

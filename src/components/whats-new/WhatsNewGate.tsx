@@ -1,19 +1,27 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { commands } from "@/bindings";
+import { whatsNewPreview } from "@/flow/dev/preview";
+import { WhatsNewSheet } from "@/flow/WhatsNewSheet";
 import { useSettings } from "../../hooks/useSettings";
-import { findReleaseNoteToShow } from "./releaseNotes";
+import { findLatestReleaseNote, findReleaseNoteToShow } from "./releaseNotes";
 import type { ReleaseNote } from "./releaseNotes";
-import { WhatsNewModal } from "./WhatsNewModal";
 
 export const WhatsNewGate: React.FC = () => {
   const { settings, isLoading, updateSetting } = useSettings();
   const [note, setNote] = useState<ReleaseNote | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [version, setVersion] = useState("");
   const dismissedVersionRef = useRef<string | null>(null);
+  const raisedVersionRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (whatsNewPreview) {
+      const latest = findLatestReleaseNote();
+      setNote(latest);
+      setVersion(latest?.version ?? "");
+      return;
+    }
     if (isLoading || !settings || !settings.show_whats_new_on_update) {
-      setIsOpen(false);
       setNote(null);
       return;
     }
@@ -34,13 +42,18 @@ export const WhatsNewGate: React.FC = () => {
           !releaseNote ||
           dismissedVersionRef.current === releaseNote.version
         ) {
-          setIsOpen(false);
           setNote(null);
           return;
         }
 
+        setVersion(currentVersion);
         setNote(releaseNote);
-        setIsOpen(true);
+        // After an update restart the app may have started hidden in the
+        // menu bar; bring the window forward so the notes are seen.
+        if (raisedVersionRef.current !== releaseNote.version) {
+          raisedVersionRef.current = releaseNote.version;
+          void commands.showMainWindowCommand().catch(() => {});
+        }
       } catch (error) {
         console.error("Failed to load release notes:", error);
       }
@@ -58,15 +71,16 @@ export const WhatsNewGate: React.FC = () => {
     settings?.whats_new_last_seen_version,
   ]);
 
-  const dismiss = () => {
+  const dismiss = useCallback(() => {
     if (!note) return;
 
     dismissedVersionRef.current = note.version;
-    setIsOpen(false);
-    void updateSetting("whats_new_last_seen_version", note.version);
-  };
+    setNote(null);
+    if (!whatsNewPreview)
+      void updateSetting("whats_new_last_seen_version", note.version);
+  }, [note, updateSetting]);
 
   if (!note) return null;
 
-  return <WhatsNewModal note={note} open={isOpen} onDismiss={dismiss} />;
+  return <WhatsNewSheet note={note} version={version} onDismiss={dismiss} />;
 };

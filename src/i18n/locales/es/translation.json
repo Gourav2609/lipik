@@ -483,7 +483,7 @@
       "updateChecks": {
         "label": "Buscar actualizaciones",
         "description": "Buscar automáticamente nuevas versiones de {{appName}}",
-        "lockedDescription": "Deshabilitado por la configuración del sistema (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Deshabilitado por la configuración del sistema (LIPIK_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "Tema de sonido",

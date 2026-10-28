@@ -12,14 +12,10 @@ import { platform } from "@tauri-apps/plugin-os";
 import { checkAccessibilityPermission } from "tauri-plugin-macos-permissions-api";
 import { ModelStateEvent, RecordingErrorEvent } from "./lib/types/events";
 import "./App.css";
-import SecureInputWarning from "./components/SecureInputWarning";
 import Onboarding, {
   AccessibilityOnboarding,
   ModelMigration,
 } from "./components/onboarding";
-import { type OnboardingPreviewStep } from "./components/settings";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { WhatsNewGate } from "./components/whats-new";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
@@ -36,6 +32,7 @@ import {
   type StepId,
 } from "./flow/onboarding";
 
+type OnboardingPreviewStep = "accessibility" | "model";
 type OnboardingStep = "accessibility" | "migration" | "model" | "flow" | "done";
 
 // Stable identity so preview effects do not re-run due to callback changes.
@@ -348,7 +345,7 @@ function App() {
   // Rendered once around every step below (including onboarding) so
   // toast.error() calls surface to the user. sonner renders via a portal, so
   // its position in the tree doesn't affect layout. Without this, errors during
-  // onboarding (e.g. a model download failing because blob.handy.computer is
+  // onboarding (e.g. a model download failing because Hugging Face is
   // unreachable) are silently swallowed and the wizard just appears to "blink".
   const toaster = (
     <Toaster
@@ -428,9 +425,6 @@ function App() {
   } else {
     content = (
       <div dir={direction} className="cursor-default">
-        <ErrorBoundary context="What's New">
-          <WhatsNewGate />
-        </ErrorBoundary>
         <FlowApp />
       </div>
     );

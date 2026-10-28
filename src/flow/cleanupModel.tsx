@@ -63,11 +63,26 @@ export const useCleanupModel = () => {
   const alive = useRef(true);
   const sent = useRef(0);
   const oldest = useRef(0);
+  const answered = useRef(false);
+  const retry = useRef<number | undefined>(undefined);
 
   const check = useCallback(async () => {
     const n = ++sent.current;
     const s = await commands.cleanupModelStatus().catch(() => null);
-    if (!alive.current || !s || n < oldest.current) return;
+    if (!alive.current) return;
+    if (!s) {
+      // The first answer starts the regular re-checks below; until then one
+      // retry at a time, so a failed check can't leave "Checking…" for good.
+      if (!answered.current && retry.current === undefined) {
+        retry.current = window.setTimeout(() => {
+          retry.current = undefined;
+          check();
+        }, RECHECK_MS);
+      }
+      return;
+    }
+    answered.current = true;
+    if (n < oldest.current) return;
     setStatus(s);
     if (s.progress) setProgress(s.progress);
   }, []);
@@ -80,6 +95,8 @@ export const useCleanupModel = () => {
     );
     return () => {
       alive.current = false;
+      window.clearTimeout(retry.current);
+      retry.current = undefined;
       unlisten.then((fn) => fn());
     };
   }, [check]);

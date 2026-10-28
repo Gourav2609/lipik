@@ -483,7 +483,7 @@
       "updateChecks": {
         "label": "Проверка за актуализации",
         "description": "Автоматична проверка за нови версии на {{appName}}",
-        "lockedDescription": "Деактивирано от системната конфигурация (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Деактивирано от системната конфигурация (LIPIK_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "Звукова тема",

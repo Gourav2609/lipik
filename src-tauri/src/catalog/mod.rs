@@ -1,14 +1,15 @@
 //! The bundled, offline model catalog.
 //!
-//! `catalog.json` is a verbatim copy of the `@handy-computer/models` package's
-//! catalog (the version pinned in `package.json`; `bun run check:catalog`
-//! keeps the two identical). It lists every model transcribe.cpp publishes,
-//! with pinned revisions, per-quant hashes and benchmark results, and marks
-//! the curated subset. It is compiled into the binary so Handy ships a
+//! `catalog.json` is vendored from an MIT-licensed npm package (see `NOTICE`
+//! beside it); edit it here when models change. It lists every model
+//! transcribe.cpp publishes, with pinned revisions, per-quant hashes and benchmark results, and marks
+//! the curated subset. It is compiled into the binary so Lipik ships a
 //! complete model list with zero network access.
 //!
-//! Every supported transcription model is offered for download and mirrored
-//! at the package's default quant, independently of recommendation ranking.
+//! Every supported transcription model is offered for download at the
+//! package's default quant, independently of recommendation ranking. The files
+//! come from Lipik's own Hugging Face repos (`lipik/<name>`), byte-for-byte
+//! copies of the ones first published under `handy-computer/<name>`.
 //!
 //! Each entry is normalised into a [`ModelDescriptor`] — the same source-agnostic
 //! shape every other producer (HF discovery, on-disk scans, the legacy table)
@@ -29,17 +30,19 @@ use crate::managers::model_capabilities::{CapabilityProbe, Compatibility};
 /// breaking change; additive fields are ignored.
 const SCHEMA: u32 = 2;
 
-/// Base URLs tried in order when the Hugging Face download fails. The full
-/// file URL is `{mirror}/{repo_id}/{revision}/{filename}` — the same three
-/// values that form the HF resolve URL, so a mirror is a plain static host.
-/// `scripts/mirror_models.py` populates it from this catalog.
-const MIRRORS: &[&str] = &["https://blob.handy.computer"];
+/// Lipik's Hugging Face organisation, which holds the catalog's files.
+const ORG: &str = "lipik";
 
-/// Handy's list order and onboarding set, keyed by catalog id. Kept from the
+/// Where the catalog's files were published before Lipik copied them into
+/// [`ORG`]. Copies downloaded from there are the same bytes, so they keep
+/// working without a new download.
+const LEGACY_ORG: &str = "handy-computer";
+
+/// Lipik's list order and onboarding set, keyed by catalog id. Kept from the
 /// previous generator until onboarding moves to the package's recommendations.
 /// `(id, rank, recommended)`: rank is the editorial sort position (lower =
 /// higher); recommended is the small badged onboarding subset.
-const HANDY_RANKING: &[(&str, u32, bool)] = &[
+const LIPIK_RANKING: &[(&str, u32, bool)] = &[
     ("parakeet-unified-en-0.6b", 1, true),
     ("nemotron-3.5-asr-streaming-0.6b", 2, true),
     ("canary-180m-flash", 3, true),
@@ -65,7 +68,7 @@ struct CatalogRoot {
     results: HashMap<String, ModelResults>,
 }
 
-/// One model as written in `catalog.json`. Only the fields Handy needs are
+/// One model as written in `catalog.json`. Only the fields Lipik needs are
 /// declared; serde ignores the rest (license, parameters, …).
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,10 +78,10 @@ struct CatalogModel {
     name: String,
     /// Editorial copy; empty for models that aren't curated.
     description: String,
-    /// HF repo id, e.g. `handy-computer/whisper-small-gguf`.
+    /// HF repo id, e.g. `lipik/whisper-small-gguf`.
     repository: String,
-    /// Commit the files and hashes are pinned to. Both HF acquisition and
-    /// mirror keys use it, so downloaded bytes provably match the hashes.
+    /// Commit the files and hashes are pinned to, so downloaded bytes provably
+    /// match the hashes.
     revision: String,
     /// The loader architecture (`general.architecture`).
     family: String,
@@ -138,9 +141,8 @@ impl CatalogModel {
         self.files.get(&self.quant)
     }
 
-    /// Handy uses a flat models directory for mirror downloads, so only
+    /// Lipik uses a flat models directory for manual installs, so only
     /// transcription models with root-level default files can be offered.
-    /// Must match `offered_models` in `scripts/mirror_models.py`.
     fn is_offered(&self) -> bool {
         self.role == "asr"
             && self
@@ -270,7 +272,7 @@ impl From<&CatalogModel> for ModelDescriptor {
         let default_filename = default_quant_file(&files, Some(&m.quant))
             .map(|f| f.filename.clone())
             .unwrap_or_default();
-        let ranking = HANDY_RANKING.iter().find(|(id, _, _)| *id == m.id);
+        let ranking = LIPIK_RANKING.iter().find(|(id, _, _)| *id == m.id);
         let results = ROOT.results.get(&m.id);
 
         ModelDescriptor {
@@ -309,7 +311,7 @@ impl From<&CatalogModel> for ModelDescriptor {
 }
 
 /// The raw parsed catalog. Kept alive (not consumed) so data that deliberately
-/// stays out of [`ModelDescriptor`] (mirrors, results) can
+/// stays out of [`ModelDescriptor`] (hashes, results) can
 /// be looked up separately.
 static ROOT: Lazy<CatalogRoot> = Lazy::new(|| {
     let root: CatalogRoot = serde_json::from_str(include_str!("catalog.json"))
@@ -321,13 +323,13 @@ static ROOT: Lazy<CatalogRoot> = Lazy::new(|| {
     root
 });
 
-/// Transcription models: the only role Handy can load. Language ID, VAD and
+/// Transcription models: the only role Lipik can load. Language ID, VAD and
 /// diarization models are published alongside them but produce no text.
 fn transcription_models() -> impl Iterator<Item = &'static CatalogModel> {
     ROOT.models.iter().filter(|m| m.role == "asr")
 }
 
-/// Every transcription model Handy can download, normalised into descriptors.
+/// Every transcription model Lipik can download, normalised into descriptors.
 pub static CATALOG: Lazy<Vec<ModelDescriptor>> = Lazy::new(|| {
     transcription_models()
         .filter(|m| m.is_offered())
@@ -335,47 +337,51 @@ pub static CATALOG: Lazy<Vec<ModelDescriptor>> = Lazy::new(|| {
         .collect()
 });
 
-/// A mirror copy of a catalog model's file, with the expected content hash for
-/// end-to-end verification. Mirrors are untrusted bit-pipes: the sha256 here
-/// (from the catalog compiled into the binary) is the trust anchor.
-pub struct MirrorFile {
-    pub url: String,
-    pub sha256: String,
-    /// Catalog size — drives progress totals and resume sanity checks.
-    pub size_bytes: u64,
+fn offered_models() -> impl Iterator<Item = &'static CatalogModel> {
+    transcription_models().filter(|m| m.is_offered())
 }
 
-/// Ordered mirror URLs for an offered catalog model's file — any listed quant,
-/// not just the default — or empty when the model isn't offered from the
-/// catalog. `model_id` is the registry id (`"{repo_id}/{filename}"`). (The
-/// mirror only hosts default quants; a miss there just 404s and the caller
-/// reports it, so listing every quant here costs nothing.)
-pub fn mirror_fallbacks(model_id: &str) -> Vec<MirrorFile> {
-    let Some((m, file)) = transcription_models()
-        .filter(|m| m.is_offered())
-        .find_map(|m| {
-            m.files
-                .values()
-                .find(|f| format!("{}/{}", m.repository, f.filename) == model_id)
-                .map(|f| (m, f))
-        })
-    else {
-        return Vec::new();
-    };
-    MIRRORS
-        .iter()
-        .map(|base| MirrorFile {
-            url: format!(
-                "{}/{}/{}/{}",
-                base.trim_end_matches('/'),
-                m.repository,
-                m.revision,
-                file.filename
-            ),
-            sha256: file.sha256.clone(),
-            size_bytes: file.size,
-        })
-        .collect()
+/// Size and sha256 of a file of an offered catalog model, any listed quant.
+pub fn file_digest(repo_id: &str, filename: &str) -> Option<(u64, &'static str)> {
+    offered_models()
+        .filter(|m| m.repository == repo_id)
+        .flat_map(|m| m.files.values())
+        .find(|f| f.filename == filename)
+        .map(|f| (f.size, f.sha256.as_str()))
+}
+
+/// The repo a catalog repo's files were first published in, for finding copies
+/// downloaded before the move.
+pub fn legacy_repo(repo_id: &str) -> Option<String> {
+    let name = repo_id.strip_prefix(ORG)?.strip_prefix('/')?;
+    Some(format!("{LEGACY_ORG}/{name}"))
+}
+
+/// The catalog repo that took over `repo_id`, when it is a legacy repo of an
+/// offered model.
+pub fn current_repo(repo_id: &str) -> Option<&'static str> {
+    let name = repo_id.strip_prefix(LEGACY_ORG)?.strip_prefix('/')?;
+    offered_models()
+        .map(|m| m.repository.as_str())
+        .find(|repo| repo.strip_prefix(ORG).and_then(|r| r.strip_prefix('/')) == Some(name))
+}
+
+/// A model id saved before the move (`"{legacy repo}/{filename}"`) as the id
+/// of the same file now, or `None` when the id needs no change.
+pub fn current_model_id(model_id: &str) -> Option<String> {
+    let (name, filename) = model_id
+        .strip_prefix(LEGACY_ORG)?
+        .strip_prefix('/')?
+        .split_once('/')?;
+    let repo = current_repo(&format!("{LEGACY_ORG}/{name}"))?;
+    file_digest(repo, filename).map(|_| format!("{repo}/{filename}"))
+}
+
+/// Hugging Face repo of an offered catalog model, by catalog id.
+pub fn repository_of(id: &str) -> Option<&'static str> {
+    offered_models()
+        .find(|m| m.id == id)
+        .map(|m| m.repository.as_str())
 }
 
 /// The catalog descriptor + specific `files[]` entry owning `filename`,
@@ -481,8 +487,8 @@ mod tests {
     }
 
     #[test]
-    fn handy_ranking_names_offered_models() {
-        for (id, _, _) in HANDY_RANKING {
+    fn lipik_ranking_names_offered_models() {
+        for (id, _, _) in LIPIK_RANKING {
             let model = transcription_models()
                 .find(|m| m.id == *id)
                 .unwrap_or_else(|| panic!("ranked model {id} is not in the catalog"));
@@ -490,27 +496,12 @@ mod tests {
         }
         assert_eq!(
             CATALOG.iter().filter(|d| d.recommended).count(),
-            HANDY_RANKING.iter().filter(|(_, _, r)| *r).count()
+            LIPIK_RANKING.iter().filter(|(_, _, r)| *r).count()
         );
     }
 
     #[test]
-    fn every_offered_model_has_mirror_fallbacks_with_hashes() {
-        // The mirror fallback is the safety net for HF outages and blocked
-        // networks; an offered entry without one silently loses that net.
-        for d in CATALOG.iter() {
-            let mirrors = mirror_fallbacks(&d.id);
-            assert!(!mirrors.is_empty(), "{}: no mirror fallbacks", d.id);
-            for m in &mirrors {
-                assert_eq!(m.sha256.len(), 64, "{}: mirror entry lacks a sha256", d.id);
-                assert!(m.size_bytes > 0, "{}: mirror entry lacks a size", d.id);
-                assert!(m.url.starts_with("https://"), "{}: bad url {}", d.id, m.url);
-            }
-        }
-    }
-
-    #[test]
-    fn catalog_matches_the_engine_handy_ships() {
+    fn catalog_matches_the_engine_lipik_ships() {
         // Every model must be loadable by the transcribe-cpp crate we link.
         let cargo = include_str!("../../Cargo.toml");
         let engine = cargo
@@ -529,7 +520,7 @@ mod tests {
         };
         assert!(
             parse(&ROOT.transcribe_cpp) <= parse(engine),
-            "catalog built for transcribe.cpp {} but Handy links {}",
+            "catalog built for transcribe.cpp {} but Lipik links {}",
             ROOT.transcribe_cpp,
             engine
         );
@@ -537,7 +528,7 @@ mod tests {
             if let Some(min) = &m.min_engine {
                 assert!(
                     parse(min) <= parse(engine),
-                    "{} needs transcribe.cpp {min}, Handy links {engine}",
+                    "{} needs transcribe.cpp {min}, Lipik links {engine}",
                     m.id
                 );
             }
@@ -562,11 +553,11 @@ mod tests {
     #[test]
     fn generated_descriptions_read_naturally() {
         let gigaam = transcription_models()
-            .find(|m| m.id == "gigaam-v3-ctc")
+            .find(|m| m.id == "gigaam-v3-e2e-ctc")
             .unwrap();
         assert!(generated_description(gigaam).starts_with("Russian speech-to-text"));
         let whisper = transcription_models()
-            .find(|m| m.id == "whisper-tiny")
+            .find(|m| m.id == "whisper-small")
             .unwrap();
         assert!(generated_description(whisper).contains("-language speech-to-text with"));
     }

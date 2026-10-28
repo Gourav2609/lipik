@@ -322,7 +322,7 @@ async fn http_416_with_wrong_hash_clears_partial() {
 
 #[tokio::test]
 async fn http_416_short_of_expected_size_clears_partial() {
-    // Mirror shape: catalog size known, partial shorter, yet the server
+    // Size known in advance, partial shorter, yet the server
     // says our offset is past EOF — its object is smaller than the catalog
     // expects. Never blessed, even with a hash on hand.
     let (url, _server) = serve_once(http_response("416 Range Not Satisfiable", &[], b"")).await;

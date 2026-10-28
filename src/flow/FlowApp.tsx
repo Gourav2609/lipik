@@ -8,6 +8,8 @@ import { PAGES } from "./pages";
 import { SettingsModal } from "./SettingsModal";
 import { SecureInputNotice } from "./SecureInputNotice";
 import { UpdateNotice } from "./UpdateNotice";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { WhatsNewGate } from "@/components/whats-new";
 import { Sidebar } from "./Sidebar";
 import { type OverlayId, type PageId, useFlowStore } from "./state";
 import {
@@ -106,6 +108,9 @@ export const FlowApp = () => {
       </main>
       <TopBar />
       {settingsTab && <SettingsModal />}
+      <ErrorBoundary context="What's New">
+        <WhatsNewGate />
+      </ErrorBoundary>
       {Overlay && (
         <div data-fk-closing={closing || undefined}>
           <Overlay onClose={closeOverlay} />

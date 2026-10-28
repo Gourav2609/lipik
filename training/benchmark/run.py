@@ -43,9 +43,10 @@ TEMPLATE_SETTINGS = REPO / "training/dictation/app/Data/settings_store.json"
 LOCAL_MODELS = REPO / "training/bench/models"
 HF_HUB = Path.home() / ".cache/huggingface/hub"
 
-PARAKEET = "handy-computer/parakeet-unified-en-0.6b-gguf/parakeet-unified-en-0.6b-Q8_0.gguf"
-QWEN17 = "handy-computer/Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q8_0.gguf"
-WHISPER = "handy-computer/whisper-large-v3-turbo-gguf/whisper-large-v3-turbo-Q8_0.gguf"
+PARAKEET = "lipik/parakeet-unified-en-0.6b-gguf/parakeet-unified-en-0.6b-Q8_0.gguf"
+HANDY_PARAKEET = "handy-computer/parakeet-unified-en-0.6b-gguf/parakeet-unified-en-0.6b-Q8_0.gguf"
+QWEN17 = "lipik/Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q8_0.gguf"
+WHISPER = "lipik/whisper-large-v3-turbo-gguf/whisper-large-v3-turbo-Q8_0.gguf"
 CLIP_TIMEOUT = 300
 
 
@@ -196,14 +197,14 @@ def main():
         return
 
     if args.contender == "handy":
-        exe, model, clean = setup_handy(), PARAKEET, None
+        exe, model, clean = setup_handy(), HANDY_PARAKEET, None
     else:
         model = {"lipik": PARAKEET, "qwen3-asr-1.7b": QWEN17, "whisper-turbo": WHISPER}[args.contender]
         app, exe = portable("lipik", LIPIK_BIN, "Lipik Portable Mode")
         configure_lipik(app, model)
         clean = None
         if args.contender == "whisper-turbo" and not (app / "Data/models" / Path(WHISPER).name).exists() \
-                and not list(HF_HUB.glob("models--handy-computer--whisper-large-v3-turbo-gguf")):
+                and not list(HF_HUB.glob("models--*--whisper-large-v3-turbo-gguf")):
             raise SystemExit("Whisper large-v3-turbo GGUF is not on this Mac; not downloading it.")
 
     for n, c in enumerate(todo, 1):

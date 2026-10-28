@@ -1,8 +1,8 @@
-# Handy on Ubuntu 26.04 GNOME Wayland
+# Lipik on Ubuntu 26.04 GNOME Wayland
 
-Tested on Ubuntu 26.04.1 LTS, GNOME Wayland, Handy 0.9.8.
+Written on Ubuntu 26.04.1 LTS, GNOME Wayland, for the upstream app (0.9.8). Not yet tested with Lipik.
 
-The fix is to use `ydotool` for typing and `handy_keys` for shortcuts.
+The fix is to use `ydotool` for typing and `lipik_keys` for shortcuts.
 
 _Note: Run commands one by one in terminal_
 
@@ -36,30 +36,30 @@ ydotool type "HELLO FROM YDOTOOL"
 
 The service should show `active (running)` and the test should type into the focused application.
 
-## 3. Configure Handy
+## 3. Configure Lipik
 
-Edit Handy's settings with:
-
-```bash
-sed -i 's/"typing_tool": "auto"/"typing_tool": "ydotool"/' ~/.local/share/com.pais.handy/settings_store.json
-sed -i 's/"keyboard_implementation": "tauri"/"keyboard_implementation": "handy_keys"/' ~/.local/share/com.pais.handy/settings_store.json
-```
-
-Restart Handy:
+Edit Lipik's settings with:
 
 ```bash
-pkill handy
-handy --start-hidden &
+sed -i 's/"typing_tool": "auto"/"typing_tool": "ydotool"/' ~/.local/share/com.gourav.lipik/settings_store.json
+sed -i 's/"keyboard_implementation": "tauri"/"keyboard_implementation": "lipik_keys"/' ~/.local/share/com.gourav.lipik/settings_store.json
 ```
 
-Check the Handy log for:
+Restart Lipik:
+
+```bash
+pkill lipik
+lipik --start-hidden &
+```
+
+Check the Lipik log for:
 
 ```text
-handy-keys manager thread started
-handy-keys shortcuts initialized
+lipik-keys manager thread started
+lipik-keys shortcuts initialized
 ```
 
-Then use your existing Handy shortcut and test dictation.
+Then use your existing Lipik shortcut and test dictation.
 
 ## 4. Hide the overlay
 
@@ -67,7 +67,7 @@ On GNOME, the overlay is a regular window that can take the focus, so nothing is
 
 ## 5. Install wl-clipboard
 
-Handy uses `wl-copy` on Wayland when it is installed:
+Lipik uses `wl-copy` on Wayland when it is installed:
 
 ```bash
 sudo apt install wl-clipboard
@@ -79,7 +79,7 @@ sudo apt install wl-clipboard
 
 Use an external script instead: it presses Ctrl and the key that types `v` on your layout, `KEY_U` (22) on bépo or `KEY_DOT` (52) on Dvorak (codes in `/usr/include/linux/input-event-codes.h`).
 
-Create `~/.local/bin/handy-paste`, here for bépo:
+Create `~/.local/bin/lipik-paste`, here for bépo:
 
 ```sh
 #!/bin/sh
@@ -89,7 +89,7 @@ ydotool key 29:1 22:1 22:0 29:0
 ```
 
 ```bash
-chmod +x ~/.local/bin/handy-paste
+chmod +x ~/.local/bin/lipik-paste
 ```
 
 Set **Paste Method** to **External Script** with this path.

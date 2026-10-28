@@ -2,7 +2,7 @@
 #
 # Stage transcribe-cpp's dynamic backend libraries into a destination directory.
 #
-# On Linux/Windows, Handy builds transcribe-cpp in its `dynamic-backends`
+# On Linux/Windows, Lipik builds transcribe-cpp in its `dynamic-backends`
 # posture: a shared `libtranscribe` plus loadable per-ISA ggml backend modules
 # (`libggml-cpu-<isa>.so`, `libggml-vulkan.so`, ...). These are produced by the
 # transcribe-cpp-sys CMake install during the cargo build, but nothing ships

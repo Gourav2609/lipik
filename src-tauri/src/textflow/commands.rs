@@ -39,7 +39,7 @@ fn same(a: &str, b: &str) -> bool {
 
 static SYNC_GENERATION: AtomicU64 = AtomicU64::new(0);
 
-/// Copies the dictionary words into Handy's `custom_words`. Waits a moment
+/// Copies the dictionary words into Lipik's `custom_words`. Waits a moment
 /// first so an import of many words rewrites the settings once.
 fn sync_custom_words(app: &AppHandle) {
     let generation = SYNC_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;

@@ -483,7 +483,7 @@
       "updateChecks": {
         "label": "Comproveu si hi ha actualitzacions",
         "description": "Comprova automàticament si hi ha versions noves del {{appName}}",
-        "lockedDescription": "Desactivat per la configuració del sistema (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Desactivat per la configuració del sistema (LIPIK_DISABLE_UPDATER)"
       },
       "whatsNewPreview": {
         "title": "Previsualització de les novetats",

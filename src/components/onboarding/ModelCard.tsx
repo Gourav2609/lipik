@@ -40,10 +40,10 @@ const getLanguageDisplayText = (
   });
 };
 
-// Legacy = a blob (Url-sourced) .bin model, kept runnable but no longer the
-// advertised download (catalog GGUFs supersede it).
+// Legacy = a whisper.cpp .bin model already on disk, kept runnable but no
+// longer downloadable (catalog GGUFs supersede it).
 export const isLegacySource = (model: ModelInfo): boolean =>
-  typeof model.source === "object" && "Url" in model.source;
+  model.source === "Local" && !model.is_custom;
 
 // Extract a GGUF quantization label from a filename, if present (e.g. "Q8_0").
 const getQuantLabel = (filename: string): string | null => {

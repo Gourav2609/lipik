@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
-use handy_recorder::{AudioChunk, Channels, Recorder, RecorderConfig, Sink};
 use hound::{SampleFormat, WavSpec, WavWriter};
+use lipik_recorder::{AudioChunk, Channels, Recorder, RecorderConfig, Sink};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -224,7 +224,7 @@ impl MicCapture {
             .take()
             .ok_or_else(|| anyhow!("The microphone recording was lost"))?;
         let device = self.device.as_deref().and_then(|name| {
-            handy_recorder::list_input_devices()
+            lipik_recorder::list_input_devices()
                 .ok()?
                 .into_iter()
                 .find(|d| d.name == name)

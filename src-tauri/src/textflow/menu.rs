@@ -117,7 +117,7 @@ fn is_builtin(name: &str) -> bool {
 pub fn emit_pill_mic(app: &AppHandle) {
     let settings = crate::settings::get_settings(app);
     let name = settings.selected_microphone.or_else(|| {
-        handy_recorder::list_input_devices()
+        lipik_recorder::list_input_devices()
             .ok()?
             .into_iter()
             .find(|d| d.is_default)

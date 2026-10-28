@@ -4,6 +4,9 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 interface MarkdownContentProps {
   markdown: string;
+  /** Replaces the default look of these elements. */
+  components?: Components;
+  className?: string;
 }
 
 const allowedElements = [
@@ -25,7 +28,7 @@ const allowedElements = [
   "ul",
 ];
 
-const isSafeUrl = (url: string) => {
+export const isSafeUrl = (url: string) => {
   try {
     const parsed = new URL(url);
     return ["http:", "https:", "mailto:"].includes(parsed.protocol);
@@ -34,7 +37,7 @@ const isSafeUrl = (url: string) => {
   }
 };
 
-const openSafeUrl = async (url: string) => {
+export const openSafeUrl = async (url: string) => {
   if (!isSafeUrl(url)) return;
 
   try {
@@ -146,12 +149,14 @@ const components: Components = {
 
 export const MarkdownContent: React.FC<MarkdownContentProps> = ({
   markdown,
+  components: overrides,
+  className = "space-y-3",
 }) => {
   return (
-    <div className="space-y-3">
+    <div className={className}>
       <ReactMarkdown
         allowedElements={allowedElements}
-        components={components}
+        components={{ ...components, ...overrides }}
         skipHtml
       >
         {markdown}

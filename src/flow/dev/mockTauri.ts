@@ -56,7 +56,7 @@ const MODEL: ModelInfo = {
   name: "Parakeet V3",
   description: "Fast and accurate English model",
   filename: "parakeet-tdt-0.6b-v3",
-  source: { Url: { url: "" } } as unknown as ModelInfo["source"],
+  source: "Local",
   size_mb: 478,
   is_downloaded: true,
   is_downloading: false,

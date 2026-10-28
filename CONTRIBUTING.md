@@ -1,8 +1,8 @@
 # Contributing to Lipik
 
-Thanks for helping. Lipik is a macOS dictation app built on
-[Handy](https://github.com/cjpais/Handy) by CJ Pais. Changes to the shared
-recording and transcription engine may be better sent to Handy itself.
+Thanks for helping. Lipik is a macOS dictation app forked from the upstream
+app credited in README.md. Changes to the shared recording and transcription
+engine may be better sent upstream.
 
 ## Reporting a bug
 

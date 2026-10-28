@@ -1,6 +1,6 @@
 use std::sync::{mpsc, Arc};
 
-use handy_recorder::{AudioChunk, Sink};
+use lipik_recorder::{AudioChunk, Sink};
 
 use crate::audio_toolkit::{
     audio::AudioVisualiser,
@@ -75,7 +75,7 @@ pub struct CapturedAudio {
     pub vad: CaptureVad,
 }
 
-/// One recording's consumer of 16 kHz mono audio from handy-recorder. Runs on
+/// One recording's consumer of 16 kHz mono audio from lipik-recorder. Runs on
 /// the recorder's delivery thread, never the real-time audio thread, so it
 /// can run VAD inline. Chunks are exactly one VAD frame long.
 pub struct CaptureSink {

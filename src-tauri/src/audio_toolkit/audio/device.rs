@@ -4,7 +4,7 @@ use rodio::cpal::{
 };
 
 /// An output device for feedback sounds. Microphones are listed by
-/// `handy_recorder::list_input_devices`.
+/// `lipik_recorder::list_input_devices`.
 pub struct OutputDeviceInfo {
     pub index: String,
     pub name: String,

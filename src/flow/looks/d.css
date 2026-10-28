@@ -105,6 +105,16 @@
 
 /* ---------- Tokens: dark ---------- */
 
+/* The page behind the app (window edges, the scrollbar strips setup keeps on
+   both sides) takes Lipik's theme, not the system's light or dark mode. */
+html:has(.fk[data-look="d"]) {
+  background: #ebe6dc;
+}
+html:has(.fk[data-look="d"][data-fk-theme="dark"]) {
+  background: #121110;
+  color-scheme: dark;
+}
+
 .fk[data-look="d"][data-fk-theme="dark"] {
   /* Same hue, lightness steps ~3-4% apart; higher surfaces are lighter. */
   --fk-bg: #121110;

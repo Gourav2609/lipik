@@ -320,16 +320,16 @@ fn load(
 }
 
 /// Debug-build fault injection for exercising crash/hang recovery:
-/// `HANDY_WORKER_FAULT=<abort|segv|hang>@<init|list|load|run|feed|finalize>`
+/// `LIPIK_WORKER_FAULT=<abort|segv|hang>@<init|list|load|run|feed|finalize>`
 /// (`abort` is what `GGML_ASSERT` ends in, `segv` a real invalid memory write)
-/// (`init` is backend registration, before the hello). With `HANDY_WORKER_FAULT_ONCE=<marker
+/// (`init` is backend registration, before the hello). With `LIPIK_WORKER_FAULT_ONCE=<marker
 /// path>` it fires only in the first worker to reach that stage (the marker
-/// file records that it fired). With `HANDY_WORKER_FAULT_GPU_ONLY=1` it fires
+/// file records that it fired). With `LIPIK_WORKER_FAULT_GPU_ONLY=1` it fires
 /// only on a GPU (backend init and device listing count as GPU work unless
 /// the worker is CPU-only), so recovery on CPU can succeed.
 #[cfg(debug_assertions)]
 fn inject_fault(stage: &str, on_gpu: bool) {
-    let Ok(spec) = std::env::var("HANDY_WORKER_FAULT") else {
+    let Ok(spec) = std::env::var("LIPIK_WORKER_FAULT") else {
         return;
     };
     let Some((kind, at)) = spec.split_once('@') else {
@@ -338,10 +338,10 @@ fn inject_fault(stage: &str, on_gpu: bool) {
     if at != stage {
         return;
     }
-    if !on_gpu && std::env::var_os("HANDY_WORKER_FAULT_GPU_ONLY").is_some() {
+    if !on_gpu && std::env::var_os("LIPIK_WORKER_FAULT_GPU_ONLY").is_some() {
         return;
     }
-    if let Some(marker) = std::env::var_os("HANDY_WORKER_FAULT_ONCE") {
+    if let Some(marker) = std::env::var_os("LIPIK_WORKER_FAULT_ONCE") {
         if std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -417,7 +417,7 @@ fn init_logger() {
 }
 
 /// SIGUSR2 toggles transcription in the app (and WebKitGTK uses SIGUSR1).
-/// Aimed at Handy by name, e.g. the README's `pkill -USR2 -n handy`, one
+/// Aimed at Lipik by name, e.g. the README's `pkill -USR2 -n lipik`, one
 /// can reach this worker instead, and its default action would kill it.
 #[cfg(unix)]
 fn ignore_app_signals() {

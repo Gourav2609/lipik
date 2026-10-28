@@ -8,8 +8,6 @@ import { SettingsPage } from "./SettingsPage";
 import { Section, SettingRow, SettingsCard } from "./parts";
 import { APP_NAME } from "@/flow/brand";
 
-const HANDY_URL = "https://github.com/cjpais/Handy";
-
 const Value = ({ children }: { children: string }) => (
   <span className="fk-num text-[14.5px] leading-[22px] text-[var(--fk-text-muted)]">
     {children}
@@ -46,19 +44,6 @@ export default function About() {
             control={<Value>{version || "Unknown"}</Value>}
           />
           <SettingRow title="Licence" control={<Value>MIT</Value>} />
-          <SettingRow
-            title="Credits"
-            description="Built on Handy by CJ Pais"
-            control={
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => openUrl(HANDY_URL).catch(() => {})}
-              >
-                Open
-              </Button>
-            }
-          />
           <SettingRow
             title="Setup"
             description="Go through the first-run steps again. Your settings stay as they are."

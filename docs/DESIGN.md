@@ -211,7 +211,7 @@ Lipik writes like a careful scribe: plain, short, calm. It says what happened an
 | `transforms` | Rewrite                  | Select text, then press a shortcut to rewrite it. |
 | `insights`   | Stats                    | How much you write, and how fast.                 |
 
-Settings sections by tab id, in nav order: `general` Dictation, `notetaker` Meetings, `vibe-coding` Code editors, `connectors` Connections, `mcp` AI tools; a hairline; `system` App, `privacy` Privacy, `account` Profile; About (`billing`) at the bottom. No group headings. There is no team tab. Paid-plan, billing, referral and "invite" surfaces are removed: Lipik is free and open source. About shows the version, the MIT licence and the credit "Built on Handy by CJ Pais".
+Settings sections by tab id, in nav order: `general` Dictation, `notetaker` Meetings, `vibe-coding` Code editors, `connectors` Connections, `mcp` AI tools; a hairline; `system` App, `privacy` Privacy, `account` Profile; About (`billing`) at the bottom. No group headings. There is no team tab. Paid-plan, billing, referral and "invite" surfaces are removed: Lipik is free and open source. About shows the version and the MIT licence.
 
 The pill is "the pill" in help text. Recording is "dictation"; cleaned text is "cleaned up", never "polished" or "enhanced".
 

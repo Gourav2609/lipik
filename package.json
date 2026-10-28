@@ -1,7 +1,7 @@
 {
-  "name": "handy-app",
+  "name": "lipik",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,14 +19,11 @@
     "test:playwright:ui": "playwright test --ui",
     "check:translations": "bun scripts/check-translations.ts",
     "check:model-languages": "bun scripts/check-model-language-coverage.ts",
-    "sync:catalog": "bun scripts/sync-catalog.ts",
-    "check:catalog": "bun scripts/sync-catalog.ts --check",
     "postinstall": "bun scripts/check-nix-deps.ts"
   },
   "dependencies": {
     "@fontsource/martel": "5.3.0",
     "@fontsource/mukta": "5.3.0",
-    "@handy-computer/models": "0.2.2",
     "@tailwindcss/vite": "^4.1.16",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-autostart": "~2.5.1",

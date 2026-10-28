@@ -274,6 +274,28 @@ pub fn start(app: &AppHandle) {
     });
 }
 
+/// Seconds since the person last pressed a key or a mouse button. Hardware
+/// events only, so Lipik's own pasting doesn't count.
+#[cfg(target_os = "macos")]
+pub fn seconds_since_user_input() -> Option<f64> {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGEventSourceSecondsSinceLastEventType(state: i32, event_type: u32) -> f64;
+    }
+    // kCGEventSourceStateHIDSystemState; key down, left, right and other mouse down.
+    const HID_SYSTEM_STATE: i32 = 1;
+    [10u32, 1, 3, 25]
+        .iter()
+        // SAFETY: a read-only query with constant arguments.
+        .map(|&kind| unsafe { CGEventSourceSecondsSinceLastEventType(HID_SYSTEM_STATE, kind) })
+        .reduce(f64::min)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn seconds_since_user_input() -> Option<f64> {
+    None
+}
+
 #[cfg(target_os = "macos")]
 fn left_button_down() -> bool {
     #[link(name = "CoreGraphics", kind = "framework")]

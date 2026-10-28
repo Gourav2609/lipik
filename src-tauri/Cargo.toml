@@ -1,8 +1,8 @@
 [package]
 name = "lipik"
-version = "0.1.5"
+version = "0.1.6"
 description = "Lipik"
-authors = ["cjpais"]
+authors = ["Gourav"]
 edition = "2021"
 license = "MIT"
 default-run = "lipik"
@@ -65,9 +65,9 @@ env_filter = "0.1.0"
 tokio = "1.43.0"
 earshot = "1.2.2"
 enigo = "0.6.1"
-# Feedback sounds. No `recording`: microphone capture is handy-recorder's.
+# Feedback sounds. No `recording`: microphone capture is lipik-recorder's.
 rodio = { version = "0.23.0", default-features = false, features = ["playback", "wav", "flac", "mp3", "vorbis"] }
-handy-recorder = "0.1"
+lipik-recorder = { path = "../crates/lipik-recorder" }
 reqwest = { version = "0.12", features = ["json", "stream", "gzip", "brotli", "deflate"] }
 futures-util = "0.3"
 rustfft = "6.4.0"
@@ -88,14 +88,14 @@ libc = "0.2"
 transcribe-cpp = { version = "0.4.0", default-features = false, features = [
   "serde",
 ] }
-handy-keys = "0.3.4"
+lipik-keys = { path = "../crates/lipik-keys" }
 ferrous-opencc = "0.2.3"
 clap = { version = "4", features = ["derive"] }
 specta = "=2.0.0-rc.22"
 specta-typescript = "0.0.9"
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 tauri-plugin-dialog = "2.6"
-hf-hub = { git = "https://github.com/cjpais/hf-hub", branch = "cancellable-downloads", features = [
+hf-hub = { git = "https://github.com/Gourav2609/hf-hub", rev = "9918f11ab3473135eb7865aa4a5d79d597e6e810", features = [
   "tokio",
 ] }
 # Notetaker speaker detection (pyannote community-1 pipeline, native CPU).
@@ -195,11 +195,12 @@ transcribe-cpp = { version = "0.4.0", default-features = false, features = [
 # (tao #1218, fixes tauri #11856 — dead titlebar buttons after visible(false) →
 # show()). Drop this once a tao release containing it lands in tauri.
 #
-# The rev is a cjpais/tao branch, not upstream: dev past 0.35.3 also carries
-# tao #1231 (removed window subclassing), which left the thread event target's
-# WNDPROC falling through to DefSubclassProc. On a no-longer-subclassed window
-# that returns 0, so WM_QUERYENDSESSION answered FALSE and vetoed Windows
-# shutdown (Handy #1710). `handy` = 07f3742b + a cherry-pick of tao #1274
+# The rev is Lipik's copy of the patched tao (a fork of tauri-apps/tao, branch
+# `lipik`), not upstream: dev past 0.35.3 also carries tao #1231 (removed
+# window subclassing), which left the thread event target's WNDPROC falling
+# through to DefSubclassProc. On a no-longer-subclassed window that returns 0,
+# so WM_QUERYENDSESSION answered FALSE and vetoed Windows shutdown (an upstream
+# issue). The rev = 07f3742b + a cherry-pick of tao #1274
 # (DefSubclassProc → DefWindowProcW). Repoint at upstream once #1274 merges.
 #
 # tao-macros must be patched to the SAME rev even though nothing here depends on
@@ -208,8 +209,8 @@ transcribe-cpp = { version = "0.4.0", default-features = false, features = [
 # that, but Nix's importCargoLock vendors both to the same `tao-macros-0.1.3`
 # dir and fails with a symlink collision. Unifying the source removes the dup.
 [patch.crates-io]
-tao = { git = "https://github.com/cjpais/tao", rev = "c3bee28c1d446d95f08c95c3b6f8d4bde052b876" }
-tao-macros = { git = "https://github.com/cjpais/tao", rev = "c3bee28c1d446d95f08c95c3b6f8d4bde052b876" }
+tao = { git = "https://github.com/Gourav2609/tao", rev = "c3bee28c1d446d95f08c95c3b6f8d4bde052b876" }
+tao-macros = { git = "https://github.com/Gourav2609/tao", rev = "c3bee28c1d446d95f08c95c3b6f8d4bde052b876" }
 
 [dev-dependencies]
 tempfile = "3"

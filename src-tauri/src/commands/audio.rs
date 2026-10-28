@@ -87,7 +87,7 @@ fn get_windows_microphone_permission_status_impl() -> WindowsMicrophonePermissio
     let app_access = read_registry_permission_access(HKEY_CURRENT_USER, MICROPHONE_PATH);
     let desktop_app_access = read_registry_permission_access(HKEY_CURRENT_USER, DESKTOP_APPS_PATH);
 
-    // Handy is a desktop app, so the NonPackaged key (desktop_app_access) is
+    // Lipik is a desktop app, so the NonPackaged key (desktop_app_access) is
     // the relevant permission scope. The UWP master key (app_access) can be
     // "deny" on systems with debloaters (e.g. O&O ShutUp10) without actually
     // blocking desktop app microphone access.
@@ -191,7 +191,7 @@ pub fn get_microphone_mode(app: AppHandle) -> Result<bool, String> {
 pub async fn get_available_microphones() -> Result<Vec<AudioDevice>, String> {
     // cpal device enumeration can stall — run it off the webview/main run loop.
     tokio::task::spawn_blocking(|| {
-        let devices = handy_recorder::list_input_devices()
+        let devices = lipik_recorder::list_input_devices()
             .map_err(|e| format!("Failed to list audio devices: {}", e))?;
 
         let mut result = vec![AudioDevice {
@@ -344,7 +344,7 @@ pub fn is_recording(app: AppHandle) -> bool {
 pub async fn get_microphone_channels(device_name: String) -> Result<u16, String> {
     // Device enumeration can stall, so keep it off the webview/main run loop.
     tokio::task::spawn_blocking(move || {
-        let devices = handy_recorder::list_input_devices()
+        let devices = lipik_recorder::list_input_devices()
             .map_err(|e| format!("Failed to list audio devices: {e}"))?;
         let device = if device_name.eq_ignore_ascii_case("default") {
             devices.into_iter().find(|device| device.is_default)

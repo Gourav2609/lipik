@@ -12,6 +12,9 @@ export const LOOK = (isFlowPreview && params.get("look")) || "d";
 export const skipOnboarding =
   isFlowPreview && params.get("skipOnboarding") === "1";
 
+/** ?whatsNew=1 shows the newest bundled release note over the app. */
+export const whatsNewPreview = isFlowPreview && params.get("whatsNew") === "1";
+
 if (isFlowPreview) {
   const theme = params.get("theme") === "light" ? "light" : "dark";
   installMockTauri({ theme });

@@ -698,6 +698,37 @@ fn dictation_meta(
     }
 }
 
+/// Code editors on the AI app list: their editors and terminals take commands.
+const CODE_EDITORS: &[&str] = &["com.todesktop.230313mzl4w4u92", "com.exafunction.windsurf"];
+
+/// A dictation of three or more words that stops mid-sentence gets a full
+/// stop in email, work chat, AI chat and documents, so the next dictation
+/// starts a sentence of its own. Personal chat, terminals, editors, browsers
+/// and other apps keep the text as it is, as does text ending in an address.
+pub fn end_sentence(text: &str, target: &Target) -> String {
+    let writes_prose = matches!(
+        target.app_type.as_str(),
+        "email" | "work" | "ai" | "document"
+    ) && !target
+        .bundle_id
+        .as_deref()
+        .is_some_and(|b| CODE_EDITORS.contains(&b) || super::context::is_browser(b));
+    let trimmed = text.trim_end();
+    let last_word = trimmed.split_whitespace().next_back().unwrap_or("");
+    let open = trimmed
+        .chars()
+        .next_back()
+        .is_some_and(char::is_alphanumeric)
+        && !last_word.contains(['@', '/', '.', '_'])
+        && !trimmed.contains('\n')
+        && trimmed.split_whitespace().count() >= 3;
+    if writes_prose && open {
+        format!("{trimmed}.")
+    } else {
+        text.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     /// Devanagari and emoji take far more tokens per character than English:
@@ -760,6 +791,58 @@ mod tests {
     }
 
     use super::*;
+
+    fn app(app_type: &str, bundle_id: &str) -> Target {
+        Target {
+            bundle_id: Some(bundle_id.to_string()),
+            app_type: app_type.to_string(),
+            app_name: None,
+        }
+    }
+
+    #[test]
+    fn full_stop_only_where_prose_is_written() {
+        let claude = app("ai", "com.anthropic.claudefordesktop");
+        let slack = app("work", "com.tinyspeck.slackmacgap");
+        assert_eq!(
+            end_sentence("So I think this is it", &claude),
+            "So I think this is it."
+        );
+        assert_eq!(
+            end_sentence("Try again now, Metabase is back", &slack),
+            "Try again now, Metabase is back."
+        );
+        assert_eq!(end_sentence("Is it ready?", &slack), "Is it ready?");
+        assert_eq!(end_sentence("Done.", &slack), "Done.");
+        assert_eq!(
+            end_sentence("Thanks a lot", &app("personal", "com.apple.MobileSMS")),
+            "Thanks a lot"
+        );
+        assert_eq!(
+            end_sentence("npm run dev", &app("other", "com.mitchellh.ghostty")),
+            "npm run dev"
+        );
+        assert_eq!(
+            end_sentence(
+                "fix the build please",
+                &app("ai", "com.todesktop.230313mzl4w4u92")
+            ),
+            "fix the build please"
+        );
+        assert_eq!(end_sentence("ok thanks", &claude), "ok thanks");
+        assert_eq!(
+            end_sentence("send it to rivaan@quavia.com", &slack),
+            "send it to rivaan@quavia.com"
+        );
+        assert_eq!(
+            end_sentence("Agenda:\n- Budget review", &claude),
+            "Agenda:\n- Budget review"
+        );
+        assert_eq!(
+            end_sentence("fix flaky upload test", &app("work", "com.google.Chrome")),
+            "fix flaky upload test"
+        );
+    }
 
     fn prepared(masked: &str, snippets: &[(&str, &str)]) -> Prepared {
         Prepared {

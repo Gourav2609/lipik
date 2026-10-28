@@ -81,7 +81,7 @@ So before training, fix the labels of a few hundred clips. Put your fixes in a
 JSONL file and pass it to export:
 
 ```
-{"file_name": "handy-1792873227.wav", "text": "kal ki meeting cancel kar do"}
+{"file_name": "lipik-1792873227.wav", "text": "kal ki meeting cancel kar do"}
 ```
 
 ```

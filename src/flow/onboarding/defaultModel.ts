@@ -29,6 +29,10 @@ const setFailed = (failed: boolean) => useFailed.setState({ failed });
 
 let started = false;
 let selecting = false;
+// Set from the moment a download is asked for until the call returns: the
+// store only lists it as downloading later, and every store change runs
+// `step` again.
+let requesting = false;
 
 const step = async () => {
   const store = useModelStore.getState();
@@ -49,8 +53,10 @@ const step = async () => {
     return;
   }
   if (id in store.downloadingModels || id in store.verifyingModels) return;
-  if (useFailed.getState().failed) return;
+  if (useFailed.getState().failed || requesting) return;
+  requesting = true;
   const ok = await store.downloadModel(id);
+  requesting = false;
   if (!ok) setFailed(true);
 };
 
