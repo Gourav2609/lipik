@@ -100,6 +100,69 @@
       a {
         color: var(--green);
       }
+      h2 {
+        font:
+          400 30px/1.1 "Instrument Serif",
+          serif;
+        margin: 40px 0 14px;
+      }
+      .days {
+        display: flex;
+        align-items: flex-end;
+        gap: 3px;
+        height: 120px;
+        padding: 16px 18px 0;
+        background: var(--card);
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 0 0 1px var(--line);
+      }
+      .days div {
+        flex: 1;
+        background: var(--green);
+        border-radius: 3px 3px 0 0;
+        min-height: 2px;
+      }
+      .days-axis {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 18px 12px;
+        margin-bottom: 24px;
+        background: var(--card);
+        border-radius: 0 0 18px 18px;
+        box-shadow: 0 0 0 1px var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+      .admin {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .admin input {
+        flex: 1;
+        min-width: 200px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        font: inherit;
+      }
+      .admin button {
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--ink);
+        color: var(--paper);
+        font:
+          600 14px/1 Inter,
+          sans-serif;
+        cursor: pointer;
+      }
       .note {
         color: var(--muted);
         font-size: 14px;
@@ -110,6 +173,78 @@
   <body>
     <main>
       <h1>Lipik stats</h1>
+      <p class="sub" id="usage-updated">Loading usage…</p>
+      <div class="tiles">
+        <div class="tile"><span>Installs</span><b id="u-installs">–</b></div>
+        <div class="tile">
+          <span>Using it now (last 3 hours)</span><b id="u-now">–</b>
+        </div>
+        <div class="tile"><span>Active today</span><b id="u-today">–</b></div>
+        <div class="tile">
+          <span>Active, last 7 days</span><b id="u-7">–</b>
+        </div>
+        <div class="tile">
+          <span>Active, last 30 days</span><b id="u-30">–</b>
+        </div>
+        <div class="tile">
+          <span>Terminal installer runs</span><b id="u-installer">–</b>
+        </div>
+        <div class="tile"><span>Emails</span><b id="u-emails">–</b></div>
+      </div>
+      <h2>Active people per day, last 30 days</h2>
+      <div class="days" id="u-days"></div>
+      <div class="days-axis"><span id="u-from"></span><span>today</span></div>
+      <div class="split">
+        <table>
+          <thead>
+            <tr>
+              <th>Version (last 7 days)</th>
+              <th class="n">Installs</th>
+            </tr>
+          </thead>
+          <tbody id="u-versions"></tbody>
+        </table>
+        <table>
+          <thead>
+            <tr>
+              <th>Country</th>
+              <th class="n">Installs</th>
+            </tr>
+          </thead>
+          <tbody id="u-countries"></tbody>
+        </table>
+        <table>
+          <thead>
+            <tr>
+              <th>macOS</th>
+              <th class="n">Installs</th>
+            </tr>
+          </thead>
+          <tbody id="u-systems"></tbody>
+        </table>
+      </div>
+      <h2>Emails</h2>
+      <div class="admin">
+        <input
+          id="key"
+          type="password"
+          placeholder="Admin key"
+          autocomplete="off"
+        />
+        <button id="show" type="button">Show emails</button>
+      </div>
+      <table hidden id="email-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>New-version emails</th>
+            <th>First seen</th>
+          </tr>
+        </thead>
+        <tbody id="email-rows"></tbody>
+      </table>
+      <p class="note" id="email-note"></p>
+      <h2>GitHub</h2>
       <p class="sub" id="updated">Loading from GitHub…</p>
       <div class="tiles">
         <div class="tile">
@@ -131,14 +266,95 @@
         <tbody id="rows"></tbody>
       </table>
       <p class="note">
-        Downloads count the .dmg from GitHub Releases. Website visits are in the
-        Cloudflare dashboard under Web Analytics. This page isn't linked from
-        the site and asks search engines not to list it.
+        Installs and active people come from the app's anonymous count, sent
+        every 3 hours (a random ID, the version and the macOS version; people
+        can turn it off in Settings → Privacy), so they only include versions
+        0.1.5 and later. Days are India time. Downloads count the .dmg from
+        GitHub Releases, which includes Terminal installs. Website visits are in
+        the Cloudflare dashboard under Web Analytics. This page isn't linked
+        from the site and asks search engines not to list it.
       </p>
     </main>
     <script>
       const $ = (id) => document.getElementById(id);
       const fmt = (n) => n.toLocaleString("en-IN");
+      const esc = (t) =>
+        String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+      const rows = (list) =>
+        list.length
+          ? list
+              .map(
+                (r) =>
+                  `<tr><td>${esc(r.name)}</td><td class="n">${fmt(r.n)}</td></tr>`,
+              )
+              .join("")
+          : `<tr><td colspan="2">None yet</td></tr>`;
+      fetch("/api/stats")
+        .then((r) => r.json())
+        .then((u) => {
+          $("u-installs").textContent = fmt(u.installs);
+          $("u-now").textContent = fmt(u.activeNow);
+          $("u-today").textContent = fmt(u.activeToday);
+          $("u-7").textContent = fmt(u.active7);
+          $("u-30").textContent = fmt(u.active30);
+          $("u-installer").textContent = fmt(u.installerTotal);
+          $("u-emails").textContent = fmt(u.emails);
+          const byDay = new Map(u.activeByDay.map((d) => [d.day, d.n]));
+          const days = [];
+          for (let i = 29; i >= 0; i--) {
+            const d = new Date(Date.parse(u.today) - i * 86400000)
+              .toISOString()
+              .slice(0, 10);
+            days.push([d, byDay.get(d) || 0]);
+          }
+          const max = Math.max(1, ...days.map((d) => d[1]));
+          $("u-days").innerHTML = days
+            .map(
+              ([d, n]) =>
+                `<div title="${d}: ${n}" style="height:${(n / max) * 100}%"></div>`,
+            )
+            .join("");
+          $("u-from").textContent = days[0][0];
+          $("u-versions").innerHTML = rows(u.versions);
+          $("u-countries").innerHTML = rows(u.countries);
+          $("u-systems").innerHTML = rows(u.systems);
+          $("usage-updated").textContent =
+            `Live, ${new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`;
+        })
+        .catch(() => {
+          $("usage-updated").textContent =
+            "Couldn't load usage. Try again in a minute.";
+        });
+      const showEmails = (key) =>
+        fetch("/api/admin/emails", {
+          headers: { authorization: `Bearer ${key}` },
+        })
+          .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+          .then((d) => {
+            try {
+              sessionStorage.setItem("lipik-admin", key);
+            } catch {}
+            $("email-rows").innerHTML = d.emails
+              .map(
+                (e) =>
+                  `<tr><td>${esc(e.email)}</td><td>${e.updates ? "Yes" : "No"}</td><td>${esc(e.first_day)}</td></tr>`,
+              )
+              .join("");
+            $("email-table").hidden = false;
+            $("email-note").textContent = d.emails.length
+              ? ""
+              : "No emails yet.";
+          })
+          .catch(() => {
+            $("email-note").textContent = "That key didn't work.";
+          });
+      $("show").addEventListener("click", () =>
+        showEmails($("key").value.trim()),
+      );
+      try {
+        const saved = sessionStorage.getItem("lipik-admin");
+        if (saved) showEmails(saved);
+      } catch {}
       Promise.all([
         fetch("https://api.github.com/repos/Gourav2609/lipik").then((r) =>
           r.json(),

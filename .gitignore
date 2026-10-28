@@ -63,3 +63,4 @@ training/bench/runs*
 *.mkv
 *.wav
 !src-tauri/resources/*.wav
+website/.dev.vars

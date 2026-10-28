@@ -1,6 +1,19 @@
 {
   "name": "lipik-site",
   "compatibility_date": "2026-10-01",
-  "assets": { "directory": "." },
+  "main": "worker.js",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/install.sh"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lipik-usage",
+      "database_id": "fb6ca150-b9d5-4b1d-8d8c-f05816587fe2",
+      "migrations_dir": "migrations",
+    },
+  ],
   "routes": [{ "pattern": "lipik.refflux.dev", "custom_domain": true }],
 }

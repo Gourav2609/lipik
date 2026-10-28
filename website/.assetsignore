@@ -5,3 +5,6 @@ wrangler.jsonc
 .assetsignore
 .wrangler
 node_modules
+worker.js
+migrations
+.dev.vars
