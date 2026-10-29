@@ -160,6 +160,17 @@ pub async fn notetaker_redo_in_hinglish(manager: Manager<'_>, id: String) -> Res
     blocking(move || m.redo_in_hinglish_now(&id)).await
 }
 
+/// Hides why the meeting's Hinglish redo failed.
+#[tauri::command]
+#[specta::specta]
+pub async fn notetaker_dismiss_hinglish_error(
+    manager: Manager<'_>,
+    id: String,
+) -> Result<(), String> {
+    let m = manager.inner().clone();
+    blocking(move || m.dismiss_hinglish_error(&id)).await
+}
+
 /// Today's and tomorrow's calendar events. Asks for calendar access the first
 /// time.
 #[tauri::command]

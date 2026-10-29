@@ -52,6 +52,8 @@ export interface Note {
   summaryError: string | null;
   /** Set while it is being redone in Hinglish. */
   hinglishRedo: HinglishRedo | null;
+  /** Why the Hinglish redo the user asked for failed. */
+  hinglishError: string | null;
   /** Its recording is still on disk. */
   hasAudio: boolean;
 }
@@ -89,6 +91,7 @@ export const toNote = (m: BackendMeeting): Note => ({
   summaryStatus: m.summary_status,
   summaryError: m.summary_error,
   hinglishRedo: m.hinglish_redo ?? null,
+  hinglishError: m.hinglish_error ?? null,
   hasAudio: m.has_audio ?? false,
 });
 
@@ -152,6 +155,11 @@ export const regenerateNote = (id: string) =>
 
 export const redoNoteInHinglish = (id: string) =>
   succeeds(async () => unwrap(await commands.notetakerRedoInHinglish(id)));
+
+export const dismissHinglishError = (id: string) =>
+  succeeds(async () =>
+    unwrap(await commands.notetakerDismissHinglishError(id)),
+  );
 
 export const isBusy = (note: Note) =>
   note.status === "recording" ||
@@ -256,6 +264,16 @@ export const useNotetakerData = () => {
 
 export type Processing = { stage: ProcessingStage; progress: number };
 
+/** A Hinglish redo in progress: fetching the model, then hearing again. */
+export type Improving = {
+  stage: "downloading" | "improving";
+  /** 0..1, or 0 when not known. */
+  progress: number;
+};
+
+const isImproving = (stage: ProcessingStage): stage is Improving["stage"] =>
+  stage === "improving" || stage === "downloading";
+
 const segmentKey = (s: Segment) => `${s.source}:${s.start_ms}`;
 
 /** Adds segments not already shown, keeping the list in time order. */
@@ -271,7 +289,7 @@ export const useMeetingDetail = (id: string) => {
   const [detail, setDetail] = useState<MeetingDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<Processing | null>(null);
-  const [improving, setImproving] = useState(false);
+  const [improving, setImproving] = useState<Improving | null>(null);
   const latest = useRef(0);
   const live = useRef<Segment[]>([]);
   const replaced = useRef<Segment[] | null>(null);
@@ -300,7 +318,7 @@ export const useMeetingDetail = (id: string) => {
   useEffect(() => {
     setLoading(true);
     setProcessing(null);
-    setImproving(false);
+    setImproving(null);
     live.current = [];
     replaced.current = null;
     reload();
@@ -324,14 +342,15 @@ export const useMeetingDetail = (id: string) => {
       }),
       events.notetakerProcessing.listen(({ payload }) => {
         if (payload.meeting_id !== id) return;
-        if (payload.stage === "improving") setImproving(true);
+        if (isImproving(payload.stage))
+          setImproving({ stage: payload.stage, progress: payload.progress });
         else
           setProcessing({ stage: payload.stage, progress: payload.progress });
       }),
       events.notetakerNoteReady.listen(({ payload }) => {
         if (payload.meeting_id !== id) return;
         setProcessing(null);
-        setImproving(false);
+        setImproving(null);
         reload();
       }),
       events.notetakerState.listen(reload),

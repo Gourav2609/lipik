@@ -879,6 +879,7 @@ pub fn run(cli_args: CliArgs) {
             notetaker::commands::notetaker_folders,
             notetaker::commands::notetaker_regenerate,
             notetaker::commands::notetaker_redo_in_hinglish,
+            notetaker::commands::notetaker_dismiss_hinglish_error,
             notetaker::commands::notetaker_upcoming,
             notetaker::commands::notetaker_calendar_access,
             notetaker::commands::notetaker_request_calendar_access,

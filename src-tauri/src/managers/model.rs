@@ -986,7 +986,7 @@ impl ModelManager {
     /// legacy entries leave the registry when their file isn't on disk, while
     /// already-downloaded ones stay runnable. Runs before the on-disk scans so a
     /// cached model dedups onto its catalog entry.
-    fn seed_catalog_models(available_models: &mut HashMap<String, ModelInfo>) {
+    pub(crate) fn seed_catalog_models(available_models: &mut HashMap<String, ModelInfo>) {
         use std::collections::hash_map::Entry;
         let mut added = 0usize;
         for desc in crate::catalog::CATALOG.iter() {
@@ -1562,7 +1562,7 @@ impl ModelManager {
     /// Scan a Hugging Face cache root (`<cache>/models--*`) for GGUF snapshots.
     /// Split from [`Self::discover_hf_cache_models`] so it can be tested against
     /// a synthetic cache directory.
-    fn discover_hf_cache_models_in(
+    pub(crate) fn discover_hf_cache_models_in(
         cache_root: &Path,
         available_models: &mut HashMap<String, ModelInfo>,
     ) {

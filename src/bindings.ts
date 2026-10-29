@@ -1423,6 +1423,17 @@ async notetakerRedoInHinglish(id: string) : Promise<Result<null, string>> {
 }
 },
 /**
+ * Hides why the meeting's Hinglish redo failed.
+ */
+async notetakerDismissHinglishError(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_dismiss_hinglish_error", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Today's and tomorrow's calendar events. Asks for calendar access the first
  * time.
  */
@@ -1850,6 +1861,11 @@ title_auto: boolean; start_ms: number; end_ms: number | null; app: string | null
  */
 hinglish_redo?: HinglishRedo | null; 
 /**
+ * Why the Hinglish redo the user asked for failed, until it is
+ * dismissed or started again.
+ */
+hinglish_error?: string | null; 
+/**
  * Its recording is still on disk, so it can be redone.
  */
 has_audio?: boolean }
@@ -1981,11 +1997,16 @@ export type ProcessingStage =
  */
 "speakers" | "transcribing" | "summarizing" | 
 /**
- * Hindi was heard: the Hinglish speech model is being fetched, or the
- * meeting is being transcribed and its notes written again with it.
- * The meeting keeps its transcript and notes until then.
+ * Hindi was heard (or the user asked): the meeting is being transcribed
+ * and its notes written again with the Hinglish speech model. The
+ * meeting keeps its transcript and notes until then.
  */
-"improving"
+"improving" | 
+/**
+ * The Hinglish speech model is being downloaded for a redo; progress is
+ * the share downloaded.
+ */
+"downloading"
 export type RecordingRetentionPeriod = "never" | 
 /**
  * Keep every recording and transcript; same as `Never` (never delete).

@@ -22,10 +22,38 @@ use super::Segment;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::SideEngine;
 
-/// Qwen3-ASR models, best first.
+/// Qwen3-ASR models by catalog id, best first. The model list knows each
+/// quant file by its own id; see [`model_ids`].
 pub const MODELS: &[&str] = &["Qwen3-ASR-1.7B", "Qwen3-ASR-0.6B"];
 /// The one fetched when a meeting sounds Hinglish.
 pub const DOWNLOAD: &str = MODELS[0];
+
+/// Model list ids of every quant of the Qwen3-ASR models, best model first
+/// and each model's default quant first.
+pub fn model_ids() -> Vec<String> {
+    MODELS
+        .iter()
+        .flat_map(|id| crate::catalog::model_ids(id))
+        .collect()
+}
+
+/// Model list id of the file fetched when a meeting sounds Hinglish.
+pub fn download_id() -> Result<String> {
+    crate::catalog::model_ids(DOWNLOAD)
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow!("the Hinglish speech model is missing from the model list"))
+}
+
+/// Whether a model list id is one of the Qwen3-ASR files, any quant.
+pub fn is_model(model_id: &str) -> bool {
+    model_ids().iter().any(|id| id == model_id)
+}
+
+/// The best Qwen3-ASR file that `ready` says is on this Mac.
+fn first_ready(ready: impl Fn(&str) -> bool) -> Option<String> {
+    model_ids().into_iter().find(|id| ready(id))
+}
 
 /// Qwen3-ASR stops early on pieces longer than about 15 s, dropping the rest.
 pub const RULES: CutRules = CutRules {
@@ -94,9 +122,9 @@ const HINDI_SIGNAL: &[&str] = &[
 ];
 
 /// The best Qwen3-ASR model on this Mac, if any.
-pub fn downloaded_model(app: &AppHandle) -> Option<&'static str> {
+pub fn downloaded_model(app: &AppHandle) -> Option<String> {
     let models = app.try_state::<Arc<ModelManager>>()?;
-    MODELS.iter().copied().find(|id| {
+    first_ready(|id| {
         models
             .get_model_info(id)
             .is_some_and(|m| m.is_downloaded && !m.is_downloading)
@@ -108,7 +136,7 @@ pub fn downloaded_model(app: &AppHandle) -> Option<&'static str> {
 pub fn engine(app: &AppHandle) -> Option<SideEngine> {
     let model = downloaded_model(app)?;
     let tm = super::transcribe::transcription_manager(app).ok()?;
-    match tm.side_batch_engine(model, LANGUAGE) {
+    match tm.side_batch_engine(&model, LANGUAGE) {
         Ok(engine) => Some(engine),
         Err(e) => {
             log::warn!("Notetaker: {model} did not load: {e}");
@@ -550,11 +578,12 @@ fn romanize_line(model: &ai::Model, prompt: &str, line: &str) -> Result<String> 
 /// Lines failing in a row after which the rest are not tried.
 const MAX_FAILS_IN_ROW: usize = 3;
 
-/// How long writing a meeting in Roman letters may take: a tenth of the
-/// meeting, at least 2 minutes and at most 10.
+/// How long writing a meeting in Roman letters may take: half the meeting,
+/// at least 5 minutes and at most an hour. A 19-minute Hinglish call needed
+/// about 4 minutes; a stuck model is caught sooner by the per-line timeout.
 pub fn romanize_time(meeting_ms: i64) -> Duration {
-    Duration::from_millis((meeting_ms.max(0) / 10) as u64)
-        .clamp(Duration::from_secs(120), Duration::from_secs(600))
+    Duration::from_millis((meeting_ms.max(0) / 2) as u64)
+        .clamp(Duration::from_secs(300), Duration::from_secs(3600))
 }
 
 /// Every line with Devanagari in Roman letters, names kept, by the clean-up
@@ -635,6 +664,94 @@ pub fn romanize_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The model list a real start-up builds from the bundled catalog and an
+    /// HF cache holding `files` (`(repo, filename)`).
+    fn model_list(
+        files: &[(&str, &str)],
+    ) -> std::collections::HashMap<String, crate::managers::model::ModelInfo> {
+        let cache = tempfile::TempDir::new().unwrap();
+        for (repo, filename) in files {
+            let dir = cache
+                .path()
+                .join(format!("models--{}", repo.replace('/', "--")));
+            let snapshot = dir.join("snapshots").join("abc123");
+            std::fs::create_dir_all(&snapshot).unwrap();
+            std::fs::create_dir_all(dir.join("refs")).unwrap();
+            std::fs::write(dir.join("refs").join("main"), "abc123").unwrap();
+            std::fs::write(snapshot.join(filename), b"gguf").unwrap();
+        }
+        let mut list = std::collections::HashMap::new();
+        ModelManager::seed_catalog_models(&mut list);
+        ModelManager::discover_hf_cache_models_in(cache.path(), &mut list);
+        // What the start-up disk check marks for the seeded default quants.
+        for model in list.values_mut() {
+            if let crate::managers::model::ModelSource::HuggingFace { repo_id, .. } = &model.source
+            {
+                if files.contains(&(repo_id.as_str(), model.filename.as_str())) {
+                    model.is_downloaded = true;
+                }
+            }
+        }
+        list
+    }
+
+    fn ready_in(
+        list: &std::collections::HashMap<String, crate::managers::model::ModelInfo>,
+    ) -> impl Fn(&str) -> bool + '_ {
+        |id| list.get(id).is_some_and(|m| m.is_downloaded)
+    }
+
+    #[test]
+    fn the_download_is_the_default_quant_the_model_list_knows() {
+        let id = download_id().unwrap();
+        assert_eq!(id, "lipik/Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q8_0.gguf");
+        let list = model_list(&[]);
+        assert!(list.contains_key(&id), "{id} is not in the model list");
+        assert!(!list.contains_key(DOWNLOAD));
+        for id in model_ids().iter().filter(|id| id.ends_with("-Q8_0.gguf")) {
+            assert!(list.contains_key(id), "{id} is not in the model list");
+        }
+        assert!(first_ready(ready_in(&list)).is_none());
+    }
+
+    #[test]
+    fn any_downloaded_quant_counts_best_model_first() {
+        let q4 = "Qwen3-ASR-1.7B-Q4_K_M.gguf";
+        let small = "Qwen3-ASR-0.6B-Q8_0.gguf";
+        let list = model_list(&[("lipik/Qwen3-ASR-1.7B-gguf", q4)]);
+        assert_eq!(
+            first_ready(ready_in(&list)).as_deref(),
+            Some("lipik/Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q4_K_M.gguf")
+        );
+        let list = model_list(&[("lipik/Qwen3-ASR-0.6B-gguf", small)]);
+        assert_eq!(
+            first_ready(ready_in(&list)).as_deref(),
+            Some("lipik/Qwen3-ASR-0.6B-gguf/Qwen3-ASR-0.6B-Q8_0.gguf")
+        );
+        let list = model_list(&[
+            ("lipik/Qwen3-ASR-0.6B-gguf", small),
+            ("lipik/Qwen3-ASR-1.7B-gguf", q4),
+        ]);
+        assert_eq!(
+            first_ready(ready_in(&list)).as_deref(),
+            Some("lipik/Qwen3-ASR-1.7B-gguf/Qwen3-ASR-1.7B-Q4_K_M.gguf")
+        );
+    }
+
+    #[test]
+    fn every_quant_id_is_a_hinglish_model() {
+        let list = model_list(&[("lipik/Qwen3-ASR-1.7B-gguf", "Qwen3-ASR-1.7B-Q6_K.gguf")]);
+        let qwen: Vec<&String> = list.keys().filter(|id| id.contains("Qwen3-ASR")).collect();
+        assert_eq!(qwen.len(), 3, "{qwen:?}");
+        assert!(qwen.iter().all(|id| is_model(id)));
+        assert_eq!(model_ids().len(), 12);
+        assert!(!is_model("Qwen3-ASR-1.7B"));
+        assert!(!list
+            .keys()
+            .filter(|id| !id.contains("Qwen3-ASR"))
+            .any(|id| is_model(id)));
+    }
 
     fn names(list: &[&str]) -> Vec<String> {
         list.iter().map(|n| n.to_string()).collect()
@@ -843,9 +960,9 @@ mod tests {
             |done| done < 0.5,
         );
         assert_eq!(asked, 3, "stops when told to");
-        assert_eq!(romanize_time(30 * 60_000), Duration::from_secs(180));
-        assert_eq!(romanize_time(60_000), Duration::from_secs(120));
-        assert_eq!(romanize_time(4 * 3600_000), Duration::from_secs(600));
+        assert_eq!(romanize_time(30 * 60_000), Duration::from_secs(900));
+        assert_eq!(romanize_time(60_000), Duration::from_secs(300));
+        assert_eq!(romanize_time(4 * 3600_000), Duration::from_secs(3600));
     }
 
     #[test]

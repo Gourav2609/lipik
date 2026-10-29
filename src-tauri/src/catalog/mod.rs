@@ -384,6 +384,22 @@ pub fn repository_of(id: &str) -> Option<&'static str> {
         .map(|m| m.repository.as_str())
 }
 
+/// Model registry ids (`"{repo}/{filename}"`) of every quant of an offered
+/// catalog model, by catalog id: the default quant first, then largest to
+/// smallest. Empty when the id isn't offered.
+pub fn model_ids(id: &str) -> Vec<String> {
+    let Some(model) = offered_models().find(|m| m.id == id) else {
+        return Vec::new();
+    };
+    let default = model.default_file().map(|f| f.filename.as_str());
+    let mut files = model.quant_files();
+    files.sort_by_key(|f| Some(f.filename.as_str()) != default);
+    files
+        .into_iter()
+        .map(|f| format!("{}/{}", model.repository, f.filename))
+        .collect()
+}
+
 /// The catalog descriptor + specific `files[]` entry owning `filename`,
 /// matched across every listed quant (not just the default) of every offered
 /// transcription model. `repo_id`, when given, must also match — the HF-cache

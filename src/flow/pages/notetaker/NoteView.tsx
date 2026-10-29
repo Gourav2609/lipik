@@ -24,7 +24,9 @@ import {
 import { Button, IconButton, SectionTabs } from "../../ui";
 import {
   clockDuration,
+  dismissHinglishError,
   openInWindow,
+  redoNoteInHinglish,
   regenerateNote,
   renameNote,
   shortDay,
@@ -33,6 +35,7 @@ import {
   useMeetingDetail,
   wordDuration,
   type Folder,
+  type Improving,
   type Processing,
 } from "./data";
 import { meetingNames, Mentions } from "./names";
@@ -644,6 +647,14 @@ export const NoteView = ({
     if (await regenerateNote(meeting.id)) changed();
   };
 
+  const redoInHinglish = async () => {
+    if (await redoNoteInHinglish(meeting.id)) changed();
+  };
+
+  const dismissRedoError = async () => {
+    if (await dismissHinglishError(meeting.id)) changed();
+  };
+
   return (
     <div>
       <div className="flex h-[30px] items-center justify-between">
@@ -721,12 +732,35 @@ export const NoteView = ({
         </button>
       </div>
       <Tabs value={shownTab} onChange={setTab} live={live} writing={writing} />
-      {(improving || meeting.hinglish_redo) && (
+      {improving || meeting.hinglish_redo ? (
         <p className="pt-[12px] text-[13px] leading-[18px] text-[var(--fk-text-muted)]">
-          {meeting.hinglish_redo === "asked"
-            ? "Redoing the transcript in Hinglish…"
-            : "Hindi heard: improving the transcript…"}
+          {redoStatus(improving, meeting.hinglish_redo === "asked")}
         </p>
+      ) : (
+        meeting.hinglish_error && (
+          <div className="flex items-center gap-[12px] pt-[12px]">
+            <p className="min-w-0 flex-1 text-[13px] leading-[18px]">
+              Couldn't redo the transcript in Hinglish: {meeting.hinglish_error}
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void dismissRedoError()}
+            >
+              Dismiss
+            </Button>
+            {meeting.has_audio && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<RefreshCw size={14} strokeWidth={1.75} />}
+                onClick={() => void redoInHinglish()}
+              >
+                Try again
+              </Button>
+            )}
+          </div>
+        )
       )}
       <div key={shownTab} className="nt-fade pt-[16px]">
         {shownTab === "transcript" && (
@@ -767,6 +801,19 @@ export const NoteView = ({
       )}
     </div>
   );
+};
+
+/** The status line of a Hinglish redo, with how far it got when known. */
+const redoStatus = (improving: Improving | null, asked: boolean) => {
+  const percent =
+    improving && improving.progress > 0
+      ? ` ${Math.min(99, Math.round(improving.progress * 100))}%`
+      : "";
+  if (improving?.stage === "downloading")
+    return `Getting the Hinglish speech model…${percent}`;
+  return asked
+    ? `Redoing the transcript in Hinglish…${percent}`
+    : `Hindi heard: improving the transcript…${percent}`;
 };
 
 const BackButton = ({ onBack }: { onBack: () => void }) => (

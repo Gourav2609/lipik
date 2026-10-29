@@ -33,6 +33,13 @@ const RowStatus = ({ note }: { note: Note }) => {
         Recording
       </span>
     );
+  if (note.hinglishRedo)
+    return (
+      <span className="flex items-center gap-[6px] text-[13px] text-[var(--fk-accent)]">
+        <span className="nt-ink-dot" />
+        Redoing in Hinglish
+      </span>
+    );
   if (note.status === "processing")
     return (
       <span className="flex items-center gap-[6px] text-[13px] text-[var(--fk-accent)]">

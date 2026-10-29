@@ -4,7 +4,7 @@
 
 ## Facts
 
-- Current version: 0.1.10, released 29 Oct 2026. Release notes: https://lipik.pages.dev/releases
+- Current version: 0.1.11, released 30 Oct 2026. Release notes: https://lipik.pages.dev/releases
 - Made by: Gourav (https://github.com/Gourav2609)
 - Platform: macOS, Apple silicon (M1 or later). No Windows, iPhone or Android version yet
 - Price: free, every feature. Licence: MIT. Code: https://github.com/Gourav2609/lipik

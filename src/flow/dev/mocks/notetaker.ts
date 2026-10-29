@@ -13,6 +13,8 @@ import type { MockHandler } from "../mockTauri";
 
 // Notetaker page in the preview, with neutral sample meetings.
 // ?ntEmpty=1 starts with no notes; ?ntRecording=1 adds a meeting being recorded.
+// Meetings keep their audio. ?ntRedo=asked shows the first one being redone in
+// Hinglish; ?ntRedo=error shows its redo failed.
 // Calendar access comes from ./notetakerSettings.ts (?calendar=full_access).
 const params = new URLSearchParams(window.location.search);
 
@@ -295,6 +297,14 @@ if (params.get("ntRecording") === "1")
     summary: null,
   });
 
+for (const r of records)
+  if (r.meeting.status !== "recording") r.meeting.has_audio = true;
+const redo = params.get("ntRedo");
+if (records[0] && redo === "asked") records[0].meeting.hinglish_redo = "asked";
+if (records[0] && redo === "error")
+  records[0].meeting.hinglish_error =
+    "not enough free disk for the Hinglish speech model (812 MB free, 2,685 MB needed)";
+
 let library = params.get("ntEmpty") === "1" ? [] : records;
 
 let savedVoices = 3;
@@ -438,6 +448,18 @@ export const handlers: Record<string, MockHandler> = {
     const r = find(id);
     if (!r) throw "No such meeting";
     throw "Ollama isn't running. Start it, then choose Try again.";
+  },
+  notetaker_redo_in_hinglish: ({ id }) => {
+    const r = find(id);
+    if (!r) throw "No such meeting";
+    r.meeting = { ...r.meeting, hinglish_redo: "asked", hinglish_error: null };
+    return null;
+  },
+  notetaker_dismiss_hinglish_error: ({ id }) => {
+    const r = find(id);
+    if (!r) throw "No such meeting";
+    r.meeting = { ...r.meeting, hinglish_error: null };
+    return null;
   },
   notetaker_start: () => {
     throw "Recording is not available in the preview";

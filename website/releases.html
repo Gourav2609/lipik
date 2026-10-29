@@ -44,8 +44,8 @@
         "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS (Apple silicon, M1 or later)",
-        "softwareVersion": "0.1.10",
-        "dateModified": "2026-10-29",
+        "softwareVersion": "0.1.11",
+        "dateModified": "2026-10-30",
         "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
         "url": "https://lipik.pages.dev/",
         "releaseNotes": "https://lipik.pages.dev/releases",
@@ -125,7 +125,7 @@
           <p class="rel-sub">
             What changed in each version of Lipik. The newest is at the top.
           </p>
-          <p class="rel-sub">Latest: 0.1.10, 29 Oct 2026.</p>
+          <p class="rel-sub">Latest: 0.1.11, 30 Oct 2026.</p>
           <p class="rel-sub">
             To install or update, paste this into Terminal and press Return. It
             keeps your settings, history and permissions:
@@ -146,6 +146,46 @@
         </div>
       </section>
       <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.11">
+          <header class="rel-head">
+            <h2>Lipik 0.1.11</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-30">30 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.11"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Redo transcript in Hinglish now works and shows its progress, and
+              menus stay on top.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Redo transcript in Hinglish works.</strong> In 0.1.10,
+                choosing <strong>Redo transcript in Hinglish</strong> did
+                nothing: Lipik looked for its Hinglish speech model under the
+                wrong name and stopped without a word. It now finds the model,
+                downloads it the first time (about 2 GB), and redoes the
+                meeting. On a 19-minute Hinglish call, the transcript went from
+                about 480 garbled English words to about 2,800 words of real
+                Hinglish.
+              </li>
+              <li>
+                <strong>You can see it working.</strong> Right after you choose
+                it, the meeting shows &quot;Getting the Hinglish speech model…
+                34%&quot;, then &quot;Redoing the transcript in Hinglish…&quot;.
+                If something goes wrong, it says why, with Try again.
+              </li>
+              <li>
+                <strong>Menus stay on top.</strong> The meeting&#x27;s menu no
+                longer slides under the details card on the right.
+              </li>
+            </ul>
+          </div>
+        </article>
         <article class="rel" id="v0.1.10">
           <header class="rel-head">
             <h2>Lipik 0.1.10</h2>

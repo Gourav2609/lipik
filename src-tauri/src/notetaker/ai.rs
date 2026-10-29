@@ -754,6 +754,7 @@ mod tests {
             mic_offset_ms: None,
             system_offset_ms: None,
             hinglish_redo: None,
+            hinglish_error: None,
             has_audio: false,
         }
     }

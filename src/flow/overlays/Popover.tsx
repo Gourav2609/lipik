@@ -5,6 +5,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 export const useEscape = (onClose: () => void) =>
   useEffect(() => {
@@ -68,7 +69,9 @@ export const Popover = ({
     return () => document.removeEventListener("mousedown", onDown);
   }, [onClose, ignore]);
 
-  return (
+  // Drawn at the app's root so side panels and sticky cards can't cover it;
+  // the root (.fk) also carries the theme colours.
+  return createPortal(
     <div
       ref={ref}
       role="menu"
@@ -78,6 +81,7 @@ export const Popover = ({
       style={style}
     >
       {children}
-    </div>
+    </div>,
+    document.querySelector(".fk") ?? document.body,
   );
 };

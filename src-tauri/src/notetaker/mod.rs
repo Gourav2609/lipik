@@ -170,6 +170,10 @@ pub struct Meeting {
     /// Set while the meeting is being redone in Hinglish.
     #[serde(default)]
     pub hinglish_redo: Option<HinglishRedo>,
+    /// Why the Hinglish redo the user asked for failed, until it is
+    /// dismissed or started again.
+    #[serde(default)]
+    pub hinglish_error: Option<String>,
     /// Its recording is still on disk, so it can be redone.
     #[serde(default)]
     pub has_audio: bool,
@@ -367,10 +371,13 @@ pub enum ProcessingStage {
     Speakers,
     Transcribing,
     Summarizing,
-    /// Hindi was heard: the Hinglish speech model is being fetched, or the
-    /// meeting is being transcribed and its notes written again with it.
-    /// The meeting keeps its transcript and notes until then.
+    /// Hindi was heard (or the user asked): the meeting is being transcribed
+    /// and its notes written again with the Hinglish speech model. The
+    /// meeting keeps its transcript and notes until then.
     Improving,
+    /// The Hinglish speech model is being downloaded for a redo; progress is
+    /// the share downloaded.
+    Downloading,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, tauri_specta::Event)]
@@ -772,6 +779,7 @@ impl NotetakerManager {
             mic_offset_ms: None,
             system_offset_ms: None,
             hinglish_redo: None,
+            hinglish_error: None,
             has_audio: false,
         };
         self.store.insert_meeting(&meeting)?;
@@ -1540,6 +1548,7 @@ impl NotetakerManager {
         if let Err(e) = std::fs::write(&marker, (tries + 1).to_string()) {
             log::warn!("Notetaker could not note the Hinglish redo of {id}: {e}");
         }
+        let _ = std::fs::remove_file(self.meeting_dir(&id).join(HINGLISH_ERROR));
         let this = self.clone();
         let thread_id = id.clone();
         let spawned = std::thread::Builder::new()
@@ -1547,16 +1556,18 @@ impl NotetakerManager {
             .spawn(move || {
                 background_priority();
                 let id = thread_id;
-                log::info!(
-                    "Notetaker: Hindi heard in {id}, fetching {}",
-                    hinglish::DOWNLOAD
-                );
+                this.emit_stage(&id, ProcessingStage::Improving, 0.0);
+                log::info!("Notetaker: redoing {id} in Hinglish");
                 match this.redo_with_hinglish(&id) {
                     Ok(()) => this.end_redo(&id),
                     Err(e) => {
                         log::warn!("Notetaker could not redo {id} in Hinglish: {e}");
+                        let dir = this.meeting_dir(&id);
+                        if dir.join(HINGLISH_ASKED).exists() && !this.cancelled(&id) {
+                            let _ = std::fs::write(dir.join(HINGLISH_ERROR), e.to_string());
+                        }
                         after_failed_redo(
-                            &this.meeting_dir(&id),
+                            &dir,
                             e.is::<DownloadCancelled>(),
                             this.may_fetch_for(&id),
                         );
@@ -1580,57 +1591,8 @@ impl NotetakerManager {
     }
 
     fn redo_with_hinglish(&self, id: &str) -> Result<()> {
-        let models = self
-            .app
-            .try_state::<Arc<crate::managers::model::ModelManager>>()
-            .ok_or_else(|| anyhow!("Models are not ready"))?
-            .inner()
-            .clone();
-        let info = models
-            .get_model_info(hinglish::DOWNLOAD)
-            .ok_or_else(|| anyhow!("{} is not in the catalog", hinglish::DOWNLOAD))?;
-        if !info.is_downloaded {
-            let needed = info.size_mb * 1_000_000 + crate::textflow::cleanup_model::SPARE_DISK;
-            let free = crate::textflow::cleanup_model::free_disk(&self.dir);
-            if free.is_some_and(|free| free < needed) {
-                return Err(anyhow!(
-                    "not enough free disk for {} ({} MB free, {} MB needed)",
-                    hinglish::DOWNLOAD,
-                    free.unwrap_or(0) / 1_000_000,
-                    needed / 1_000_000
-                ));
-            }
-        }
-        {
-            let mut waiters = self.fetch_waiters.lock().unwrap();
-            if waiters.is_empty() {
-                self.fetch_ours
-                    .store(!info.is_downloading, Ordering::Relaxed);
-            }
-            waiters.push(id.to_string());
-        }
-        let fetching = Arc::new(AtomicBool::new(true));
-        let ticker = {
-            let (app, id, fetching) = (self.app.clone(), id.to_string(), fetching.clone());
-            std::thread::spawn(move || {
-                while fetching.load(Ordering::Relaxed) {
-                    let _ = NotetakerProcessing {
-                        meeting_id: id.clone(),
-                        stage: ProcessingStage::Improving,
-                        progress: 0.0,
-                    }
-                    .emit(&app);
-                    std::thread::sleep(Duration::from_secs(3));
-                }
-            })
-        };
-        let fetched = tauri::async_runtime::block_on(models.download_model(hinglish::DOWNLOAD));
-        self.fetch_waiters.lock().unwrap().retain(|m| m != id);
-        fetching.store(false, Ordering::Relaxed);
-        let _ = ticker.join();
-        fetched?;
         if hinglish::downloaded_model(&self.app).is_none() {
-            return Err(DownloadCancelled.into());
+            self.fetch_hinglish_model(id)?;
         }
         loop {
             if self.cancelled(id) {
@@ -1648,6 +1610,88 @@ impl NotetakerManager {
         let result = self.process(id, true).map(|_| ());
         self.processing.lock().unwrap().retain(|m| m != id);
         result
+    }
+
+    /// Downloads the Hinglish speech model for the redo of meeting `id`,
+    /// sending the download's progress as the meeting's `Downloading` stage.
+    fn fetch_hinglish_model(&self, id: &str) -> Result<()> {
+        use tauri::Listener;
+
+        let models = self
+            .app
+            .try_state::<Arc<crate::managers::model::ModelManager>>()
+            .ok_or_else(|| anyhow!("the model list is not ready yet"))?
+            .inner()
+            .clone();
+        let model_id = hinglish::download_id()?;
+        let info = models
+            .get_model_info(&model_id)
+            .ok_or_else(|| anyhow!("the Hinglish speech model is missing from the model list"))?;
+        if !info.is_downloaded {
+            let needed = info.size_mb * 1_000_000 + crate::textflow::cleanup_model::SPARE_DISK;
+            let free = crate::textflow::cleanup_model::free_disk(&self.dir);
+            if free.is_some_and(|free| free < needed) {
+                return Err(anyhow!(
+                    "not enough free disk for the Hinglish speech model ({} MB free, {} MB needed)",
+                    free.unwrap_or(0) / 1_000_000,
+                    needed / 1_000_000
+                ));
+            }
+        }
+        log::info!("Notetaker: fetching {model_id} for {id}");
+        {
+            let mut waiters = self.fetch_waiters.lock().unwrap();
+            if waiters.is_empty() {
+                self.fetch_ours
+                    .store(!info.is_downloading, Ordering::Relaxed);
+            }
+            waiters.push(id.to_string());
+        }
+        // Share downloaded (0..1), as f32 bits.
+        let done = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let listener = {
+            let (done, model_id) = (done.clone(), model_id.clone());
+            self.app.listen("model-download-progress", move |event| {
+                let Ok(p) = serde_json::from_str::<crate::managers::model::DownloadProgress>(
+                    event.payload(),
+                ) else {
+                    return;
+                };
+                if p.model_id == model_id {
+                    done.store((p.percentage as f32 / 100.0).to_bits(), Ordering::Relaxed);
+                }
+            })
+        };
+        let fetching = Arc::new(AtomicBool::new(true));
+        let ticker = {
+            let (app, id, fetching, done) = (
+                self.app.clone(),
+                id.to_string(),
+                fetching.clone(),
+                done.clone(),
+            );
+            std::thread::spawn(move || {
+                while fetching.load(Ordering::Relaxed) {
+                    let _ = NotetakerProcessing {
+                        meeting_id: id.clone(),
+                        stage: ProcessingStage::Downloading,
+                        progress: f32::from_bits(done.load(Ordering::Relaxed)),
+                    }
+                    .emit(&app);
+                    std::thread::sleep(Duration::from_secs(1));
+                }
+            })
+        };
+        let fetched = tauri::async_runtime::block_on(models.download_model(&model_id));
+        self.app.unlisten(listener);
+        self.fetch_waiters.lock().unwrap().retain(|m| m != id);
+        fetching.store(false, Ordering::Relaxed);
+        let _ = ticker.join();
+        fetched?;
+        if hinglish::downloaded_model(&self.app).is_none() {
+            return Err(DownloadCancelled.into());
+        }
+        Ok(())
     }
 
     /// Splits the call audio by voice. Any failure (no models, offline on
@@ -1770,6 +1814,14 @@ impl NotetakerManager {
         }
     }
 
+    /// Hides why the meeting's Hinglish redo failed.
+    pub fn dismiss_hinglish_error(&self, id: &str) -> Result<()> {
+        match std::fs::remove_file(self.meeting_dir(id).join(HINGLISH_ERROR)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
+            _ => Ok(()),
+        }
+    }
+
     /// Writes the notes again (once the model is there, or the thoughts
     /// changed). The transcript is kept, unless processing failed: then the
     /// final transcript is made again too.
@@ -1872,6 +1924,9 @@ impl NotetakerManager {
         let dir = self.meeting_dir(&meeting.id);
         let improving = self.improving.lock().unwrap().contains(&meeting.id);
         meeting.hinglish_redo = redo_kind(&dir, improving);
+        meeting.hinglish_error = (!improving)
+            .then(|| std::fs::read_to_string(dir.join(HINGLISH_ERROR)).ok())
+            .flatten();
         meeting.has_audio = has_audio(&dir);
     }
 
@@ -1960,11 +2015,13 @@ impl NotetakerManager {
                     .app
                     .try_state::<Arc<crate::managers::model::ModelManager>>()
                 {
-                    if models
-                        .get_model_info(hinglish::DOWNLOAD)
-                        .is_some_and(|m| m.is_downloading)
-                    {
-                        let _ = models.cancel_download(hinglish::DOWNLOAD);
+                    if let Ok(model_id) = hinglish::download_id() {
+                        if models
+                            .get_model_info(&model_id)
+                            .is_some_and(|m| m.is_downloading)
+                        {
+                            let _ = models.cancel_download(&model_id);
+                        }
                     }
                 }
             }
@@ -2116,6 +2173,9 @@ const HINGLISH_ASKED: &str = "hinglish-asked";
 /// cancelled its download: Auto never downloads one again (choosing
 /// Hinglish still does).
 const HINGLISH_MODEL_DELETED: &str = "hinglish-model-deleted";
+/// In a meeting's folder after a redo the user asked for failed: why, shown
+/// on the meeting until it is dismissed or the redo starts again.
+const HINGLISH_ERROR: &str = "hinglish-error";
 /// Share of the progress bar for hearing the audio in a Hinglish pass; the
 /// rest is writing it in Roman letters.
 const HEARING_SHARE: f32 = 0.8;
@@ -2123,7 +2183,7 @@ const HEARING_SHARE: f32 = 0.8;
 /// Remembers that the user deleted a Hinglish speech model or cancelled its
 /// download.
 pub fn note_model_declined(app: &AppHandle, model_id: &str) {
-    if !hinglish::MODELS.contains(&model_id) {
+    if !hinglish::is_model(model_id) {
         return;
     }
     if let Ok(dir) = crate::portable::app_data_dir(app) {
