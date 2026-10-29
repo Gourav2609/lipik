@@ -420,7 +420,7 @@ pub struct AppSettings {
     /// Lipik checks the update feed every few hours for a new version.
     #[serde(default = "default_release_check_enabled")]
     pub release_check_enabled: bool,
-    /// Lipik tells lipik.refflux.dev every few hours that this copy is in use.
+    /// Lipik tells lipik.pages.dev every few hours that this copy is in use.
     #[serde(default = "default_usage_ping_enabled")]
     pub usage_ping_enabled: bool,
     /// Random ID sent with the usage ping, made on first launch.

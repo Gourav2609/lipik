@@ -8,3 +8,4 @@ node_modules
 worker.js
 migrations
 .dev.vars
+pages

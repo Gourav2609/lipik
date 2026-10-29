@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs the latest Lipik release into /Applications:
-#   curl -fsSL https://lipik.refflux.dev/install.sh | sh
+#   curl -fsSL https://lipik.pages.dev/install.sh | sh
 # Settings, history and meetings live in ~/Library and are kept.
 # LIPIK_DEMO=1 plays the whole thing without downloading or installing.
 set -eu
@@ -242,7 +242,7 @@ listening
 say "  $B${G2}Lipik$VERSION_LABEL is ready.$R"
 say ""
 say "  Hold ${B}fn$R and start talking. Let go, and your words appear."
-say "  ${D}lipik.refflux.dev$R"
+say "  ${D}lipik.pages.dev$R"
 say ""
 
 [ -z "$DEMO" ] && open "$DEST/Lipik.app"

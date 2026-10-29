@@ -10,7 +10,7 @@ versions.
 Open **Terminal** (in Applications → Utilities), paste this and press Return:
 
 ```bash
-curl -fsSL https://lipik.refflux.dev/install.sh | sh
+curl -fsSL https://lipik.pages.dev/install.sh | sh
 ```
 
 It checks your Mac, downloads the latest release from GitHub, copies

@@ -9,7 +9,7 @@
       content="Record a call on your Mac and get a transcript and short summary, made on your Mac. No bot joins the call. Free and open source."
     />
     <meta name="theme-color" content="#fbf9f4" />
-    <link rel="canonical" href="https://lipik.refflux.dev/meeting-notes" />
+    <link rel="canonical" href="https://lipik.pages.dev/meeting-notes" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Lipik" />
     <meta
@@ -20,11 +20,8 @@
       property="og:description"
       content="Record a call on your Mac and get a transcript and short summary. No bot joins the call. Free and open source."
     />
-    <meta property="og:url" content="https://lipik.refflux.dev/meeting-notes" />
-    <meta
-      property="og:image"
-      content="https://lipik.refflux.dev/assets/og.png"
-    />
+    <meta property="og:url" content="https://lipik.pages.dev/meeting-notes" />
+    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -42,7 +39,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://lipik.refflux.dev/assets/og.png"
+      content="https://lipik.pages.dev/assets/og.png"
     />
     <script type="application/ld+json">
       {
@@ -75,6 +72,14 @@
           },
           {
             "@type": "Question",
+            "name": "Does it work for meetings in Hinglish?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, since Lipik 0.1.9. Lipik notices when a meeting mixes Hindi and English and writes the transcript in Roman letters. The first time, it downloads its Hinglish speech model (about 2 GB) from Hugging Face and redoes that meeting."
+            }
+          },
+          {
+            "@type": "Question",
             "name": "Which macOS version do I need?",
             "acceptedAnswer": {
               "@type": "Answer",
@@ -100,6 +105,34 @@
         ]
       }
     </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lipik",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "softwareVersion": "0.1.9",
+        "dateModified": "2026-10-28",
+        "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
+        "url": "https://lipik.pages.dev/",
+        "releaseNotes": "https://lipik.pages.dev/releases",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Gourav",
+          "url": "https://github.com/Gourav2609"
+        },
+        "sameAs": ["https://github.com/Gourav2609/lipik"]
+      }
+    </script>
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -116,7 +149,7 @@
     <a class="skip" href="#main">Skip to content</a>
 
     <header class="nav" id="nav">
-      <a class="brand" href="index.html" aria-label="Lipik home">
+      <a class="brand" href="/" aria-label="Lipik home">
         <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
           <g stroke="currentColor" stroke-linecap="round" fill="none">
             <path d="M3 5.4h18" stroke-width="2.6" />
@@ -129,13 +162,13 @@
         <span>Lipik</span>
       </a>
       <nav id="nav-links" aria-label="Sections">
-        <a href="index.html#clean">Clean-up</a>
-        <a href="index.html#features">Features</a>
-        <a href="index.html#how">How it works</a>
-        <a href="index.html#open">Open source</a>
-        <a href="index.html#faq">FAQ</a>
-        <a href="pricing.html">Pricing</a>
-        <a href="releases.html">Release notes</a>
+        <a href="/#clean">Clean-up</a>
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#open">Open source</a>
+        <a href="/#faq">FAQ</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/releases">Release notes</a>
       </nav>
       <a class="btn btn-ink btn-sm" href="#download"
         >Download<span class="hide-sm">&nbsp;for Mac</span></a
@@ -228,6 +261,22 @@
             and you can write the summary later once the model is downloaded.
           </p>
 
+          <h2 id="hinglish">Meetings in Hinglish</h2>
+          <p>
+            New in Lipik 0.1.9: when a meeting mixes Hindi and English, Lipik
+            notices by itself and writes the transcript in Roman letters, the
+            way you'd type Hinglish on WhatsApp. Hindi words and people's names
+            are kept, instead of turning into English-sounding words.
+          </p>
+          <p>
+            The first time, Lipik downloads its Hinglish speech model from
+            Hugging Face, about 2 GB, and redoes that meeting. The Roman letters
+            are written by the clean-up model; without it, Hindi lines stay in
+            Devanagari. You can set the meeting language yourself in Settings,
+            under Meetings, but you shouldn't need to. More on the
+            <a href="/hinglish-speech-to-text">Hinglish speech to text</a> page.
+          </p>
+
           <h2 id="ai-apps">Ask your AI apps about a meeting</h2>
           <p>
             New in Lipik 0.1.2: AI apps on your Mac can read your meeting notes
@@ -269,25 +318,34 @@
               the clean-up model for the summary (2.5 or 5 GB) and the speaker
               model (33 MB)
             </li>
+            <li>
+              For meetings in Hinglish, one more one-time download from Hugging
+              Face: the Hinglish speech model (about 2 GB)
+            </li>
           </ul>
 
           <h2>What goes online</h2>
           <ul>
-            <li>the one-time downloads above, from Hugging Face</li>
+            <li>
+              the one-time downloads above, from Hugging Face, including the
+              Hinglish speech model (about 2 GB) the first time a meeting is in
+              Hinglish
+            </li>
             <li>
               Apple's English (India) speech files, through macOS, for Hinglish
               dictation only
             </li>
             <li>
-              once a day, a check with GitHub for the latest version number, to
-              show a "new version" notice. It carries nothing about you, and you
-              can turn it off in Settings, under Privacy, then Updates.
+              every few hours, a check with GitHub for the latest version
+              number, to show a "new version" notice. It carries nothing about
+              you, and you can turn it off in Settings, under Privacy, then
+              Updates.
             </li>
             <li>
               every few hours, an anonymous count so we know how many people use
-              Lipik: a random ID, the app version and the macOS version. Never
-              your voice, text or name. Turn it off in Settings, under Privacy,
-              then Usage count.
+              Lipik: a random ID, the app version, the macOS version and the
+              chip type. Never your voice, text or name. Turn it off in
+              Settings, under Privacy, then Usage count.
             </li>
             <li>
               your email, only if you type it during setup to hear about new
@@ -333,6 +391,17 @@
                   about past meetings work without any other app. Ollama is an
                   optional choice for advanced users, in Settings. If you
                   already use Ollama with Lipik, it keeps using it.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Does it work for meetings in Hinglish?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes, since Lipik 0.1.9. Lipik notices when a meeting mixes
+                  Hindi and English and writes the transcript in Roman letters.
+                  The first time, it downloads its Hinglish speech model (about
+                  2 GB) from Hugging Face and redoes that meeting.
                 </p>
               </div>
             </details>
@@ -396,12 +465,12 @@
           <div class="term">
             <code
               ><span class="term-p" aria-hidden="true">$</span>curl -fsSL
-              https://lipik.refflux.dev/install.sh &#124; sh</code
+              https://lipik.pages.dev/install.sh &#124; sh</code
             >
             <button
               class="term-copy"
               type="button"
-              data-copy="curl -fsSL https://lipik.refflux.dev/install.sh | sh"
+              data-copy="curl -fsSL https://lipik.pages.dev/install.sh | sh"
             >
               Copy
             </button>
@@ -422,7 +491,7 @@
 
     <footer class="footer">
       <div class="wrap footer-inner">
-        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+        <a class="brand brand-sm" href="/" aria-label="Lipik home">
           <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
             <g stroke="currentColor" stroke-linecap="round" fill="none">
               <path d="M3 5.4h18" stroke-width="2.6" />
@@ -435,17 +504,25 @@
           <span>Lipik</span>
         </a>
         <p>
-          Free and open source under the MIT licence.
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
           <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
         </p>
       </div>
       <nav class="wrap footer-more" aria-label="More pages">
         <span>More</span>
-        <a href="hinglish.html">Hinglish voice typing</a>
-        <a href="meeting-notes.html" aria-current="page"
+        <a href="/hinglish">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes" aria-current="page"
           >Meeting notes without a bot</a
         >
-        <a href="free-dictation-mac.html">Free local dictation for Mac</a>
+        <a href="/free-dictation-mac">Free local dictation for Mac</a>
+        <a href="/benchmark">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative">Granola alternative</a>
       </nav>
     </footer>
 

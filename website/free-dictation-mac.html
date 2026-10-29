@@ -9,7 +9,7 @@
       content="Free voice dictation for Mac with no word limit and no account. Lipik turns speech into text on your Mac and works with Wi-Fi off. Open source (MIT)."
     />
     <meta name="theme-color" content="#fbf9f4" />
-    <link rel="canonical" href="https://lipik.refflux.dev/free-dictation-mac" />
+    <link rel="canonical" href="https://lipik.pages.dev/free-dictation-mac" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Lipik" />
     <meta property="og:title" content="Lipik: free local dictation for Mac" />
@@ -19,12 +19,9 @@
     />
     <meta
       property="og:url"
-      content="https://lipik.refflux.dev/free-dictation-mac"
+      content="https://lipik.pages.dev/free-dictation-mac"
     />
-    <meta
-      property="og:image"
-      content="https://lipik.refflux.dev/assets/og.png"
-    />
+    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -39,7 +36,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://lipik.refflux.dev/assets/og.png"
+      content="https://lipik.pages.dev/assets/og.png"
     />
     <script type="application/ld+json">
       {
@@ -83,10 +80,38 @@
             "name": "Why does macOS say Lipik can't be opened?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Lipik isn't signed with an Apple Developer ID yet, so macOS blocks a downloaded copy the first time. The easiest way around it is to install from Terminal: paste curl -fsSL https://lipik.refflux.dev/install.sh | sh and press Return. With the download, on macOS 15 and later, double-click Lipik, click Done, then go to System Settings, then Privacy & Security, and click Open Anyway."
+              "text": "Lipik isn't signed with an Apple Developer ID yet, so macOS blocks a downloaded copy the first time. The easiest way around it is to install from Terminal: paste curl -fsSL https://lipik.pages.dev/install.sh | sh and press Return. With the download, on macOS 15 and later, double-click Lipik, click Done, then go to System Settings, then Privacy & Security, and click Open Anyway."
             }
           }
         ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lipik",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "softwareVersion": "0.1.9",
+        "dateModified": "2026-10-28",
+        "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
+        "url": "https://lipik.pages.dev/",
+        "releaseNotes": "https://lipik.pages.dev/releases",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Gourav",
+          "url": "https://github.com/Gourav2609"
+        },
+        "sameAs": ["https://github.com/Gourav2609/lipik"]
       }
     </script>
     <link rel="icon" type="image/png" href="assets/favicon.png" />
@@ -105,7 +130,7 @@
     <a class="skip" href="#main">Skip to content</a>
 
     <header class="nav" id="nav">
-      <a class="brand" href="index.html" aria-label="Lipik home">
+      <a class="brand" href="/" aria-label="Lipik home">
         <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
           <g stroke="currentColor" stroke-linecap="round" fill="none">
             <path d="M3 5.4h18" stroke-width="2.6" />
@@ -118,13 +143,13 @@
         <span>Lipik</span>
       </a>
       <nav id="nav-links" aria-label="Sections">
-        <a href="index.html#clean">Clean-up</a>
-        <a href="index.html#features">Features</a>
-        <a href="index.html#how">How it works</a>
-        <a href="index.html#open">Open source</a>
-        <a href="index.html#faq">FAQ</a>
-        <a href="pricing.html">Pricing</a>
-        <a href="releases.html">Release notes</a>
+        <a href="/#clean">Clean-up</a>
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#open">Open source</a>
+        <a href="/#faq">FAQ</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/releases">Release notes</a>
       </nav>
       <a class="btn btn-ink btn-sm" href="#download"
         >Download<span class="hide-sm">&nbsp;for Mac</span></a
@@ -231,7 +256,8 @@
             downloads it once from Hugging Face; it is 731 MB. For other
             languages, you can download one of the free Whisper models in
             Settings. Together they cover 99 languages, and
-            <a href="hinglish.html">Hinglish</a> works in beta.
+            <a href="/hinglish">Hinglish</a> works in dictation (beta) and in
+            <a href="/hinglish-speech-to-text">meeting notes</a>.
           </p>
           <p>
             The clean-up step removes filler words, fixes punctuation and writes
@@ -251,28 +277,30 @@
             not your recording.
           </p>
 
-          <h2>What needs the internet</h2>
+          <h2 id="online">What needs the internet</h2>
           <p>Lipik goes online only for these:</p>
           <ul>
             <li>
               one-time downloads from Hugging Face: the speech model (731 MB),
               the clean-up model (2.5 or 5 GB) and, for meeting notes, the
-              speaker model (33 MB)
+              speaker model (33 MB) and, the first time a meeting is in
+              Hinglish, the Hinglish speech model (about 2 GB)
             </li>
             <li>
               Apple's English (India) speech files, through macOS, for Hinglish
-              only
+              dictation only
             </li>
             <li>
-              once a day, a check with GitHub for the latest version number, to
-              show a "new version" notice. It carries nothing about you, and you
-              can turn it off in Settings, under Privacy, then Updates.
+              every few hours, a check with GitHub for the latest version
+              number, to show a "new version" notice. It carries nothing about
+              you, and you can turn it off in Settings, under Privacy, then
+              Updates.
             </li>
             <li>
               every few hours, an anonymous count so we know how many people use
-              Lipik: a random ID, the app version and the macOS version. Never
-              your voice, text or name. Turn it off in Settings, under Privacy,
-              then Usage count.
+              Lipik: a random ID, the app version, the macOS version and the
+              chip type. Never your voice, text or name. Turn it off in
+              Settings, under Privacy, then Usage count.
             </li>
             <li>
               your email, only if you type it during setup to hear about new
@@ -282,8 +310,10 @@
           </ul>
           <p>
             After the downloads, dictation works with Wi-Fi off. There is no
-            account, no ads and no tracking. Your voice and your text never
-            leave your Mac.
+            account and there are no ads, and nothing you say leaves your Mac:
+            your voice and your text stay on it. On its own, Lipik sends only
+            the update check and the anonymous usage count above, and you can
+            turn both off in Settings, under Privacy.
           </p>
 
           <h2>What else is included</h2>
@@ -294,13 +324,11 @@
             </li>
             <li>hands-free dictation with <kbd>fn</kbd> + Space</li>
             <li>
-              <a href="meeting-notes.html">meeting notes</a> with a transcript
-              and a short summary, with no bot joining the call
+              <a href="/meeting-notes">meeting notes</a> with a transcript and a
+              short summary, with no bot joining the call
             </li>
           </ul>
-          <p>
-            The full list is on the <a href="pricing.html">pricing page</a>.
-          </p>
+          <p>The full list is on the <a href="/pricing">pricing page</a>.</p>
         </div>
       </section>
 
@@ -358,7 +386,7 @@
                   blocks a downloaded copy the first time. The easiest way
                   around it is to install from Terminal: paste
                   <code
-                    >curl -fsSL https://lipik.refflux.dev/install.sh &#124;
+                    >curl -fsSL https://lipik.pages.dev/install.sh &#124;
                     sh</code
                   >
                   and press Return. With the download, on macOS 15 and later,
@@ -398,12 +426,12 @@
           <div class="term">
             <code
               ><span class="term-p" aria-hidden="true">$</span>curl -fsSL
-              https://lipik.refflux.dev/install.sh &#124; sh</code
+              https://lipik.pages.dev/install.sh &#124; sh</code
             >
             <button
               class="term-copy"
               type="button"
-              data-copy="curl -fsSL https://lipik.refflux.dev/install.sh | sh"
+              data-copy="curl -fsSL https://lipik.pages.dev/install.sh | sh"
             >
               Copy
             </button>
@@ -424,7 +452,7 @@
 
     <footer class="footer">
       <div class="wrap footer-inner">
-        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+        <a class="brand brand-sm" href="/" aria-label="Lipik home">
           <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
             <g stroke="currentColor" stroke-linecap="round" fill="none">
               <path d="M3 5.4h18" stroke-width="2.6" />
@@ -437,17 +465,25 @@
           <span>Lipik</span>
         </a>
         <p>
-          Free and open source under the MIT licence.
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
           <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
         </p>
       </div>
       <nav class="wrap footer-more" aria-label="More pages">
         <span>More</span>
-        <a href="hinglish.html">Hinglish voice typing</a>
-        <a href="meeting-notes.html">Meeting notes without a bot</a>
-        <a href="free-dictation-mac.html" aria-current="page"
+        <a href="/hinglish">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes">Meeting notes without a bot</a>
+        <a href="/free-dictation-mac" aria-current="page"
           >Free local dictation for Mac</a
         >
+        <a href="/benchmark">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative">Granola alternative</a>
       </nav>
     </footer>
 

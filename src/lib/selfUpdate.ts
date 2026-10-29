@@ -2,7 +2,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-const DOWNLOAD_PAGE = "https://lipik.refflux.dev/#download";
+const DOWNLOAD_PAGE = "https://lipik.pages.dev/#download";
 
 /** The newer version on the update feed, or null (also when the check fails). */
 export const findUpdate = (): Promise<Update | null> =>

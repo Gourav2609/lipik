@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Free Granola Alternative: Meeting Notes, No Bot | Lipik</title>
+    <meta
+      name="description"
+      content="A free Granola alternative for Mac: meeting notes with no bot. Lipik records your mic and your Mac's sound and writes the transcript and summary on your Mac."
+    />
+    <meta name="theme-color" content="#fbf9f4" />
+    <link rel="canonical" href="https://lipik.pages.dev/granola-alternative" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lipik" />
+    <meta
+      property="og:title"
+      content="Lipik: meeting notes on Mac with no bot, free"
+    />
+    <meta
+      property="og:description"
+      content="No bot joins the call. The transcript and summary are made on your Mac, and your notes stay there."
+    />
+    <meta
+      property="og:url"
+      content="https://lipik.pages.dev/granola-alternative"
+    />
+    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Lipik: speak freely, Lipik writes it down. Free, open-source voice dictation for Mac."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Lipik: meeting notes on Mac with no bot, free"
+    />
+    <meta
+      name="twitter:description"
+      content="No bot joins the call. The transcript and summary are made on your Mac, and your notes stay there."
+    />
+    <meta
+      name="twitter:image"
+      content="https://lipik.pages.dev/assets/og.png"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lipik",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "softwareVersion": "0.1.9",
+        "dateModified": "2026-10-28",
+        "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
+        "url": "https://lipik.pages.dev/",
+        "releaseNotes": "https://lipik.pages.dev/releases",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Gourav",
+          "url": "https://github.com/Gourav2609"
+        },
+        "sameAs": ["https://github.com/Gourav2609/lipik"]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Does a bot join the call?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Lipik records on your Mac, from your microphone and your Mac's sound. Nobody new joins the meeting."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Lipik free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Meeting notes, summaries and every other feature are free, with no account."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Where are my notes kept?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "On your Mac. The transcript, summary and recordings are made and saved on your Mac, and never leave it."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does it work for meetings in Hinglish?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. Lipik notices when a meeting mixes Hindi and English and writes the transcript in Roman letters. The first time, it downloads its Hinglish speech model, about 2 GB, and redoes that meeting."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which macOS version do I need?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "macOS 14.2 or later, on a Mac with Apple silicon (M1 or later)."
+            }
+          }
+        ]
+      }
+    </script>
+    <link rel="icon" type="image/png" href="/assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:opsz,wght@14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+  </head>
+  <body class="page-topic">
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" id="nav">
+      <a class="brand" href="/" aria-label="Lipik home">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <g stroke="currentColor" stroke-linecap="round" fill="none">
+            <path d="M3 5.4h18" stroke-width="2.6" />
+            <path
+              d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+              stroke-width="2.3"
+            />
+          </g>
+        </svg>
+        <span>Lipik</span>
+      </a>
+      <nav id="nav-links" aria-label="Sections">
+        <a href="/#clean">Clean-up</a>
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#open">Open source</a>
+        <a href="/#faq">FAQ</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/releases">Release notes</a>
+      </nav>
+      <a class="btn btn-ink btn-sm" href="#download"
+        >Download<span class="hide-sm">&nbsp;for Mac</span></a
+      >
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-controls="nav-links"
+        aria-expanded="false"
+        aria-label="Open menu"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path class="nt-a" d="M3 7h14" />
+          <path class="nt-b" d="M3 13h14" />
+        </svg>
+      </button>
+    </header>
+
+    <main id="main">
+      <section class="topic-hero" aria-labelledby="topic-h">
+        <div class="wrap">
+          <p class="hero-eyebrow">Granola alternative</p>
+          <h1 id="topic-h">Meeting notes on Mac with no bot, free.</h1>
+          <p class="topic-sub">
+            Lipik records your side and the other side of a call on your Mac,
+            then writes the transcript and summary on your Mac too, so no bot
+            joins and your notes stay with you. Like Granola, it listens to your
+            computer's audio; unlike Granola, it is free and open source.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download for Mac</a
+            >
+            <a class="btn btn-line" href="#compare">Compare</a>
+          </div>
+          <p class="fineprint">
+            Free and open source. Meeting notes need macOS 14.2 or later.
+          </p>
+        </div>
+      </section>
+
+      <section class="wrap topic-body">
+        <div class="prose">
+          <h2 id="compare">Lipik and Granola</h2>
+          <p>
+            Granola facts come from its own site, granola.ai, including its
+            pricing and security pages (checked 29 Oct 2026).
+          </p>
+          <div class="compare-wrap">
+            <table class="compare">
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span class="visually-hidden">Question</span>
+                  </th>
+                  <th scope="col">Lipik</th>
+                  <th scope="col">Granola</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Price</th>
+                  <td>Free</td>
+                  <td>
+                    Basic is free; Business is $14 and Enterprise $35 per user a
+                    month
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Older notes</th>
+                  <td>Kept on your Mac with no time limit</td>
+                  <td>
+                    On the free plan, notes older than 30 days need an upgrade
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Bot joins the call</th>
+                  <td>No</td>
+                  <td>No, it uses your computer's audio</td>
+                </tr>
+                <tr>
+                  <th scope="row">Where the transcript is made</th>
+                  <td>On your Mac</td>
+                  <td>
+                    By transcription providers such as Deepgram and Assembly
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Where notes are kept</th>
+                  <td>On your Mac</td>
+                  <td>In Granola's US-hosted AWS cloud</td>
+                </tr>
+                <tr>
+                  <th scope="row">Meeting audio</th>
+                  <td>Kept on your Mac</td>
+                  <td>Not stored by Granola</td>
+                </tr>
+                <tr>
+                  <th scope="row">Platforms</th>
+                  <td>macOS 14.2 or later, Apple silicon</td>
+                  <td>macOS, Windows, iOS and Android</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>How Lipik takes notes</h2>
+          <p>
+            Lipik records two things, kept apart: your microphone and your Mac's
+            sound. Your microphone is you. The other side is split into Speaker
+            1, Speaker 2 and so on, or names when the meeting makes it clear,
+            such as someone being called on by name. Lipik then writes a short
+            summary with the decisions and next steps.
+          </p>
+          <ul>
+            <li>
+              Meetings in <a href="/hinglish-speech-to-text">Hinglish</a> are
+              noticed by themselves and written in Roman letters. The first
+              time, Lipik downloads its Hinglish speech model (about 2 GB).
+            </li>
+            <li>
+              AI apps such as Claude, Cursor and Codex can read your notes on
+              your Mac, read-only.
+            </li>
+            <li>
+              Without headphones, Lipik removes the call's sound from your mic
+              before writing the transcript.
+            </li>
+          </ul>
+          <p>More on the <a href="/meeting-notes">meeting notes page</a>.</p>
+
+          <h2>When Granola may suit you better</h2>
+          <p>
+            If you take notes on Windows or a phone, or want notes shared with
+            your team in the cloud, Granola does that. Lipik keeps everything on
+            one Mac.
+          </p>
+
+          <h2>Tell people you're recording</h2>
+          <p>
+            Because no bot joins, nobody is told about the recording
+            automatically. Ask before you record; in many places the law
+            requires it.
+          </p>
+          <p class="fineprint">
+            Granola is a trademark of its owner. Lipik is not connected to it.
+          </p>
+        </div>
+      </section>
+
+      <section class="section faq" aria-labelledby="tfaq-h">
+        <div class="wrap faq-inner">
+          <h2 id="tfaq-h">Questions</h2>
+          <div class="faq-list">
+            <details>
+              <summary>Does a bot join the call?</summary>
+              <div class="faq-a">
+                <p>
+                  No. Lipik records on your Mac, from your microphone and your
+                  Mac's sound. Nobody new joins the meeting.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Is Lipik free?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes. Meeting notes, summaries and every other feature are
+                  free, with no account.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Where are my notes kept?</summary>
+              <div class="faq-a">
+                <p>
+                  On your Mac. The transcript, summary and recordings are made
+                  and saved on your Mac, and never leave it.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Does it work for meetings in Hinglish?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes. Lipik notices when a meeting mixes Hindi and English and
+                  writes the transcript in Roman letters. The first time, it
+                  downloads its Hinglish speech model, about 2 GB, and redoes
+                  that meeting.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Which macOS version do I need?</summary>
+              <div class="faq-a">
+                <p>
+                  macOS 14.2 or later, on a Mac with Apple silicon (M1 or
+                  later).
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="download" id="download" aria-labelledby="download-h">
+        <div class="wrap download-inner">
+          <div class="dl-rule" aria-hidden="true"><span></span></div>
+          <img
+            class="dl-icon"
+            src="/assets/icon.png"
+            alt=""
+            width="128"
+            height="128"
+          />
+          <h2 id="download-h">Get Lipik for Mac.</h2>
+          <p>
+            Free, for Macs with Apple silicon. Open the download, drag Lipik
+            into Applications, and hold fn to start.
+          </p>
+          <div class="dl-actions">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download Lipik.dmg</a
+            ><a class="btn btn-line" href="https://github.com/Gourav2609/lipik"
+              >View the code on GitHub</a
+            >
+          </div>
+          <div class="term">
+            <code
+              ><span class="term-p" aria-hidden="true">$</span>curl -fsSL
+              https://lipik.pages.dev/install.sh &#124; sh</code
+            >
+            <button
+              class="term-copy"
+              type="button"
+              data-copy="curl -fsSL https://lipik.pages.dev/install.sh | sh"
+            >
+              Copy
+            </button>
+          </div>
+          <p class="fineprint">
+            Pasting the line above into Terminal installs Lipik with no security
+            warning. If you use the download instead, macOS asks you to confirm
+            the first time: go to System Settings, then Privacy &amp; Security,
+            and click Open Anyway.
+            <a
+              href="https://github.com/Gourav2609/lipik/blob/main/docs/INSTALL.md"
+              >Install help</a
+            >
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="brand brand-sm" href="/" aria-label="Lipik home">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <g stroke="currentColor" stroke-linecap="round" fill="none">
+              <path d="M3 5.4h18" stroke-width="2.6" />
+              <path
+                d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+                stroke-width="2.3"
+              />
+            </g>
+          </svg>
+          <span>Lipik</span>
+        </a>
+        <p>
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
+          <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
+        </p>
+      </div>
+      <nav class="wrap footer-more" aria-label="More pages">
+        <span>More</span>
+        <a href="/hinglish">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes">Meeting notes without a bot</a>
+        <a href="/free-dictation-mac">Free local dictation for Mac</a>
+        <a href="/benchmark">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative" aria-current="page"
+          >Granola alternative</a
+        >
+      </nav>
+    </footer>
+
+    <script>
+      const nav = document.getElementById("nav");
+      const onScroll = () =>
+        nav.classList.toggle("is-scrolled", window.scrollY > 8);
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    </script>
+    <script src="/nav.js"></script>
+    <!-- Cloudflare Web Analytics -->
+    <script
+      type="module"
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon='{"token": "a15babb81e4142a0a4f64e26ec8361bf"}'
+    ></script>
+    <!-- End Cloudflare Web Analytics -->
+  </body>
+</html>

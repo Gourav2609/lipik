@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Indian English Speech to Text Benchmark (Svarah) | Lipik</title>
+    <meta
+      name="description"
+      content="How well Lipik, Whisper, Qwen3-ASR and Apple Dictation turn Indian-accented English into text: word error rate on 150 Svarah clips, with speed and memory."
+    />
+    <meta name="theme-color" content="#fbf9f4" />
+    <link rel="canonical" href="https://lipik.pages.dev/benchmark" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lipik" />
+    <meta
+      property="og:title"
+      content="Lipik benchmark: Indian-accented English speech to text"
+    />
+    <meta
+      property="og:description"
+      content="Word error rate, speed and memory on 150 clips of AI4Bharat's Svarah test set."
+    />
+    <meta property="og:url" content="https://lipik.pages.dev/benchmark" />
+    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Lipik: speak freely, Lipik writes it down. Free, open-source voice dictation for Mac."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Lipik benchmark: Indian-accented English speech to text"
+    />
+    <meta
+      name="twitter:description"
+      content="Word error rate, speed and memory on 150 clips of AI4Bharat's Svarah test set."
+    />
+    <meta
+      name="twitter:image"
+      content="https://lipik.pages.dev/assets/og.png"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lipik",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "softwareVersion": "0.1.9",
+        "dateModified": "2026-10-28",
+        "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
+        "url": "https://lipik.pages.dev/",
+        "releaseNotes": "https://lipik.pages.dev/releases",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Gourav",
+          "url": "https://github.com/Gourav2609"
+        },
+        "sameAs": ["https://github.com/Gourav2609/lipik"]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is Svarah?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A test set of Indian-accented English speech from AI4Bharat, released under CC BY 4.0. Its speakers come from many parts of India."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which speech model does Lipik use by default?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Parakeet Unified English 0.6B, a one-time 731 MB download that runs on your Mac. On 150 Svarah clips it got 8.5% of words wrong."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Whisper more accurate than Parakeet?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "On this set, Whisper large-v3-turbo got 7.5% of words wrong against Parakeet's 8.5%, but it needed about 11 times the model time per clip. You can switch to a Whisper model in Lipik's Settings."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How did Apple Dictation do?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Apple Dictation with English (India) got 18.3% of words wrong on the same 150 clips."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I run the benchmark myself?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The scripts and instructions are in training/benchmark in Lipik's GitHub repository. Svarah needs a free Hugging Face login to download."
+            }
+          }
+        ]
+      }
+    </script>
+    <link rel="icon" type="image/png" href="/assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:opsz,wght@14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+  </head>
+  <body class="page-topic">
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" id="nav">
+      <a class="brand" href="/" aria-label="Lipik home">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <g stroke="currentColor" stroke-linecap="round" fill="none">
+            <path d="M3 5.4h18" stroke-width="2.6" />
+            <path
+              d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+              stroke-width="2.3"
+            />
+          </g>
+        </svg>
+        <span>Lipik</span>
+      </a>
+      <nav id="nav-links" aria-label="Sections">
+        <a href="/#clean">Clean-up</a>
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#open">Open source</a>
+        <a href="/#faq">FAQ</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/releases">Release notes</a>
+      </nav>
+      <a class="btn btn-ink btn-sm" href="#download"
+        >Download<span class="hide-sm">&nbsp;for Mac</span></a
+      >
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-controls="nav-links"
+        aria-expanded="false"
+        aria-label="Open menu"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path class="nt-a" d="M3 7h14" />
+          <path class="nt-b" d="M3 13h14" />
+        </svg>
+      </button>
+    </header>
+
+    <main id="main">
+      <section class="topic-hero" aria-labelledby="topic-h">
+        <div class="wrap">
+          <p class="hero-eyebrow">Benchmark</p>
+          <h1 id="topic-h">How well Lipik hears Indian English.</h1>
+          <p class="topic-sub">
+            On 150 clips of Indian-accented English from AI4Bharat's Svarah test
+            set, Lipik's default speech model, Parakeet, got 8.5% of words
+            wrong. Whisper large-v3-turbo got 7.5%, Qwen3-ASR 1.7B 12.7% and
+            Apple Dictation (English, India) 18.3%. Parakeet needed the least
+            model time per clip.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download for Mac</a
+            >
+            <a class="btn btn-line" href="#results">See the results</a>
+          </div>
+          <p class="fineprint">
+            Results published 28 Oct 2026. A lower word error rate is better.
+          </p>
+        </div>
+      </section>
+
+      <section class="wrap topic-body">
+        <div class="prose">
+          <h2 id="results">Results on 150 clips</h2>
+          <p>
+            Word error rate is the share of words that had to be changed, added
+            or removed to match what was said.
+          </p>
+          <div class="compare-wrap">
+            <table class="compare compare-data">
+              <thead>
+                <tr>
+                  <th scope="col">Speech to text</th>
+                  <th scope="col">Word error rate</th>
+                  <th scope="col">Seconds per clip</th>
+                  <th scope="col">Model time</th>
+                  <th scope="col">Peak memory</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="is-lipik">
+                  <th scope="row">Lipik, final text (Parakeet + clean-up)</th>
+                  <td>8.5%</td>
+                  <td>0.46 s</td>
+                  <td>0.06 s</td>
+                  <td>934 MB</td>
+                </tr>
+                <tr class="is-lipik">
+                  <th scope="row">Lipik, Parakeet text before clean-up</th>
+                  <td>8.5%</td>
+                  <td>0.46 s</td>
+                  <td>0.06 s</td>
+                  <td>934 MB</td>
+                </tr>
+                <tr>
+                  <th scope="row">Whisper large-v3-turbo</th>
+                  <td>7.5%</td>
+                  <td>1.77 s</td>
+                  <td>0.69 s</td>
+                  <td>1,173 MB</td>
+                </tr>
+                <tr>
+                  <th scope="row">Qwen3-ASR 1.7B</th>
+                  <td>12.7%</td>
+                  <td>1.23 s</td>
+                  <td>0.24 s</td>
+                  <td>3,690 MB</td>
+                </tr>
+                <tr>
+                  <th scope="row">Apple Dictation, English (India)</th>
+                  <td>18.3%</td>
+                  <td>0.15 s</td>
+                  <td>0.15 s</td>
+                  <td>22 MB*</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="fineprint">
+            Seconds per clip is the median for the whole run of one clip. For
+            Lipik, Whisper and Qwen3-ASR it includes loading the model each time
+            (the app keeps it loaded) and, for Lipik's final text, the clean-up.
+            Model time is speech to text only. *Apple's model runs inside a
+            macOS system service, so its memory number leaves the model out.
+          </p>
+
+          <h2>What the numbers mean</h2>
+          <ul>
+            <li>
+              Lipik uses <strong>Parakeet Unified English 0.6B</strong> by
+              default. It got about 1 word in 12 wrong on this set.
+            </li>
+            <li>
+              Whisper large-v3-turbo made fewer mistakes, 7.5%, but needed about
+              11 times the model time per clip (0.69 s against 0.06 s). That is
+              why Parakeet is the default. Whisper models are a free download in
+              Lipik's Settings if you prefer them.
+            </li>
+            <li>
+              Clean-up did not change the word error rate. It removes fillers
+              and fixes punctuation and formatting, which this score ignores.
+            </li>
+            <li>
+              Apple Dictation with English (India) made about twice as many
+              mistakes as Parakeet on this set. Lipik uses it only for
+              <a href="/hinglish-speech-to-text">Hinglish</a>, where it writes
+              Hindi words in Roman letters.
+            </li>
+          </ul>
+
+          <h2>By the speaker's first language</h2>
+          <p>
+            Svarah's speakers come from many parts of India. Each group here has
+            only 4 to 13 clips, so treat these numbers as rough.
+          </p>
+          <div class="compare-wrap">
+            <table class="compare compare-data">
+              <thead>
+                <tr>
+                  <th scope="col">First language</th>
+                  <th scope="col">Clips</th>
+                  <th scope="col">Lipik (Parakeet)</th>
+                  <th scope="col">Whisper large-v3-turbo</th>
+                  <th scope="col">Qwen3-ASR 1.7B</th>
+                  <th scope="col">Apple, English (India)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Assamese</th>
+                  <td>4</td>
+                  <td>8.0%</td>
+                  <td>8.0%</td>
+                  <td>52.0%</td>
+                  <td>44.0%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Bengali</th>
+                  <td>10</td>
+                  <td>4.2%</td>
+                  <td>1.2%</td>
+                  <td>3.6%</td>
+                  <td>12.5%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Bodo</th>
+                  <td>10</td>
+                  <td>7.9%</td>
+                  <td>7.9%</td>
+                  <td>7.9%</td>
+                  <td>30.2%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Dogri</th>
+                  <td>9</td>
+                  <td>10.4%</td>
+                  <td>13.5%</td>
+                  <td>6.2%</td>
+                  <td>17.7%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Gujarati</th>
+                  <td>5</td>
+                  <td>3.1%</td>
+                  <td>3.1%</td>
+                  <td>1.6%</td>
+                  <td>6.2%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Hindi</th>
+                  <td>7</td>
+                  <td>5.8%</td>
+                  <td>4.7%</td>
+                  <td>7.0%</td>
+                  <td>10.5%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Kannada</th>
+                  <td>11</td>
+                  <td>5.9%</td>
+                  <td>5.4%</td>
+                  <td>10.4%</td>
+                  <td>12.2%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Kashmiri</th>
+                  <td>8</td>
+                  <td>10.6%</td>
+                  <td>11.4%</td>
+                  <td>17.9%</td>
+                  <td>25.2%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Konkani</th>
+                  <td>8</td>
+                  <td>12.8%</td>
+                  <td>10.5%</td>
+                  <td>29.1%</td>
+                  <td>14.0%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Maithili</th>
+                  <td>7</td>
+                  <td>9.1%</td>
+                  <td>6.5%</td>
+                  <td>2.6%</td>
+                  <td>11.7%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Malayalam</th>
+                  <td>9</td>
+                  <td>15.3%</td>
+                  <td>16.5%</td>
+                  <td>10.6%</td>
+                  <td>15.3%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Marathi</th>
+                  <td>7</td>
+                  <td>8.5%</td>
+                  <td>8.5%</td>
+                  <td>8.5%</td>
+                  <td>19.7%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Nepali</th>
+                  <td>13</td>
+                  <td>6.3%</td>
+                  <td>3.4%</td>
+                  <td>5.7%</td>
+                  <td>20.6%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Odia</th>
+                  <td>6</td>
+                  <td>3.9%</td>
+                  <td>2.6%</td>
+                  <td>2.6%</td>
+                  <td>17.1%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Punjabi</th>
+                  <td>5</td>
+                  <td>1.7%</td>
+                  <td>5.2%</td>
+                  <td>3.4%</td>
+                  <td>24.1%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Sindhi</th>
+                  <td>5</td>
+                  <td>12.0%</td>
+                  <td>6.0%</td>
+                  <td>54.0%</td>
+                  <td>6.0%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Tamil</th>
+                  <td>8</td>
+                  <td>5.6%</td>
+                  <td>1.4%</td>
+                  <td>11.3%</td>
+                  <td>15.5%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Telugu</th>
+                  <td>6</td>
+                  <td>5.5%</td>
+                  <td>8.2%</td>
+                  <td>30.1%</td>
+                  <td>19.2%</td>
+                </tr>
+                <tr>
+                  <th scope="row">Urdu</th>
+                  <td>12</td>
+                  <td>24.0%</td>
+                  <td>19.4%</td>
+                  <td>27.9%</td>
+                  <td>34.1%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>How it was measured</h2>
+          <ul>
+            <li>
+              <strong>Clips:</strong> 150 clips from
+              <a href="https://huggingface.co/datasets/ai4bharat/Svarah"
+                >Svarah</a
+              >, AI4Bharat's test set of Indian-accented English (CC BY 4.0),
+              from speakers of 19 first languages.
+            </li>
+            <li>
+              <strong>Score:</strong> both the output and the reference are
+              lower-cased, punctuation is dropped and numbers are written as
+              digits before counting word errors.
+            </li>
+            <li>
+              <strong>How each ran:</strong> Parakeet, Whisper and Qwen3-ASR
+              through Lipik's own speech engine on a Mac with Apple silicon;
+              Apple Dictation through Apple's on-device speech service. Lipik's
+              final text used clean-up with Qwen3 8B.
+            </li>
+            <li>
+              <strong>Not measured here:</strong> how close the text is to what
+              you'd send. Svarah's references are plain transcripts, so only the
+              word error rate is meaningful on this set.
+            </li>
+            <li>
+              <strong>Limits:</strong> one test set of 150 clips of
+              Indian-accented English; results on your voice may differ.
+            </li>
+          </ul>
+          <p>
+            The scripts, the clip list and the full results are on GitHub:
+            <a
+              href="https://github.com/Gourav2609/lipik/blob/main/training/benchmark/RESULTS.md"
+              >RESULTS.md</a
+            >
+            and
+            <a
+              href="https://github.com/Gourav2609/lipik/blob/main/training/benchmark/README.md"
+              >how to run it yourself</a
+            >.
+          </p>
+
+          <h2>What about Hinglish?</h2>
+          <p>
+            This test is English only. Hinglish is harder, and Hinglish
+            dictation is still in beta. How it works is on the
+            <a href="/hinglish-speech-to-text">Hinglish speech to text</a> page.
+          </p>
+        </div>
+      </section>
+
+      <section class="section faq" aria-labelledby="tfaq-h">
+        <div class="wrap faq-inner">
+          <h2 id="tfaq-h">Questions</h2>
+          <div class="faq-list">
+            <details>
+              <summary>What is Svarah?</summary>
+              <div class="faq-a">
+                <p>
+                  A test set of Indian-accented English speech from AI4Bharat,
+                  released under CC BY 4.0. Its speakers come from many parts of
+                  India.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Which speech model does Lipik use by default?</summary>
+              <div class="faq-a">
+                <p>
+                  Parakeet Unified English 0.6B, a one-time 731 MB download that
+                  runs on your Mac. On 150 Svarah clips it got 8.5% of words
+                  wrong.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Is Whisper more accurate than Parakeet?</summary>
+              <div class="faq-a">
+                <p>
+                  On this set, Whisper large-v3-turbo got 7.5% of words wrong
+                  against Parakeet's 8.5%, but it needed about 11 times the
+                  model time per clip. You can switch to a Whisper model in
+                  Lipik's Settings.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>How did Apple Dictation do?</summary>
+              <div class="faq-a">
+                <p>
+                  Apple Dictation with English (India) got 18.3% of words wrong
+                  on the same 150 clips.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Can I run the benchmark myself?</summary>
+              <div class="faq-a">
+                <p>
+                  Yes. The scripts and instructions are in training/benchmark in
+                  Lipik's GitHub repository. Svarah needs a free Hugging Face
+                  login to download.
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="download" id="download" aria-labelledby="download-h">
+        <div class="wrap download-inner">
+          <div class="dl-rule" aria-hidden="true"><span></span></div>
+          <img
+            class="dl-icon"
+            src="/assets/icon.png"
+            alt=""
+            width="128"
+            height="128"
+          />
+          <h2 id="download-h">Get Lipik for Mac.</h2>
+          <p>
+            Free, for Macs with Apple silicon. Open the download, drag Lipik
+            into Applications, and hold fn to start.
+          </p>
+          <div class="dl-actions">
+            <a
+              class="btn btn-ink"
+              href="https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg"
+              >Download Lipik.dmg</a
+            ><a class="btn btn-line" href="https://github.com/Gourav2609/lipik"
+              >View the code on GitHub</a
+            >
+          </div>
+          <div class="term">
+            <code
+              ><span class="term-p" aria-hidden="true">$</span>curl -fsSL
+              https://lipik.pages.dev/install.sh &#124; sh</code
+            >
+            <button
+              class="term-copy"
+              type="button"
+              data-copy="curl -fsSL https://lipik.pages.dev/install.sh | sh"
+            >
+              Copy
+            </button>
+          </div>
+          <p class="fineprint">
+            Pasting the line above into Terminal installs Lipik with no security
+            warning. If you use the download instead, macOS asks you to confirm
+            the first time: go to System Settings, then Privacy &amp; Security,
+            and click Open Anyway.
+            <a
+              href="https://github.com/Gourav2609/lipik/blob/main/docs/INSTALL.md"
+              >Install help</a
+            >
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="brand brand-sm" href="/" aria-label="Lipik home">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <g stroke="currentColor" stroke-linecap="round" fill="none">
+              <path d="M3 5.4h18" stroke-width="2.6" />
+              <path
+                d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+                stroke-width="2.3"
+              />
+            </g>
+          </svg>
+          <span>Lipik</span>
+        </a>
+        <p>
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
+          <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
+        </p>
+      </div>
+      <nav class="wrap footer-more" aria-label="More pages">
+        <span>More</span>
+        <a href="/hinglish">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes">Meeting notes without a bot</a>
+        <a href="/free-dictation-mac">Free local dictation for Mac</a>
+        <a href="/benchmark" aria-current="page">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative">Granola alternative</a>
+      </nav>
+    </footer>
+
+    <script>
+      const nav = document.getElementById("nav");
+      const onScroll = () =>
+        nav.classList.toggle("is-scrolled", window.scrollY > 8);
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    </script>
+    <script src="/nav.js"></script>
+    <!-- Cloudflare Web Analytics -->
+    <script
+      type="module"
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon='{"token": "a15babb81e4142a0a4f64e26ec8361bf"}'
+    ></script>
+    <!-- End Cloudflare Web Analytics -->
+  </body>
+</html>

@@ -6,10 +6,10 @@
     <title>Hinglish Voice Typing on Mac (Beta) | Lipik</title>
     <meta
       name="description"
-      content="Speak Hinglish, get Roman-letter text in any Mac app. Free, open source, runs on your Mac. Hinglish support is in beta."
+      content="Hold fn, speak Hinglish, and Lipik types it in Roman letters in any Mac app. Free, open source, runs on your Mac. Hinglish voice typing is in beta."
     />
     <meta name="theme-color" content="#fbf9f4" />
-    <link rel="canonical" href="https://lipik.refflux.dev/hinglish" />
+    <link rel="canonical" href="https://lipik.pages.dev/hinglish" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Lipik" />
     <meta
@@ -20,11 +20,8 @@
       property="og:description"
       content="Speak Hindi and English in one sentence. Lipik types it in Roman letters in any Mac app. Free and open source."
     />
-    <meta property="og:url" content="https://lipik.refflux.dev/hinglish" />
-    <meta
-      property="og:image"
-      content="https://lipik.refflux.dev/assets/og.png"
-    />
+    <meta property="og:url" content="https://lipik.pages.dev/hinglish" />
+    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -42,7 +39,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://lipik.refflux.dev/assets/og.png"
+      content="https://lipik.pages.dev/assets/og.png"
     />
     <script type="application/ld+json">
       {
@@ -59,10 +56,18 @@
           },
           {
             "@type": "Question",
+            "name": "Which apps does it work in?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Any app where you can type: a chat app, your email, a document or a code editor. Hold fn, talk, and let go; Lipik types where your cursor is."
+            }
+          },
+          {
+            "@type": "Question",
             "name": "Which macOS version do I need?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "macOS 26 or later, on a Mac with Apple silicon (M1 or later). On older versions of macOS, Lipik still works for English."
+              "text": "macOS 26 or later, on a Mac with Apple silicon (M1 or later). On older versions of macOS, dictation works in English."
             }
           },
           {
@@ -70,7 +75,7 @@
             "name": "Does it work offline?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes, once the speech files are on your Mac. Lipik's own speech model is a one-time 731 MB download from Hugging Face. Apple's English (India) speech files are a one-time download through macOS, if your Mac doesn't have them yet. After that, Hinglish mode works with Wi-Fi off."
+              "text": "Yes, once the speech files are on your Mac. Lipik's own speech model is a one-time 731 MB download from Hugging Face. Apple's English (India) speech files are a one-time download through macOS, if your Mac doesn't have them yet. After that, Hinglish voice typing works with Wi-Fi off."
             }
           },
           {
@@ -83,6 +88,14 @@
           },
           {
             "@type": "Question",
+            "name": "Does Hinglish mode slow down English dictation?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. If what you said reads as English, Lipik keeps its own text, so English dictation is as fast as before."
+            }
+          },
+          {
+            "@type": "Question",
             "name": "Why is it called beta?",
             "acceptedAnswer": {
               "@type": "Answer",
@@ -90,6 +103,34 @@
             }
           }
         ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lipik",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "softwareVersion": "0.1.9",
+        "dateModified": "2026-10-28",
+        "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
+        "url": "https://lipik.pages.dev/",
+        "releaseNotes": "https://lipik.pages.dev/releases",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Gourav",
+          "url": "https://github.com/Gourav2609"
+        },
+        "sameAs": ["https://github.com/Gourav2609/lipik"]
       }
     </script>
     <link rel="icon" type="image/png" href="assets/favicon.png" />
@@ -108,7 +149,7 @@
     <a class="skip" href="#main">Skip to content</a>
 
     <header class="nav" id="nav">
-      <a class="brand" href="index.html" aria-label="Lipik home">
+      <a class="brand" href="/" aria-label="Lipik home">
         <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
           <g stroke="currentColor" stroke-linecap="round" fill="none">
             <path d="M3 5.4h18" stroke-width="2.6" />
@@ -121,13 +162,13 @@
         <span>Lipik</span>
       </a>
       <nav id="nav-links" aria-label="Sections">
-        <a href="index.html#clean">Clean-up</a>
-        <a href="index.html#features">Features</a>
-        <a href="index.html#how">How it works</a>
-        <a href="index.html#open">Open source</a>
-        <a href="index.html#faq">FAQ</a>
-        <a href="pricing.html">Pricing</a>
-        <a href="releases.html">Release notes</a>
+        <a href="/#clean">Clean-up</a>
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#open">Open source</a>
+        <a href="/#faq">FAQ</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/releases">Release notes</a>
       </nav>
       <a class="btn btn-ink btn-sm" href="#download"
         >Download<span class="hide-sm">&nbsp;for Mac</span></a
@@ -249,14 +290,23 @@
               English model only.
             </li>
             <li>
-              Meeting notes use Lipik's own model, so Hinglish mode doesn't
-              apply to them yet.
+              Hinglish mode is for dictation. Meeting notes handle Hinglish on
+              their own, as described below.
             </li>
             <li>It writes Roman letters only.</li>
           </ul>
           <p>
             If something comes out wrong, you can report it on
             <a href="https://github.com/Gourav2609/lipik">GitHub</a>.
+          </p>
+
+          <h2 id="meetings">Hinglish in meetings</h2>
+          <p>
+            Meeting notes don't use Hinglish mode. They notice Hindi by
+            themselves and write the transcript in Roman letters, with Hindi
+            words and names kept, on macOS 14.2 or later. That is covered on the
+            <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+            page.
           </p>
         </div>
       </section>
@@ -275,11 +325,21 @@
               </div>
             </details>
             <details>
+              <summary>Which apps does it work in?</summary>
+              <div class="faq-a">
+                <p>
+                  Any app where you can type: a chat app, your email, a document
+                  or a code editor. Hold fn, talk, and let go; Lipik types where
+                  your cursor is.
+                </p>
+              </div>
+            </details>
+            <details>
               <summary>Which macOS version do I need?</summary>
               <div class="faq-a">
                 <p>
                   macOS 26 or later, on a Mac with Apple silicon (M1 or later).
-                  On older versions of macOS, Lipik still works for English.
+                  On older versions of macOS, dictation works in English.
                 </p>
               </div>
             </details>
@@ -291,7 +351,7 @@
                   model is a one-time 731 MB download from Hugging Face. Apple's
                   English (India) speech files are a one-time download through
                   macOS, if your Mac doesn't have them yet. After that, Hinglish
-                  mode works with Wi-Fi off.
+                  voice typing works with Wi-Fi off.
                 </p>
               </div>
             </details>
@@ -301,6 +361,15 @@
                 <p>
                   No. Hinglish mode writes everything in Roman letters, the way
                   most people type Hinglish in chats.
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>Does Hinglish mode slow down English dictation?</summary>
+              <div class="faq-a">
+                <p>
+                  No. If what you said reads as English, Lipik keeps its own
+                  text, so English dictation is as fast as before.
                 </p>
               </div>
             </details>
@@ -345,12 +414,12 @@
           <div class="term">
             <code
               ><span class="term-p" aria-hidden="true">$</span>curl -fsSL
-              https://lipik.refflux.dev/install.sh &#124; sh</code
+              https://lipik.pages.dev/install.sh &#124; sh</code
             >
             <button
               class="term-copy"
               type="button"
-              data-copy="curl -fsSL https://lipik.refflux.dev/install.sh | sh"
+              data-copy="curl -fsSL https://lipik.pages.dev/install.sh | sh"
             >
               Copy
             </button>
@@ -371,7 +440,7 @@
 
     <footer class="footer">
       <div class="wrap footer-inner">
-        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+        <a class="brand brand-sm" href="/" aria-label="Lipik home">
           <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
             <g stroke="currentColor" stroke-linecap="round" fill="none">
               <path d="M3 5.4h18" stroke-width="2.6" />
@@ -384,15 +453,23 @@
           <span>Lipik</span>
         </a>
         <p>
-          Free and open source under the MIT licence.
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
           <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
         </p>
       </div>
       <nav class="wrap footer-more" aria-label="More pages">
         <span>More</span>
-        <a href="hinglish.html" aria-current="page">Hinglish voice typing</a>
-        <a href="meeting-notes.html">Meeting notes without a bot</a>
-        <a href="free-dictation-mac.html">Free local dictation for Mac</a>
+        <a href="/hinglish" aria-current="page">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes">Meeting notes without a bot</a>
+        <a href="/free-dictation-mac">Free local dictation for Mac</a>
+        <a href="/benchmark">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative">Granola alternative</a>
       </nav>
     </footer>
 

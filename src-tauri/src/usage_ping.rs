@@ -1,4 +1,4 @@
-//! Every few hours, tells lipik.refflux.dev that this copy of Lipik is in use, so
+//! Every few hours, tells lipik.pages.dev that this copy of Lipik is in use, so
 //! we know how many people use it. The ping carries exactly four things: a
 //! random ID made on first launch (`install_id`), the app version, the macOS
 //! version and the chip type ("arm64" or "x86_64"). Never audio, text, names
@@ -15,8 +15,8 @@ use serde_json::{json, Value};
 use std::time::{Duration, SystemTime};
 use tauri::AppHandle;
 
-const PING: &str = "https://lipik.refflux.dev/api/ping";
-const EMAIL: &str = "https://lipik.refflux.dev/api/email";
+const PING: &str = "https://lipik.pages.dev/api/ping";
+const EMAIL: &str = "https://lipik.pages.dev/api/email";
 const FIRST_WAIT: Duration = Duration::from_secs(60);
 const CHECK_EVERY: Duration = Duration::from_secs(15 * 60);
 const SEND_EVERY: Duration = Duration::from_secs(3 * 60 * 60);

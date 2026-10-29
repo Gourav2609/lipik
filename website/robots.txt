@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://lipik.refflux.dev/sitemap.xml
+Sitemap: https://lipik.pages.dev/sitemap.xml

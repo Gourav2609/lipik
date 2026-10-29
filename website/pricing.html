@@ -9,7 +9,7 @@
       content="Every Lipik feature is free: unlimited dictation, clean-up, meeting notes and 99 languages. No account, no subscription, no word limit."
     />
     <meta name="theme-color" content="#fbf9f4" />
-    <link rel="canonical" href="https://lipik.refflux.dev/pricing" />
+    <link rel="canonical" href="https://lipik.pages.dev/pricing" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Lipik" />
     <meta property="og:title" content="Lipik pricing: everything is free" />
@@ -17,11 +17,8 @@
       property="og:description"
       content="Every Lipik feature is free. No account, no subscription, no word limit."
     />
-    <meta property="og:url" content="https://lipik.refflux.dev/pricing" />
-    <meta
-      property="og:image"
-      content="https://lipik.refflux.dev/assets/og.png"
-    />
+    <meta property="og:url" content="https://lipik.pages.dev/pricing" />
+    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -36,8 +33,36 @@
     />
     <meta
       name="twitter:image"
-      content="https://lipik.refflux.dev/assets/og.png"
+      content="https://lipik.pages.dev/assets/og.png"
     />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lipik",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "softwareVersion": "0.1.9",
+        "dateModified": "2026-10-28",
+        "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
+        "url": "https://lipik.pages.dev/",
+        "releaseNotes": "https://lipik.pages.dev/releases",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Gourav",
+          "url": "https://github.com/Gourav2609"
+        },
+        "sameAs": ["https://github.com/Gourav2609/lipik"]
+      }
+    </script>
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -54,7 +79,7 @@
     <a class="skip" href="#main">Skip to content</a>
 
     <header class="nav" id="nav">
-      <a class="brand" href="index.html" aria-label="Lipik home">
+      <a class="brand" href="/" aria-label="Lipik home">
         <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
           <g stroke="currentColor" stroke-linecap="round" fill="none">
             <path d="M3 5.4h18" stroke-width="2.6" />
@@ -67,15 +92,15 @@
         <span>Lipik</span>
       </a>
       <nav id="nav-links" aria-label="Sections">
-        <a href="index.html#clean">Clean-up</a>
-        <a href="index.html#features">Features</a>
-        <a href="index.html#how">How it works</a>
-        <a href="index.html#open">Open source</a>
-        <a href="index.html#faq">FAQ</a>
-        <a href="pricing.html" aria-current="page">Pricing</a>
-        <a href="releases.html">Release notes</a>
+        <a href="/#clean">Clean-up</a>
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#open">Open source</a>
+        <a href="/#faq">FAQ</a>
+        <a href="/pricing" aria-current="page">Pricing</a>
+        <a href="/releases">Release notes</a>
       </nav>
-      <a class="btn btn-ink btn-sm" href="index.html#download"
+      <a class="btn btn-ink btn-sm" href="/#download"
         >Download<span class="hide-sm">&nbsp;for Mac</span></a
       >
       <button
@@ -113,9 +138,7 @@
               Every feature is in. There is no paid plan, no trial and no word
               limit.
             </p>
-            <a class="btn btn-ink" href="index.html#download"
-              >Download for Mac</a
-            >
+            <a class="btn btn-ink" href="/#download">Download for Mac</a>
             <p class="fineprint">For Macs with Apple silicon.</p>
           </div>
           <div class="price-right">
@@ -129,7 +152,7 @@
               <li>Tone for each kind of app</li>
               <li>Meeting notes and summaries</li>
               <li>99 languages with Whisper models</li>
-              <li>Hinglish (beta)</li>
+              <li>Hinglish in dictation (beta) and meeting notes</li>
               <li>Hands-free with fn + Space</li>
               <li>Works with Wi-Fi off</li>
               <li>No account, no ads</li>
@@ -206,7 +229,7 @@
 
     <footer class="footer">
       <div class="wrap footer-inner">
-        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+        <a class="brand brand-sm" href="/" aria-label="Lipik home">
           <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
             <g stroke="currentColor" stroke-linecap="round" fill="none">
               <path d="M3 5.4h18" stroke-width="2.6" />
@@ -219,10 +242,24 @@
           <span>Lipik</span>
         </a>
         <p>
-          Free and open source under the MIT licence.
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
           <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
         </p>
       </div>
+      <nav class="wrap footer-more" aria-label="More pages">
+        <span>More</span>
+        <a href="/hinglish">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes">Meeting notes without a bot</a>
+        <a href="/free-dictation-mac">Free local dictation for Mac</a>
+        <a href="/benchmark">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative">Granola alternative</a>
+      </nav>
     </footer>
 
     <script>

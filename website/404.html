@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Page not found | Lipik</title>
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#fbf9f4" />
+    <link rel="icon" type="image/png" href="/assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:opsz,wght@14..32,400..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+  </head>
+  <body class="page-topic">
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" id="nav">
+      <a class="brand" href="/" aria-label="Lipik home">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+          <g stroke="currentColor" stroke-linecap="round" fill="none">
+            <path d="M3 5.4h18" stroke-width="2.6" />
+            <path
+              d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+              stroke-width="2.3"
+            />
+          </g>
+        </svg>
+        <span>Lipik</span>
+      </a>
+      <nav id="nav-links" aria-label="Sections">
+        <a href="/#clean">Clean-up</a>
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#open">Open source</a>
+        <a href="/#faq">FAQ</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/releases">Release notes</a>
+      </nav>
+      <a class="btn btn-ink btn-sm" href="/#download"
+        >Download<span class="hide-sm">&nbsp;for Mac</span></a
+      >
+      <button
+        class="nav-toggle"
+        type="button"
+        aria-controls="nav-links"
+        aria-expanded="false"
+        aria-label="Open menu"
+      >
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path class="nt-a" d="M3 7h14" />
+          <path class="nt-b" d="M3 13h14" />
+        </svg>
+      </button>
+    </header>
+
+    <main id="main">
+      <section class="topic-hero" aria-labelledby="topic-h">
+        <div class="wrap">
+          <p class="hero-eyebrow">Page not found</p>
+          <h1 id="topic-h">This page isn't here.</h1>
+          <p class="topic-sub">
+            The link may be old, or the address may have a typo. Lipik is a
+            free, open-source dictation app for Mac. These pages may help:
+          </p>
+          <nav class="notfound-links" aria-label="Pages">
+            <a class="btn btn-ink" href="/">Home</a>
+            <a class="btn btn-line" href="/pricing">Pricing</a>
+            <a class="btn btn-line" href="/releases">Release notes</a>
+            <a class="btn btn-line" href="/hinglish">Hinglish</a>
+            <a class="btn btn-line" href="/meeting-notes">Meeting notes</a>
+            <a class="btn btn-line" href="/benchmark">Benchmark</a>
+          </nav>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="brand brand-sm" href="/" aria-label="Lipik home">
+          <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+            <g stroke="currentColor" stroke-linecap="round" fill="none">
+              <path d="M3 5.4h18" stroke-width="2.6" />
+              <path
+                d="M6.5 6.4v4.6M10.5 6.4v11.6M14.5 6.4v7.4M18.5 6.4v3"
+                stroke-width="2.3"
+              />
+            </g>
+          </svg>
+          <span>Lipik</span>
+        </a>
+        <p>
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
+          <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
+        </p>
+      </div>
+      <nav class="wrap footer-more" aria-label="More pages">
+        <span>More</span>
+        <a href="/hinglish">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes">Meeting notes without a bot</a>
+        <a href="/free-dictation-mac">Free local dictation for Mac</a>
+        <a href="/benchmark">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative">Granola alternative</a>
+      </nav>
+    </footer>
+
+    <script>
+      const nav = document.getElementById("nav");
+      const onScroll = () =>
+        nav.classList.toggle("is-scrolled", window.scrollY > 8);
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    </script>
+    <script src="/nav.js"></script>
+    <!-- Cloudflare Web Analytics -->
+    <script
+      type="module"
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon='{"token": "a15babb81e4142a0a4f64e26ec8361bf"}'
+    ></script>
+    <!-- End Cloudflare Web Analytics -->
+  </body>
+</html>

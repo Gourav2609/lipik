@@ -1,0 +1,9 @@
+# Page files keep the default (checked with the server on every visit).
+/styles.css
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+/main.js
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+/nav.js
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+/assets/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400

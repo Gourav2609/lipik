@@ -1,4 +1,6 @@
-// lipik.refflux.dev: the static site, plus the usage counts.
+// lipik-site: the usage counts and the installer. The site itself lives on
+// lipik.pages.dev, whose /api/* and /install.sh come here through a service
+// binding. Every other request (the old lipik.refflux.dev pages) is sent there.
 // /api/ping   POST {id, version, os, arch}  every 3 hours from the app
 // /api/email  POST {email, updates}         from the setup step
 // /api/stats  GET                           counts for /stats (no emails)
@@ -11,6 +13,7 @@ const VERSION = /^\d{1,3}\.\d{1,3}\.\d{1,3}[0-9A-Za-z.-]{0,16}$/;
 const OS = /^\d{1,2}(\.\d{1,5}){0,3}$/;
 const ARCH = new Set(["arm64", "x86_64"]);
 const EMAIL = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/;
+const SITE = "https://lipik.pages.dev";
 
 // Days are counted in India time, where the owner reads them.
 const dayOf = (ms) => new Date(ms + 5.5 * 3600_000).toISOString().slice(0, 10);
@@ -217,7 +220,7 @@ async function adminEmails(request, env) {
 
 export default {
   async fetch(request, env, ctx) {
-    const { pathname } = new URL(request.url);
+    const { pathname, search } = new URL(request.url);
     const method = request.method;
     try {
       if (pathname === "/api/ping" && method === "POST")
@@ -233,13 +236,12 @@ export default {
       console.error(e);
       return json({ ok: false }, 500);
     }
-    if (
-      pathname === "/install.sh" &&
-      method === "GET" &&
-      !(await limited(request, env))
-    ) {
-      ctx.waitUntil(countInstaller(env).catch((e) => console.error(e)));
+    if (pathname === "/install.sh") {
+      if (method === "GET" && !(await limited(request, env))) {
+        ctx.waitUntil(countInstaller(env).catch((e) => console.error(e)));
+      }
+      return env.ASSETS.fetch(request);
     }
-    return env.ASSETS.fetch(request);
+    return Response.redirect(`${SITE}${pathname}${search}`, 301);
   },
 };

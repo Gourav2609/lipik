@@ -9,7 +9,7 @@
       content="Lipik is a free, open-source dictation app for Mac. Hold fn, talk, let go: clean text in any app. Works offline once set up. No account, no word limit."
     />
     <meta name="theme-color" content="#fbf9f4" />
-    <link rel="canonical" href="https://lipik.refflux.dev/" />
+    <link rel="canonical" href="https://lipik.pages.dev/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Lipik" />
     <meta
@@ -20,11 +20,8 @@
       property="og:description"
       content="Hold fn, talk, let go. Clean text in any app. Runs on your Mac, free, no account."
     />
-    <meta property="og:url" content="https://lipik.refflux.dev/" />
-    <meta
-      property="og:image"
-      content="https://lipik.refflux.dev/assets/og.png"
-    />
+    <meta property="og:url" content="https://lipik.pages.dev/" />
+    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -42,18 +39,21 @@
     />
     <meta
       name="twitter:image"
-      content="https://lipik.refflux.dev/assets/og.png"
+      content="https://lipik.pages.dev/assets/og.png"
     />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Lipik",
-        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac.",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "softwareVersion": "0.1.9",
+        "dateModified": "2026-10-28",
         "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
-        "url": "https://lipik.refflux.dev/",
+        "url": "https://lipik.pages.dev/",
+        "releaseNotes": "https://lipik.pages.dev/releases",
         "license": "https://opensource.org/licenses/MIT",
         "isAccessibleForFree": true,
         "offers": {
@@ -61,7 +61,49 @@
           "price": "0",
           "priceCurrency": "USD"
         },
+        "author": {
+          "@type": "Person",
+          "name": "Gourav",
+          "url": "https://github.com/Gourav2609"
+        },
         "sameAs": ["https://github.com/Gourav2609/lipik"]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to dictate in any Mac app with Lipik",
+        "description": "Hold fn, speak, and let go: Lipik types clean text where your cursor is.",
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "Lipik, free for Macs with Apple silicon"
+          }
+        ],
+        "step": [
+          {
+            "@type": "HowToStep",
+            "position": 1,
+            "name": "Hold fn",
+            "text": "Put your cursor where the words should go: a message, an email, a doc, a prompt. Then hold the fn key.",
+            "url": "https://lipik.pages.dev/#how"
+          },
+          {
+            "@type": "HowToStep",
+            "position": 2,
+            "name": "Speak",
+            "text": "Talk the way you would to a friend. Pause, ramble, correct yourself. The pill at the bottom of your screen shows Lipik is listening.",
+            "url": "https://lipik.pages.dev/#how"
+          },
+          {
+            "@type": "HowToStep",
+            "position": 3,
+            "name": "Let go",
+            "text": "The clean text is typed where your cursor is. If no text box is selected, it shows in a small card so you can copy it.",
+            "url": "https://lipik.pages.dev/#how"
+          }
+        ]
       }
     </script>
     <script type="application/ld+json">
@@ -98,7 +140,7 @@
             "name": "Which languages does it understand?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "English works out of the box with the Parakeet model. For other languages, download one of the free Whisper models in Settings; together they cover 99 languages. Hinglish (Hindi and English mixed, written in Roman letters) works but is still in beta."
+              "text": "English works out of the box with the Parakeet model. For other languages, download one of the free Whisper models in Settings; together they cover 99 languages. Hinglish (Hindi and English mixed, written in Roman letters) works in dictation, in beta on macOS 26 or later, and in meeting notes, where Lipik notices it by itself."
             }
           },
           {
@@ -154,8 +196,8 @@
         <a href="#how">How it works</a>
         <a href="#open">Open source</a>
         <a href="#faq">FAQ</a>
-        <a href="pricing.html">Pricing</a>
-        <a href="releases.html">Release notes</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/releases">Release notes</a>
       </nav>
       <a class="btn btn-ink btn-sm" href="#download"
         >Download<span class="hide-sm">&nbsp;for Mac</span></a
@@ -182,9 +224,12 @@
             <span class="line"></span>
             <span class="drops"><i></i><i></i><i></i><i></i></span>
           </div>
-          <p class="hero-eyebrow">Free, open-source dictation app for Mac</p>
+          <p class="hero-eyebrow">Open source, no account, no word limit</p>
           <div class="hero-head">
-            <h1 id="hero-h">Speak freely. Lipik writes it down.</h1>
+            <h1 id="hero-h">
+              Speak freely. Lipik writes it down.
+              <span class="h1-sub">Free dictation app for Mac</span>
+            </h1>
             <div class="hero-side">
               <p class="lede">
                 Hold <kbd>fn</kbd> and talk the way you talk. Clean, punctuated
@@ -198,12 +243,12 @@
               <div class="term">
                 <code
                   ><span class="term-p" aria-hidden="true">$</span>curl -fsSL
-                  https://lipik.refflux.dev/install.sh &#124; sh</code
+                  https://lipik.pages.dev/install.sh &#124; sh</code
                 >
                 <button
                   class="term-copy"
                   type="button"
-                  data-copy="curl -fsSL https://lipik.refflux.dev/install.sh | sh"
+                  data-copy="curl -fsSL https://lipik.pages.dev/install.sh | sh"
                 >
                   Copy
                 </button>
@@ -1672,8 +1717,10 @@
                   English works out of the box with the Parakeet model. For
                   other languages, download one of the free Whisper models in
                   Settings; together they cover 99 languages. Hinglish (Hindi
-                  and English mixed, written in Roman letters) works but is
-                  still in beta.
+                  and English mixed, written in Roman letters) works in
+                  dictation, in beta on macOS 26 or later, and in
+                  <a href="/hinglish-speech-to-text">meeting notes</a>, where
+                  Lipik notices it by itself.
                 </p>
               </div>
             </details>
@@ -1730,12 +1777,12 @@
           <div class="term">
             <code
               ><span class="term-p" aria-hidden="true">$</span>curl -fsSL
-              https://lipik.refflux.dev/install.sh &#124; sh</code
+              https://lipik.pages.dev/install.sh &#124; sh</code
             >
             <button
               class="term-copy"
               type="button"
-              data-copy="curl -fsSL https://lipik.refflux.dev/install.sh | sh"
+              data-copy="curl -fsSL https://lipik.pages.dev/install.sh | sh"
             >
               Copy
             </button>
@@ -1770,15 +1817,23 @@
           <span>Lipik</span>
         </a>
         <p>
-          Free and open source under the MIT licence.
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
           <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
         </p>
       </div>
       <nav class="wrap footer-more" aria-label="More pages">
         <span>More</span>
-        <a href="hinglish.html">Hinglish voice typing</a>
-        <a href="meeting-notes.html">Meeting notes without a bot</a>
-        <a href="free-dictation-mac.html">Free local dictation for Mac</a>
+        <a href="/hinglish">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes">Meeting notes without a bot</a>
+        <a href="/free-dictation-mac">Free local dictation for Mac</a>
+        <a href="/benchmark">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative">Granola alternative</a>
       </nav>
     </footer>
 

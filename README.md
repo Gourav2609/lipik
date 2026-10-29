@@ -23,12 +23,14 @@ you.
 
 - **Local AI clean-up.** On by default. Built-in rules turn spoken
   punctuation, corrections like "four, no, five", emails and times into
-  written text, and a local model in [Ollama](https://ollama.com) removes
-  filler words, fixes punctuation and writes in the tone you set for
-  personal messages, work chat and email. A reply that adds words you
+  written text, and a built-in local model (Qwen3 8B, or Qwen3 4B Instruct
+  on Macs with less than 16 GB of memory, run by llama.cpp inside Lipik)
+  removes filler words, fixes punctuation and writes in the tone you set
+  for personal messages, work chat and email. A reply that adds words you
   didn't say, drops your words or translates Hinglish is thrown away.
-  By default the clean-up runs on that local model. It only uses a cloud
-  provider if you set one up yourself.
+  No other app is needed; [Ollama](https://ollama.com) stays an optional
+  choice in Settings, and Macs older than macOS 13.3 use it. It only uses
+  a cloud provider if you set one up yourself.
 - **Dictionary and snippets.** Teach Lipik names and words it gets wrong, and
   set short phrases that expand into longer text.
 - **Rewrite shortcuts.** Select text anywhere and press `⌥1` to `⌥9` to
@@ -48,7 +50,9 @@ you.
 - **Hinglish support.** Hindi and English mixed in one sentence, written in
   Roman script. On macOS 26 or later Lipik also runs Apple's on-device
   dictation and uses its text when the local model's text does not read as
-  English. Everything still stays on your Mac.
+  English. Meeting notes notice Hinglish by themselves and write it in Roman
+  letters; the first Hinglish meeting downloads a Hinglish speech model
+  (Qwen3-ASR 1.7B, about 2 GB). Everything still stays on your Mac.
 - **Voice training scripts.** Fine-tune a Whisper model on your own saved
   dictations so it learns your voice and vocabulary. See
   [training/README.md](training/README.md).
@@ -62,7 +66,7 @@ _Coming soon._
 Paste this into Terminal and press Return:
 
 ```bash
-curl -fsSL https://lipik.refflux.dev/install.sh | sh
+curl -fsSL https://lipik.pages.dev/install.sh | sh
 ```
 
 It downloads the latest release, puts **Lipik** in **Applications** and opens
@@ -92,11 +96,13 @@ rules.
 Your voice, your text and your meeting notes stay on your Mac. Lipik only
 connects to the internet for:
 
-- one-time model downloads from Hugging Face (speech, clean-up, speakers)
-- Apple's English (India) speech files, through macOS, for Hinglish only
-- once a day, a request to GitHub for the latest version number (Settings →
+- one-time model downloads from Hugging Face (speech, clean-up, speakers,
+  and the Hinglish speech model the first time a meeting is in Hinglish)
+- Apple's English (India) speech files, through macOS, for Hinglish
+  dictation only
+- every few hours, a request to GitHub for the latest version number (Settings →
   Privacy → Updates turns it off)
-- every 3 hours, an anonymous usage count to lipik.refflux.dev: a random
+- every 3 hours, an anonymous usage count to lipik.pages.dev: a random
   install ID, the app version and the macOS version, so we know how many
   people use Lipik (Settings → Privacy → Usage count turns it off). The
   server notes the country and does not keep the IP address. The code is
@@ -150,11 +156,16 @@ development.
 
 ## Website
 
-The site at [lipik.refflux.dev](https://lipik.refflux.dev) lives in
-[`website/`](website): plain HTML, CSS and JavaScript, no build step. Every
-change merged to `main` that touches `website/` is deployed by
-`.github/workflows/website.yml`. To preview it locally, run
-`python3 -m http.server -d website 8742` and open http://127.0.0.1:8742.
+The site at [lipik.pages.dev](https://lipik.pages.dev) lives in
+[`website/`](website): plain HTML, CSS and JavaScript, no build step. It is a
+Cloudflare Pages project (`lipik`); its `/api/*` and `/install.sh` are passed
+on to the `lipik-site` Worker (`website/worker.js`), which keeps the usage
+counts and sends the old lipik.refflux.dev addresses to the new site. Every
+change merged to `main` that touches `website/` deploys the Worker through
+`.github/workflows/website.yml`; deploy the pages with
+`website/pages/build.sh && cd website/pages && npx wrangler@4 pages deploy`.
+To preview it locally, run `python3 -m http.server -d website 8742` and open
+http://127.0.0.1:8742.
 
 ## Credits
 

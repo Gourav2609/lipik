@@ -1608,7 +1608,7 @@ hold_threshold_ms?: number; audio_feedback?: boolean; audio_feedback_volume?: nu
  */
 release_check_enabled?: boolean; 
 /**
- * Lipik tells lipik.refflux.dev every few hours that this copy is in use.
+ * Lipik tells lipik.pages.dev every few hours that this copy is in use.
  */
 usage_ping_enabled?: boolean; 
 /**

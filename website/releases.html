@@ -8,7 +8,7 @@
       name="description"
       content="What changed in each version of Lipik, the free, open-source voice dictation app for Mac."
     />
-    <link rel="canonical" href="https://lipik.refflux.dev/releases" />
+    <link rel="canonical" href="https://lipik.pages.dev/releases" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Lipik" />
     <meta property="og:title" content="Lipik release notes" />
@@ -16,11 +16,8 @@
       property="og:description"
       content="What changed in each version of Lipik."
     />
-    <meta property="og:url" content="https://lipik.refflux.dev/releases" />
-    <meta
-      property="og:image"
-      content="https://lipik.refflux.dev/assets/og.png"
-    />
+    <meta property="og:url" content="https://lipik.pages.dev/releases" />
+    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -35,10 +32,38 @@
     />
     <meta
       name="twitter:image"
-      content="https://lipik.refflux.dev/assets/og.png"
+      content="https://lipik.pages.dev/assets/og.png"
     />
 
     <meta name="theme-color" content="#fbf9f4" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Lipik",
+        "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS (Apple silicon, M1 or later)",
+        "softwareVersion": "0.1.9",
+        "dateModified": "2026-10-28",
+        "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
+        "url": "https://lipik.pages.dev/",
+        "releaseNotes": "https://lipik.pages.dev/releases",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Gourav",
+          "url": "https://github.com/Gourav2609"
+        },
+        "sameAs": ["https://github.com/Gourav2609/lipik"]
+      }
+    </script>
     <link rel="icon" type="image/png" href="assets/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -55,7 +80,7 @@
     <a class="skip" href="#main">Skip to content</a>
 
     <header class="nav" id="nav">
-      <a class="brand" href="index.html" aria-label="Lipik home">
+      <a class="brand" href="/" aria-label="Lipik home">
         <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
           <g stroke="currentColor" stroke-linecap="round" fill="none">
             <path d="M3 5.4h18" stroke-width="2.6" />
@@ -68,15 +93,15 @@
         <span>Lipik</span>
       </a>
       <nav id="nav-links" aria-label="Sections">
-        <a href="index.html#clean">Clean-up</a>
-        <a href="index.html#features">Features</a>
-        <a href="index.html#how">How it works</a>
-        <a href="index.html#open">Open source</a>
-        <a href="index.html#faq">FAQ</a>
-        <a href="pricing.html">Pricing</a>
-        <a href="releases.html" aria-current="page">Release notes</a>
+        <a href="/#clean">Clean-up</a>
+        <a href="/#features">Features</a>
+        <a href="/#how">How it works</a>
+        <a href="/#open">Open source</a>
+        <a href="/#faq">FAQ</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/releases" aria-current="page">Release notes</a>
       </nav>
-      <a class="btn btn-ink btn-sm" href="index.html#download"
+      <a class="btn btn-ink btn-sm" href="/#download"
         >Download<span class="hide-sm">&nbsp;for Mac</span></a
       >
       <button
@@ -100,6 +125,7 @@
           <p class="rel-sub">
             What changed in each version of Lipik. The newest is at the top.
           </p>
+          <p class="rel-sub">Latest: 0.1.9, 28 Oct 2026.</p>
           <p>
             <a
               class="btn btn-ink"
@@ -110,11 +136,618 @@
         </div>
       </section>
       <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.9">
+          <header class="rel-head">
+            <h2>Lipik 0.1.9</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-28">28 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.9"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Meetings in Hinglish, names from hand-overs, and no more call echo
+              on your side.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Meetings in Hinglish.</strong> When a meeting mixes
+                Hindi and English, Lipik now notices by itself and writes the
+                transcript in Roman letters, the way you'd type Hinglish on
+                WhatsApp. Hindi words and people's names are kept instead of
+                turning into English-sounding noise. The first time, Lipik
+                quietly downloads its Hinglish speech model (about 2 GB) and
+                redoes that meeting. You can set the language yourself in
+                Settings → Meetings, but you shouldn't need to.
+              </li>
+              <li>
+                <strong>Names from hand-overs.</strong> When someone is spoken
+                to by name, like "Mohan, any update?", and the same voice
+                answers each time, Lipik puts that name from the invite on the
+                voice. One mention isn't enough, so you get "Speaker 3" rather
+                than a wrong name.
+              </li>
+              <li>
+                <strong>No more call echo on your side.</strong> Without
+                headphones your mic also hears the call, so other people's words
+                used to show up as yours. Lipik now removes the call's sound
+                from your mic before transcribing. Your own voice is kept as it
+                was.
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <p>
+              Easiest: paste this into Terminal and press Return. It installs or
+              updates Lipik with no security warning:
+            </p>
+            <p>
+              <code>curl -fsSL https://lipik.pages.dev/install.sh | sh</code>
+            </p>
+            <p>Or by hand:</p>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+              <li>Updating keeps your settings, history and permissions.</li>
+            </ol>
+          </div>
+        </article>
+        <article class="rel" id="v0.1.8">
+          <header class="rel-head">
+            <h2>Lipik 0.1.8</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-28">28 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.8"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Speakers named from the calendar invite, and window buttons that
+              stay put.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Speakers named from the calendar invite.</strong> When
+                someone is called on by name ("Naresh, can you go next?") or
+                introduces themselves ("Gautam here"), Lipik puts the right name
+                from the meeting invite on that voice. It only names a voice
+                when the meeting makes it clear, so you get "Speaker 2" rather
+                than a wrong name. Rooms and group addresses on the invite are
+                skipped. Name a voice once and Lipik recognises it in every
+                meeting after that.
+              </li>
+              <li>
+                <strong>Window buttons stay in place.</strong> Switching between
+                light and dark no longer moves the close, minimise and zoom
+                buttons to the corner of the window.
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <p>
+              Easiest: paste this into Terminal and press Return. It installs or
+              updates Lipik with no security warning:
+            </p>
+            <p>
+              <code>curl -fsSL https://lipik.pages.dev/install.sh | sh</code>
+            </p>
+            <p>Or by hand:</p>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+              <li>Updating keeps your settings, history and permissions.</li>
+            </ol>
+          </div>
+        </article>
+        <article class="rel" id="v0.1.7">
+          <header class="rel-head">
+            <h2>Lipik 0.1.7</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-28">28 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.7"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Meeting titles from what was said, and no waiting for the clean-up
+              download in setup.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Meetings get real titles.</strong> A call with no
+                calendar event used to be called "Slack Call Meeting" or "Brave
+                Call Meeting". Lipik now names it after what was discussed, like
+                "Speech Model Setup and Troubleshooting". Titles you set, and
+                calendar titles, stay as they are. For older meetings, choose
+                <strong>Regenerate</strong> in the meeting's menu.
+              </li>
+              <li>
+                <strong>No waiting for the 5 GB download in setup.</strong>
+                Start the clean-up model download and press Continue: it keeps
+                going in the background. Dictation works right away, and
+                clean-up turns on by itself when the model is ready. A meeting
+                recorded in the meantime gets its notes as soon as the download
+                finishes.
+              </li>
+              <li>
+                <strong>Lipik's own models.</strong> Every speech model now
+                downloads from Lipik's own copies on Hugging Face.
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <p>
+              Easiest: paste this into Terminal and press Return. It installs or
+              updates Lipik with no security warning:
+            </p>
+            <p>
+              <code>curl -fsSL https://lipik.pages.dev/install.sh | sh</code>
+            </p>
+            <p>Or by hand:</p>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+              <li>Updating keeps your settings, history and permissions.</li>
+            </ol>
+          </div>
+        </article>
+        <article class="rel" id="v0.1.6">
+          <header class="rel-head">
+            <h2>Lipik 0.1.6</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-28">28 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.6"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Spaces and full stops between dictations, a fixed first-time
+              setup, and Lipik spells its own name.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong
+                  >Your next dictation no longer runs into the last one.</strong
+                >
+                Dictate, let go, then dictate again: Lipik puts a space between
+                the two ("…by tomorrow. Then we…"). This now works in every app,
+                including ones like Slack and Claude that don't tell macOS where
+                the cursor is. It leaves the space out after you press Enter,
+                type, or click somewhere else.
+              </li>
+              <li>
+                <strong>Sentences end with a full stop.</strong> In email,
+                Slack, AI chats and documents, a dictation of three or more
+                words that stops mid-sentence now ends with a full stop.
+                Personal chats, terminals, code editors and browser search boxes
+                are left as you said them.
+              </li>
+              <li>
+                <strong>No stray comma where you said "um".</strong> "Hey can
+                we, um, move the call" now comes out as "Hey can we move the
+                call". Commas that belong there stay.
+              </li>
+              <li>
+                <strong>Lipik spells its own name.</strong> "Lippik", "Lippic",
+                "lipic" and similar now come out as "Lipik".
+              </li>
+              <li>
+                <strong>Setup no longer stalls on a new Mac.</strong> On a first
+                install, setup could start the same speech model download many
+                times at once and get stuck, or wait forever on "Checking the
+                clean-up model…". Both are fixed, and the window edges now match
+                Lipik's dark theme.
+              </li>
+              <li>
+                The end of a long meeting note now scrolls clear of the "Ask
+                about this meeting" bar.
+              </li>
+              <li>
+                <strong>Settings → About → Run setup again</strong> walks you
+                through setup without changing your settings.
+              </li>
+              <li>
+                Lipik now downloads its speech models from its own Hugging Face
+                copies, and every Handy name is gone from the app.
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <p>
+              Easiest: paste this into Terminal and press Return. It installs or
+              updates Lipik with no security warning:
+            </p>
+            <p>
+              <code>curl -fsSL https://lipik.pages.dev/install.sh | sh</code>
+            </p>
+            <p>Or by hand:</p>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+              <li>Updating keeps your settings, history and permissions.</li>
+            </ol>
+          </div>
+        </article>
+        <article class="rel" id="v0.1.5">
+          <header class="rel-head">
+            <h2>Lipik 0.1.5</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-28">28 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.5"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              One-click updates, a few small fixes, and an anonymous usage
+              count.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>One-click updates.</strong> When a new version is out, a
+                card next to the pill says so, with <strong>Update now</strong>.
+                Lipik downloads it, replaces itself and restarts, keeping your
+                settings, history and permissions. It never restarts during a
+                meeting. The check runs every few hours and carries nothing
+                about you; turn it off in
+                <strong>Settings → Privacy → Updates</strong>. From this version
+                on you won't need to download Lipik again by hand.
+              </li>
+              <li>
+                <strong>Hear about new versions by email.</strong> Setup now
+                asks for an email address so we can tell you when a new version
+                is out. It's optional: skip it, and nothing is sent.
+              </li>
+              <li>
+                <strong>Run setup again</strong> from
+                <strong>Settings → About</strong>, without losing your settings.
+              </li>
+              <li>
+                <strong>An anonymous usage count.</strong> Every few hours Lipik
+                sends a random ID, the app version and the macOS version, so we
+                know how many people use it. Never your voice, your text or your
+                name, and the server doesn't keep your IP address. Turn it off
+                in <strong>Settings → Privacy → Usage count</strong>. Setup
+                tells you about it before anything is sent.
+              </li>
+              <li>
+                <strong>Meeting notes scroll clear of the Ask bar</strong>, so
+                the last lines are no longer hidden under it.
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <p>
+              Easiest: paste this into Terminal and press Return. It installs or
+              updates Lipik with no security warning:
+            </p>
+            <p>
+              <code>curl -fsSL https://lipik.pages.dev/install.sh | sh</code>
+            </p>
+            <p>Or by hand:</p>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+              <li>Updating keeps your settings, history and permissions.</li>
+            </ol>
+          </div>
+        </article>
+        <article class="rel" id="v0.1.4">
+          <header class="rel-head">
+            <h2>Lipik 0.1.4</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-28">28 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.4"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Two dictation fixes: spaces between dictations, and no stray comma
+              where "um" was.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>A space between one dictation and the next.</strong>
+                Dictate a sentence, press the key again and keep talking: Lipik
+                now adds a space when the cursor sits right after other text, so
+                the two parts no longer run together ("tomorrow.Then"). It
+                checks the character before the cursor, so there is no extra
+                space at the start of a line, after a space or after an opening
+                bracket.
+              </li>
+              <li>
+                <strong>No stray comma where a filler was.</strong> "Hey can we,
+                um, move the call" used to paste as "Hey can we, move the call".
+                The comma is now dropped when it sat inside a phrase, and kept
+                where it belongs ("Hey, um, can we" becomes "Hey, can we").
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <p>
+              Easiest: paste this into Terminal and press Return. It installs or
+              updates Lipik with no security warning:
+            </p>
+            <p>
+              <code>curl -fsSL https://lipik.pages.dev/install.sh | sh</code>
+            </p>
+            <p>Or by hand:</p>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+              <li>Updating keeps your settings, history and permissions.</li>
+            </ol>
+          </div>
+        </article>
+        <article class="rel" id="v0.1.3">
+          <header class="rel-head">
+            <h2>Lipik 0.1.3</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-28">28 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.3"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Clean-up without Ollama, speakers in meeting notes, and a notice
+              when a new version is out.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Clean-up is built in.</strong> You no longer need the
+                separate Ollama app. In setup, or in
+                <strong>Settings → Meetings</strong>, one button downloads the
+                clean-up model: 5 GB on Macs with 16 GB of memory or more, 2.5
+                GB on smaller Macs. It runs on your Mac with the same quality as
+                before and a little faster. Meeting summaries and Ask use it
+                too. If you already use Ollama, nothing changes: Lipik keeps
+                using it, and you can switch in Settings.
+              </li>
+              <li>
+                <strong>Who said what in meeting notes.</strong> The other side
+                of a call is now split into Speaker 1, Speaker 2 and so on,
+                instead of one "Them". Click a speaker's name to rename them
+                everywhere in that meeting. Lipik then recognises that voice in
+                later meetings. Names are only filled in on clear evidence, such
+                as someone introducing themselves. The first meeting after
+                updating downloads a 33 MB speaker model. Calls longer than 3
+                hours keep a single "Them".
+              </li>
+              <li>
+                <strong>Saved voices are yours to delete.</strong>
+                <strong>Settings → Privacy → Saved voices</strong> shows how
+                many voices Lipik remembers, with
+                <strong>Forget all voices</strong>. Voices stay on your Mac and
+                are removed with their meeting.
+              </li>
+              <li>
+                <strong>New-version notice.</strong> Once a day Lipik asks
+                GitHub for the latest version number. When a newer one is out, a
+                small notice links to it. The request carries nothing about you.
+                Turn it off in <strong>Settings → Privacy → Updates</strong>.
+              </li>
+              <li>
+                Built-in clean-up needs macOS 13.3 or later; older Macs keep
+                using Ollama.
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+              <li>Updating keeps your settings, history and permissions.</li>
+            </ol>
+          </div>
+        </article>
+        <article class="rel" id="v0.1.2">
+          <header class="rel-head">
+            <h2>Lipik 0.1.2</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-27">27 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.2"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Ask your AI apps about your meetings, plus better emails and
+              dictionary words.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Your meetings in your AI apps.</strong> Claude, Claude
+                Code, Cursor, Codex, Windsurf, VS Code and Gemini CLI can now
+                read your Lipik meeting notes, on your Mac and read-only.
+                Connect them in the new setup step or in
+                <strong>Settings → AI apps</strong>. Each note's menu has
+                <strong>Copy link for AI apps</strong>: paste the link into a
+                connected app and ask about that meeting. ChatGPT can't run
+                tools on your Mac, so use
+                <strong>Copy as Markdown</strong> there.
+              </li>
+              <li>
+                <strong>"At the rate" means @.</strong> Say "rivaan at the rate
+                quavia dot com" and Lipik writes rivaan@quavia.com. It only does
+                this between a name and a web address, so "interest at the rate
+                of 7 percent" stays as you said it.
+              </li>
+              <li>
+                <strong>Your own email, spelled right.</strong> Speech models
+                often mangle a name inside an email ("Gorbaikitchen dot com").
+                Add your email to the <strong>Dictionary</strong> and Lipik
+                turns anything that sounds like it into the real address. Other
+                addresses, like a colleague's at the same company, are left
+                alone.
+              </li>
+              <li>
+                <strong
+                  >Dictionary words that start with a different letter.</strong
+                >
+                "Kwavia" now becomes "Quavia" when Quavia is in your Dictionary
+                (c, k and q at the start sound alike).
+              </li>
+              <li>
+                <strong>Meeting reminder.</strong> "Start meeting notes" no
+                longer gets cut off on the card.
+              </li>
+            </ul>
+            <h3>Install or update</h3>
+            <ol>
+              <li>
+                Download <strong>Lipik.dmg</strong> below (Apple silicon, M1 and
+                later) and drag <strong>Lipik</strong> into
+                <strong>Applications</strong>, replacing the old one.
+              </li>
+              <li>
+                First time only: Lipik isn't signed with an Apple Developer ID
+                yet, so macOS blocks the first launch. <br /><strong
+                  >macOS 15 and later:</strong
+                >
+                double-click Lipik, click <strong>Done</strong>, then
+                <strong
+                  >System Settings → Privacy &amp; Security → Open
+                  Anyway</strong
+                >. <br /><strong>macOS 14 and earlier:</strong> right-click
+                Lipik in Applications, choose <strong>Open</strong>, then
+                <strong>Open</strong>.
+              </li>
+              <li>Updating keeps your settings, history and permissions.</li>
+            </ol>
+          </div>
+        </article>
         <article class="rel" id="v0.1.1">
           <header class="rel-head">
             <h2>Lipik 0.1.1</h2>
             <p class="rel-meta">
-              <time>26 October 2026</time>
+              <time datetime="2026-10-26">26 October 2026</time>
               <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.1"
                 >On GitHub</a
               >
@@ -180,7 +813,7 @@
           <header class="rel-head">
             <h2>Lipik 0.1.0</h2>
             <p class="rel-meta">
-              <time>26 October 2026</time>
+              <time datetime="2026-10-26">26 October 2026</time>
               <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.0"
                 >On GitHub</a
               >
@@ -273,7 +906,7 @@
 
     <footer class="footer">
       <div class="wrap footer-inner">
-        <a class="brand brand-sm" href="index.html" aria-label="Lipik home">
+        <a class="brand brand-sm" href="/" aria-label="Lipik home">
           <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
             <g stroke="currentColor" stroke-linecap="round" fill="none">
               <path d="M3 5.4h18" stroke-width="2.6" />
@@ -286,10 +919,24 @@
           <span>Lipik</span>
         </a>
         <p>
-          Free and open source under the MIT licence.
+          Free and open source under the MIT licence. Made by
+          <a href="https://github.com/Gourav2609">Gourav</a>.
           <a href="https://github.com/Gourav2609/lipik">Code on GitHub</a>.
         </p>
       </div>
+      <nav class="wrap footer-more" aria-label="More pages">
+        <span>More</span>
+        <a href="/hinglish">Hinglish voice typing</a>
+        <a href="/hinglish-speech-to-text">Hinglish speech to text</a>
+        <a href="/hindi-voice-typing-mac">Hindi voice typing on Mac</a>
+        <a href="/meeting-notes">Meeting notes without a bot</a>
+        <a href="/free-dictation-mac">Free local dictation for Mac</a>
+        <a href="/benchmark">Indian English benchmark</a>
+        <a href="/wispr-flow-alternative">Wispr Flow alternative</a>
+        <a href="/superwhisper-alternative">Superwhisper alternative</a>
+        <a href="/macwhisper-alternative">MacWhisper alternative</a>
+        <a href="/granola-alternative">Granola alternative</a>
+      </nav>
     </footer>
 
     <script>
