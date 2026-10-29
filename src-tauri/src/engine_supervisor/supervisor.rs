@@ -1588,6 +1588,42 @@ mod tests {
         clip.repeat((secs * 16_000).div_ceil(clip.len()))
     }
 
+    /// How fast the live preview decodes (seconds of audio per second of
+    /// model compute, as the "Live preview perf" log reports it). Run once
+    /// alone and once while clean-up requests keep the local LLM busy, to see
+    /// whether clean-up while speaking slows the preview:
+    /// `LIPIK_TEST_MODEL=<asr.gguf> LIPIK_TEST_WAV=<16 kHz wav> cargo test --lib live_preview_speed -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn live_preview_speed() {
+        let pcm = test_pcm();
+        let engine = EngineSupervisor::new(true);
+        engine.load(spec()).unwrap();
+        // Once to warm the model up, then measured.
+        for round in 0..2 {
+            let compute = Arc::new(Mutex::new(Duration::ZERO));
+            let total = Arc::clone(&compute);
+            let started = Instant::now();
+            let stream = engine
+                .start_stream(RunOptions::default(), StreamOptions::default(), move |p| {
+                    *lock(&total) += p.elapsed;
+                })
+                .unwrap();
+            feed_paced(&stream, &pcm);
+            let finalized = stream.finalize(false).unwrap().unwrap();
+            let audio = pcm.len() as f64 / 16_000.0;
+            let compute = lock(&compute).as_secs_f64();
+            if round == 1 {
+                println!(
+                    "{audio:.1} s audio: preview compute {compute:.2} s ({:.1}x real-time), finalize {:.2} s, wall {:.1} s",
+                    audio / compute,
+                    finalized.elapsed.as_secs_f64(),
+                    started.elapsed().as_secs_f64()
+                );
+            }
+        }
+    }
+
     /// Never two workers: a reload or unload has fully stopped the old
     /// worker before anything else happens.
     #[test]

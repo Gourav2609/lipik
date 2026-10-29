@@ -35,6 +35,19 @@ const FOCUS_CHECK_MAX_AGE: Duration = Duration::from_millis(300);
 /// cleanup doesn't hide the new session's overlay or reset its tray icon.
 static RECORDING_SESSION: AtomicU64 = AtomicU64::new(0);
 
+/// The live transcription of the recording in progress (0 when none): its
+/// clean-up while speaking is handed to this dictation's clean-up only.
+static LIVE_DICTATION: AtomicU64 = AtomicU64::new(0);
+
+/// Ends a dictation's clean-up while speaking on every way out of it; one
+/// handed to clean-up is gone by then.
+struct EarlyGuard(u64);
+impl Drop for EarlyGuard {
+    fn drop(&mut self) {
+        crate::textflow::early::stop(self.0);
+    }
+}
+
 #[derive(Clone, serde::Serialize)]
 struct RecordingErrorEvent {
     error_type: String,
@@ -368,6 +381,7 @@ pub(crate) async fn process_transcription_output(
     transcription: &str,
     post_process: bool,
     target: &crate::textflow::Target,
+    early: Option<crate::textflow::early::Taken>,
 ) -> ProcessedTranscription {
     let settings = get_settings(app);
     let prepared = crate::textflow::prepare(app, transcription);
@@ -389,7 +403,7 @@ pub(crate) async fn process_transcription_output(
                 }
             }
         }
-    } else if let Some(cleaned) = crate::textflow::clean_up(app, &prepared, target).await {
+    } else if let Some(cleaned) = crate::textflow::clean_up(app, &prepared, target, early).await {
         final_text = cleaned;
     }
     final_text = crate::textflow::auto_transform(app, final_text).await;
@@ -473,9 +487,12 @@ impl ShortcutAction for TranscribeAction {
             streaming: model_supports_streaming,
             long_form: false,
         };
-        if live_decode(expected_model, settings.long_form_chunking) != LiveDecode::None {
-            tm.start_stream();
-        }
+        let live = if live_decode(expected_model, settings.long_form_chunking) != LiveDecode::None {
+            tm.start_stream(!self.post_process)
+        } else {
+            0
+        };
+        LIVE_DICTATION.store(live, Ordering::SeqCst);
         let plan_elapsed = plan_started.elapsed();
 
         // Sizing the overlay follows the same advertised capability. A model that
@@ -644,9 +661,11 @@ impl TranscribeAction {
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = self.post_process;
         let cancel_generation = rm.cancel_generation();
+        let dictation = LIVE_DICTATION.swap(0, Ordering::SeqCst);
 
         tauri::async_runtime::spawn(async move {
             let _guard = FinishGuard(ah.clone(), Arc::clone(&tm));
+            let _early = EarlyGuard(dictation);
             debug!(
                 "Starting async transcription task for binding: {}",
                 binding_id
@@ -774,6 +793,7 @@ impl TranscribeAction {
                                     &transcription,
                                     post_process,
                                     &target,
+                                    crate::textflow::early::take(dictation),
                                 ),
                                 || rm.was_cancelled_since(cancel_generation),
                             )

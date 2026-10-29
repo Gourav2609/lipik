@@ -2,7 +2,7 @@
 //! optional clean-up and optional auto-applied transform.
 
 use super::store::{StyleCategory, StyleKind, TextFlow, Transform};
-use super::{context, gate, llm, rules, text};
+use super::{context, early, gate, llm, rules, text};
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -314,46 +314,96 @@ fn trim_line_ends(text: &str) -> String {
         .join("\n")
 }
 
-/// Clean-up: the rules step, then for dictations of 8 or more words the
-/// local model, on the parts that need it (`gate`), whose reply is kept only
-/// when it passes `rules::check`. When nothing needs the model, the rules
-/// text is pasted with a final period. Whenever the model is skipped, fails
-/// or is rejected, the rules text is used. `None` when clean-up is off or
-/// there are no words.
-pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> Option<String> {
-    let tf = app.try_state::<TextFlow>()?;
-    let (style, vocabulary) = tf.read(|d| {
-        let words: Vec<String> = d.dictionary.words.iter().map(|w| w.word.clone()).collect();
-        (d.style.clone(), words)
-    });
+/// What clean-up reads besides the transcript.
+pub(super) struct Setup {
+    pub kind: StyleKind,
+    pub vocabulary: Vec<String>,
+    pub label: String,
+}
+
+impl Setup {
+    /// The style and dictionary for `target`; `None` when clean-up is off.
+    pub(super) fn read(tf: &TextFlow, target: &Target) -> Option<Self> {
+        let (style, vocabulary) = tf.read(|d| {
+            let words: Vec<String> = d.dictionary.words.iter().map(|w| w.word.clone()).collect();
+            (d.style.clone(), words)
+        });
+        style.auto_cleanup.then(|| Self {
+            kind: style.for_category(target.category()),
+            vocabulary,
+            label: target.label(),
+        })
+    }
+
+    /// Whether clean-up sends only the parts that need the model rather
+    /// than the whole text.
+    pub(super) fn sends_parts(&self) -> bool {
+        self.kind == StyleKind::Formal
+    }
+}
+
+/// One model request: the part of the rules text it cleans and the chat
+/// sent for it.
+pub(super) struct Job {
+    pub part: gate::Part,
+    pub messages: Vec<llm::Message>,
+    pub limit: u32,
+    /// The dictionary words sent, which the reply is checked against.
+    relevant: Vec<String>,
+}
+
+impl Job {
+    /// The last message, the only one that differs between requests.
+    pub(super) fn key(&self) -> &str {
+        self.messages.last().map_or("", |m| m.content.as_str())
+    }
+}
+
+pub(super) enum Plan {
+    /// No model call: the rules text, with a final period when `end_mark`.
+    Rules { text: String, end_mark: bool },
+    Model {
+        rules_text: String,
+        jobs: Vec<Job>,
+        whole: bool,
+        /// Words in the parts that need the model.
+        sent: usize,
+        /// The context size the whole text's request needs.
+        context: u32,
+    },
+}
+
+/// What clean-up sends to the model for `prepared`; `None` when it has no
+/// words. In formal style only the parts that need the model go, each in its
+/// own request, unless they are most of the text; other styles send the
+/// whole text.
+pub(super) fn plan(prepared: &Prepared, setup: &Setup) -> Option<Plan> {
     let mut words_only = prepared.masked.clone();
     for (marker, _) in &prepared.snippets {
         words_only = words_only.replace(marker.as_str(), "");
     }
-    if !style.auto_cleanup || !words_only.chars().any(char::is_alphanumeric) {
+    if !words_only.chars().any(char::is_alphanumeric) {
         return None;
     }
-    let rules_text = rules::apply(&prepared.masked, &vocabulary);
-    let fallback = || {
-        prepared
-            .unmask(&rules_text)
-            .unwrap_or_else(|| prepared.text())
-    };
+    let rules_text = rules::apply(&prepared.masked, &setup.vocabulary);
     if text::count_words(&words_only) < MIN_MODEL_WORDS {
-        return Some(fallback());
+        return Some(Plan::Rules {
+            text: rules_text,
+            end_mark: false,
+        });
     }
-    let kind = style.for_category(target.category());
     // Other styles change punctuation and capitals everywhere, so the whole
     // text always goes to the model.
-    let parts = if kind == StyleKind::Formal {
-        gate::parts(&rules_text, &vocabulary)
+    let parts = if setup.sends_parts() {
+        gate::parts(&rules_text, &setup.vocabulary)
     } else {
         vec![whole_part(&rules_text)]
     };
     if parts.is_empty() {
-        log::debug!("Clean-up used the rules only: nothing needs the model");
-        let marked = gate::end_mark(&rules_text);
-        return Some(prepared.unmask(&marked).unwrap_or_else(fallback));
+        return Some(Plan::Rules {
+            text: rules_text,
+            end_mark: true,
+        });
     }
     // `parts` returns ordered parts that don't overlap; if that ever fails,
     // send the whole text rather than guess.
@@ -368,25 +418,180 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
         .map(|p| text::count_words(&rules_text[p.start..p.end]))
         .sum();
     let whole = sent as f64 >= gate::WHOLE_SHARE * text::count_words(&rules_text) as f64;
-    let relevant = relevant_vocabulary(&vocabulary, &prepared.masked);
-    let label = target.label();
-    let has_snippets = !prepared.snippets.is_empty();
-    let request = |text: &str| {
-        cleanup_messages(
-            &label,
-            kind,
+    let relevant = relevant_vocabulary(&setup.vocabulary, &prepared.masked);
+    let context = llm::messages_context(
+        &job(
+            prepared,
+            setup,
+            &rules_text,
+            whole_part(&rules_text),
             &relevant,
-            has_snippets && text.contains("[[S"),
-            text,
         )
+        .messages,
+    );
+    let jobs = if whole {
+        vec![job(
+            prepared,
+            setup,
+            &rules_text,
+            whole_part(&rules_text),
+            &relevant,
+        )]
+    } else {
+        parts
+            .into_iter()
+            .map(|part| job(prepared, setup, &rules_text, part, &relevant))
+            .collect()
     };
+    Some(Plan::Model {
+        rules_text,
+        jobs,
+        whole,
+        sent,
+        context,
+    })
+}
+
+/// The request for `part` of `rules_text`.
+fn job(
+    prepared: &Prepared,
+    setup: &Setup,
+    rules_text: &str,
+    part: gate::Part,
+    relevant: &[String],
+) -> Job {
+    let core = &rules_text[part.start..part.end];
+    let snippets = !prepared.snippets.is_empty() && core.contains("[[S");
+    Job {
+        messages: cleanup_messages(&setup.label, setup.kind, relevant, snippets, core),
+        limit: reply_token_limit(core),
+        part,
+        relevant: relevant.to_vec(),
+    }
+}
+
+/// The requests `plan` makes for the text heard so far that more speech is
+/// not expected to change, for clean-up while the user is still speaking:
+/// every part but the last (it may join with what follows) and none in the
+/// sentence still being said. A request the final text doesn't make is
+/// never used, so a guess here costs time, not text. None for a list or a
+/// style other than formal.
+pub(super) fn early_jobs(prepared: &Prepared, setup: &Setup) -> Vec<Job> {
+    if !setup.sends_parts() {
+        return Vec::new();
+    }
+    let rules_text = rules::apply(&prepared.masked, &setup.vocabulary);
+    let mut parts = gate::parts(&rules_text, &setup.vocabulary);
+    if !gate::in_order(&rules_text, &parts)
+        || parts
+            .iter()
+            .any(|p| p.reasons.contains(&gate::Reason::List))
+    {
+        return Vec::new();
+    }
+    parts.pop();
+    let finished = rules_text.trim_end().ends_with(['.', '!', '?']);
+    let last = gate::last_sentence_start(&rules_text);
+    let relevant = relevant_vocabulary(&setup.vocabulary, &prepared.masked);
+    parts
+        .into_iter()
+        .filter(|p| finished || p.end <= last)
+        .map(|part| job(prepared, setup, &rules_text, part, &relevant))
+        .collect()
+}
+
+/// Sends each job through `ask` (by its index in `jobs`) and puts the
+/// accepted replies into the rules text: the text to paste, with snippet
+/// markers. `None` when the whole text was sent and the call failed.
+pub(super) async fn run<F, Fut>(
+    prepared: &Prepared,
+    rules_text: &str,
+    jobs: &[Job],
+    whole: bool,
+    ask: F,
+) -> Option<String>
+where
+    F: Fn(usize) -> Fut,
+    Fut: std::future::Future<Output = Result<String, String>>,
+{
+    if whole {
+        let job = jobs.first()?;
+        return match ask(0).await {
+            Ok(reply) => Some(accept(&prepared.masked, &reply, rules_text, &job.relevant)),
+            Err(e) => {
+                log::warn!("Clean-up used the rules only: {e}");
+                None
+            }
+        };
+    }
+    let mut cleaned = Vec::new();
+    for (i, job) in jobs.iter().enumerate() {
+        let core = &rules_text[job.part.start..job.part.end];
+        cleaned.push(match ask(i).await {
+            Ok(reply) if job.part.fragment => {
+                accept_fragment(core, &reply, &prepared.masked, &job.relevant)
+            }
+            Ok(reply) => accept_part(core, &reply, &prepared.masked, &job.relevant),
+            Err(e) => {
+                log::warn!("Clean-up kept the rules text for a part: {e}");
+                core.to_string()
+            }
+        });
+    }
+    let parts: Vec<gate::Part> = jobs.iter().map(|j| j.part.clone()).collect();
+    Some(gate::end_mark(&assemble(rules_text, &parts, &cleaned)))
+}
+
+/// Clean-up: the rules step, then for dictations of 8 or more words the
+/// local model, on the parts that need it (`gate`), whose reply is kept only
+/// when it passes `rules::check`. When nothing needs the model, the rules
+/// text is pasted with a final period. Whenever the model is skipped, fails
+/// or is rejected, the rules text is used. Replies to requests already made
+/// while the user was speaking (`early`) are used instead of asking again.
+/// `None` when clean-up is off or there are no words.
+pub async fn clean_up(
+    app: &AppHandle,
+    prepared: &Prepared,
+    target: &Target,
+    early: Option<early::Taken>,
+) -> Option<String> {
+    let tf = app.try_state::<TextFlow>()?;
+    let setup = Setup::read(&tf, target)?;
+    let fallback = |rules_text: &str| {
+        prepared
+            .unmask(rules_text)
+            .unwrap_or_else(|| prepared.text())
+    };
+    let (rules_text, jobs, whole, sent, needed) = match plan(prepared, &setup)? {
+        Plan::Rules {
+            text,
+            end_mark: false,
+        } => return Some(fallback(&text)),
+        Plan::Rules {
+            text,
+            end_mark: true,
+        } => {
+            log::debug!("Clean-up used the rules only: nothing needs the model");
+            let marked = gate::end_mark(&text);
+            return Some(prepared.unmask(&marked).unwrap_or_else(|| fallback(&text)));
+        }
+        Plan::Model {
+            rules_text,
+            jobs,
+            whole,
+            sent,
+            context,
+        } => (rules_text, jobs, whole, sent, context),
+    };
+    if let Some(early) = &early {
+        early.keep_only(&jobs);
+    }
     let endpoint = llm::endpoint(app);
     // Loading the model takes seconds; paste the rules text instead of
     // waiting. The load started with the recording, so the next one is fast.
     // With an auto-apply transform the dictation waits for the model anyway,
     // and so does a long dictation when the model is loaded at a size too
     // small for it.
-    let needed = llm::messages_context(&request(&rules_text));
     let waits = auto_apply_transform(&tf).is_some();
     let (context, timeout) = match (llm::loaded_context(&endpoint, needed).await, waits) {
         (Some(n), false) if n >= needed => (n, CLEANUP_TIMEOUT),
@@ -394,64 +599,52 @@ pub async fn clean_up(app: &AppHandle, prepared: &Prepared, target: &Target) -> 
         (None, true) => (needed, TRANSFORM_TIMEOUT),
         (None, false) => {
             log::debug!("Clean-up used the rules only: the local model is not loaded yet");
-            return Some(fallback());
+            return Some(fallback(&rules_text));
         }
     };
     let started = std::time::Instant::now();
-    let ask = |text: String| {
-        let messages = request(&text);
-        let endpoint = &endpoint;
-        async move {
+    let reused = std::sync::atomic::AtomicUsize::new(0);
+    let (early, endpoint, jobs_ref, reused_ref) = (&early, &endpoint, &jobs, &reused);
+    let ask = move |i: usize| async move {
+        let job = &jobs_ref[i];
+        if let Some(early) = early {
             let left = timeout.saturating_sub(started.elapsed());
-            let limit = Some(reply_token_limit(&text));
-            llm::chat_messages(endpoint, &messages, context, left, limit).await
+            if let Some(reply) = early.reply(job.key(), left).await {
+                reused_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return Ok(reply);
+            }
         }
+        let left = timeout.saturating_sub(started.elapsed());
+        llm::chat_messages(endpoint, &job.messages, context, left, Some(job.limit)).await
     };
+    let out = run(prepared, &rules_text, &jobs, whole, ask).await;
     if whole {
-        let reply = ask(rules_text.clone()).await;
         log::debug!(
             "Clean-up took {:?} (whole text, {} words)",
             started.elapsed(),
-            sent
+            text::count_words(&rules_text)
         );
-        let reply = match reply {
-            Ok(reply) => reply,
-            Err(e) => {
-                log::warn!("Clean-up used the rules only: {e}");
-                return Some(fallback());
-            }
-        };
-        let text = accept(&prepared.masked, &reply, &rules_text, &relevant);
-        return Some(prepared.unmask(&text).unwrap_or_else(fallback));
+    } else {
+        log::debug!(
+            "Clean-up took {:?} ({} parts, {} of {} words, {} cleaned while speaking; {:?})",
+            started.elapsed(),
+            jobs.len(),
+            sent,
+            text::count_words(&rules_text),
+            reused.into_inner(),
+            jobs.iter()
+                .flat_map(|j| j.part.reasons.iter())
+                .collect::<Vec<_>>()
+        );
     }
-    let mut cleaned = Vec::new();
-    for part in &parts {
-        let core = &rules_text[part.start..part.end];
-        cleaned.push(match ask(core.to_string()).await {
-            Ok(reply) if part.fragment => {
-                accept_fragment(core, &reply, &prepared.masked, &relevant)
-            }
-            Ok(reply) => accept_part(core, &reply, &prepared.masked, &relevant),
-            Err(e) => {
-                log::warn!("Clean-up kept the rules text for a part: {e}");
-                core.to_string()
-            }
-        });
-    }
-    let out = assemble(&rules_text, &parts, &cleaned);
-    log::debug!(
-        "Clean-up took {:?} ({} parts, {} of {} words; {:?})",
-        started.elapsed(),
-        parts.len(),
-        sent,
-        text::count_words(&rules_text),
-        parts
-            .iter()
-            .flat_map(|p| p.reasons.iter())
-            .collect::<Vec<_>>()
-    );
-    let text = gate::end_mark(&out);
-    Some(prepared.unmask(&text).unwrap_or_else(fallback))
+    let Some(text) = out else {
+        return Some(fallback(&rules_text));
+    };
+    Some(
+        prepared
+            .unmask(&text)
+            .unwrap_or_else(|| fallback(&rules_text)),
+    )
 }
 
 /// The rules text with each part replaced by its cleaned text. A part out of
@@ -731,6 +924,7 @@ pub fn end_sentence(text: &str, target: &Target) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     /// Devanagari and emoji take far more tokens per character than English:
     /// the cap must leave room for a reply as long as the checks accept.
     #[test]
@@ -1032,6 +1226,484 @@ mod tests {
             );
             assert!(!reply.contains("<think>"));
         }
+        engine.stop();
+    }
+
+    fn slack() -> Setup {
+        Setup {
+            kind: StyleKind::Formal,
+            vocabulary: Vec::new(),
+            label: "Slack".to_string(),
+        }
+    }
+
+    fn keys(jobs: &[Job]) -> Vec<String> {
+        jobs.iter().map(|j| j.key().to_string()).collect()
+    }
+
+    fn final_plan(text: &str) -> (String, Vec<Job>, bool) {
+        match plan(&prepared(text, &[]), &slack()) {
+            Some(Plan::Model {
+                rules_text,
+                jobs,
+                whole,
+                ..
+            }) => (rules_text, jobs, whole),
+            _ => panic!("needs the model: {text}"),
+        }
+    }
+
+    fn final_jobs(text: &str) -> Vec<Job> {
+        final_plan(text).1
+    }
+
+    /// The requests clean-up while speaking makes for `said`, as the live
+    /// transcription commits it 5 words at a time, 5 words behind the
+    /// speech at release; each is answered by `ask` in order.
+    fn speak(
+        said: &str,
+        setup: &Setup,
+        mut ask: impl FnMut(&Job) -> Option<String>,
+    ) -> HashMap<String, String> {
+        let words: Vec<&str> = said.split(' ').collect();
+        let mut heard = early::Heard::default();
+        let mut replies = HashMap::new();
+        let mut n = 5;
+        while n + 5 <= words.len() {
+            let text = words[..n].join(" ");
+            if heard.has_new_sentence(&text) {
+                for job in early_jobs(&prepared(&text, &[]), setup) {
+                    if !replies.contains_key(job.key()) {
+                        if let Some(reply) = ask(&job) {
+                            replies.insert(job.key().to_string(), reply);
+                        }
+                    }
+                }
+            }
+            n += 5;
+        }
+        replies
+    }
+
+    const SAID: &str = "The build, you know, is green again. The release notes are done and \
+        shared with the team. The tests, you know, all pass now. Thanks for the help today \
+        and for staying late. We can, you know, ship on Friday. Please send the final \
+        numbers to the whole team before lunch.";
+
+    /// The example from review: neighbouring sentences go together.
+    const NEIGHBOURS: &str = "Hi team, the launch plan and the slides are ready in the shared \
+        folder for everyone. Let's meet Monday, you know. We can do Tuesday, actually, if \
+        that works.";
+
+    /// Requests made while speaking are ones clean-up makes at release; the
+    /// last part, which may still join with what follows, waits.
+    #[test]
+    fn requests_while_speaking_match_the_final_ones() {
+        let early = speak(SAID, &slack(), |j| Some(j.key().to_string()));
+        let release = keys(&final_jobs(SAID));
+        assert_eq!(release.len(), 3);
+        assert_eq!(early.len(), 2, "{early:?}");
+        assert!(early.keys().all(|k| release.contains(k)));
+        assert!(!early.contains_key(&release[2]));
+    }
+
+    /// Lists and other styles go as the whole text, so nothing is sent early.
+    #[test]
+    fn lists_and_other_styles_are_not_sent_early() {
+        let list = "Number one, fix the login page. Number two, you know, update the docs. \
+            Number three, ship it. Number four, tell the team.";
+        assert!(early_jobs(&prepared(list, &[]), &slack()).is_empty());
+        let casual = Setup {
+            kind: StyleKind::Casual,
+            ..slack()
+        };
+        assert!(early_jobs(&prepared(SAID, &[]), &casual).is_empty());
+    }
+
+    /// Clean-up's requests as they were before clean-up while speaking (the
+    /// premium-design branch), copied from its `clean_up`: each request's
+    /// messages and reply cap, whether it is the whole text, and the context
+    /// size asked for.
+    fn premium_design_requests(
+        prepared: &Prepared,
+        kind: StyleKind,
+        vocabulary: &[String],
+        label: &str,
+    ) -> Option<(Vec<(Vec<(String, String)>, u32)>, bool, u32)> {
+        let mut words_only = prepared.masked.clone();
+        for (marker, _) in &prepared.snippets {
+            words_only = words_only.replace(marker.as_str(), "");
+        }
+        if !words_only.chars().any(char::is_alphanumeric) {
+            return None;
+        }
+        let rules_text = rules::apply(&prepared.masked, vocabulary);
+        if text::count_words(&words_only) < MIN_MODEL_WORDS {
+            return None;
+        }
+        let parts = if kind == StyleKind::Formal {
+            gate::parts(&rules_text, vocabulary)
+        } else {
+            vec![whole_part(&rules_text)]
+        };
+        if parts.is_empty() {
+            return None;
+        }
+        let parts = if gate::in_order(&rules_text, &parts) {
+            parts
+        } else {
+            vec![whole_part(&rules_text)]
+        };
+        let sent: usize = parts
+            .iter()
+            .map(|p| text::count_words(&rules_text[p.start..p.end]))
+            .sum();
+        let whole = sent as f64 >= gate::WHOLE_SHARE * text::count_words(&rules_text) as f64;
+        let relevant = relevant_vocabulary(vocabulary, &prepared.masked);
+        let has_snippets = !prepared.snippets.is_empty();
+        let request = |text: &str| {
+            let messages = cleanup_messages(
+                label,
+                kind,
+                &relevant,
+                has_snippets && text.contains("[[S"),
+                text,
+            );
+            (messages, reply_token_limit(text))
+        };
+        let needed = llm::messages_context(&request(&rules_text).0);
+        let requests: Vec<_> = if whole {
+            vec![request(&rules_text)]
+        } else {
+            parts
+                .iter()
+                .map(|p| request(&rules_text[p.start..p.end]))
+                .collect()
+        };
+        let requests = requests
+            .into_iter()
+            .map(|(m, limit)| {
+                let m = m
+                    .into_iter()
+                    .map(|m| (m.role.to_string(), m.content))
+                    .collect();
+                (m, limit)
+            })
+            .collect();
+        Some((requests, whole, needed))
+    }
+
+    /// The texts the release requests are checked on: made-up ones and the
+    /// benchmark's long dictations when they are there.
+    fn sample_texts() -> Vec<String> {
+        let mut texts: Vec<String> = [
+            SAID,
+            NEIGHBOURS,
+            "That works for me, actually. We can meet, you know, on Friday at noon in the big room.",
+            "We ship on Monday. Tuesday, I mean. Bring the slides and the notes for the whole team.",
+            "The build, you know, is green again. We ship on Monday. Actually no, Tuesday works \
+                better. Please send the final numbers to the whole team before lunch.",
+            "Number one, fix the login page. Number two, you know, update the docs. Number three.",
+            "so can you send me the report by friday you know",
+        ]
+        .map(String::from)
+        .to_vec();
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../training/cleanup/long.json");
+        if let Ok(json) = std::fs::read_to_string(path) {
+            let cases: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+            texts.extend(
+                cases
+                    .iter()
+                    .map(|c| c["spoken"].as_str().unwrap().to_string()),
+            );
+        }
+        texts
+    }
+
+    /// The release requests are exactly the ones clean-up made before it was
+    /// done while speaking, in every style.
+    #[test]
+    fn release_requests_are_the_ones_from_before() {
+        let words: Vec<String> = ["Supabase", "GraphQL", "Lumi"].map(String::from).to_vec();
+        for said in sample_texts() {
+            let p = prepared(&said, &[]);
+            for kind in [StyleKind::Formal, StyleKind::Casual] {
+                let setup = Setup {
+                    kind,
+                    vocabulary: words.clone(),
+                    label: "Slack".to_string(),
+                };
+                let now = match plan(&p, &setup) {
+                    Some(Plan::Model {
+                        jobs,
+                        whole,
+                        context,
+                        ..
+                    }) => Some((
+                        jobs.iter()
+                            .map(|j| {
+                                let m = j
+                                    .messages
+                                    .iter()
+                                    .map(|m| (m.role.to_string(), m.content.clone()))
+                                    .collect();
+                                (m, j.limit)
+                            })
+                            .collect::<Vec<_>>(),
+                        whole,
+                        context,
+                    )),
+                    _ => None,
+                };
+                assert_eq!(
+                    now,
+                    premium_design_requests(&p, kind, &words, "Slack"),
+                    "{said}"
+                );
+            }
+        }
+    }
+
+    /// The same final transcript gets the same text whether or not replies
+    /// came back while speaking: they only make it faster.
+    #[test]
+    fn early_replies_never_change_the_requests_or_the_text() {
+        let mut reused_somewhere = false;
+        for said in sample_texts() {
+            let Some(Plan::Model {
+                rules_text, jobs, ..
+            }) = plan(&prepared(&said, &[]), &slack())
+            else {
+                continue;
+            };
+            // A model that answers each request the same way every time.
+            let cores: HashMap<String, String> = jobs
+                .iter()
+                .map(|j| {
+                    let core = &rules_text[j.part.start..j.part.end];
+                    (
+                        j.key().to_string(),
+                        core.replace(", you know,", "").replace("um, ", ""),
+                    )
+                })
+                .collect();
+            let model = |key: &str| Ok(cores.get(key).cloned().unwrap_or_default());
+            let finish = |early: &HashMap<String, String>| {
+                let (rules_text, jobs, whole) = final_plan(&said);
+                let asked = std::cell::RefCell::new(Vec::new());
+                let reused = std::cell::Cell::new(0);
+                let ask = |i: usize| {
+                    let key = jobs[i].key().to_string();
+                    let reply = match early.get(&key) {
+                        Some(reply) => {
+                            reused.set(reused.get() + 1);
+                            Ok(reply.clone())
+                        }
+                        None => model(&key),
+                    };
+                    asked.borrow_mut().push(key);
+                    std::future::ready(reply)
+                };
+                let out = tauri::async_runtime::block_on(run(
+                    &prepared(&said, &[]),
+                    &rules_text,
+                    &jobs,
+                    whole,
+                    ask,
+                ));
+                (asked.into_inner(), out, reused.get(), whole)
+            };
+            let early = speak(&said, &slack(), |j| model(j.key()).ok());
+            let (asked_without, text_without, _, _) = finish(&HashMap::new());
+            let (asked_with, text_with, reused, whole) = finish(&early);
+            assert_eq!(asked_without, asked_with, "{said}");
+            assert_eq!(asked_without, keys(&jobs), "{said}");
+            assert_eq!(text_without, text_with, "{said}");
+            if whole {
+                assert_eq!(reused, 0, "{said}");
+            }
+            reused_somewhere |= reused > 0;
+        }
+        assert!(reused_somewhere);
+    }
+
+    /// Replies come together in order; a failed part keeps its rules text.
+    #[test]
+    fn replies_are_put_together_in_order() {
+        let (rules_text, jobs, whole) = final_plan(SAID);
+        assert!(!whole);
+        let ask = |i: usize| {
+            let core = rules_text[jobs[i].part.start..jobs[i].part.end].to_string();
+            async move {
+                if i == 1 {
+                    return Err("timed out".to_string());
+                }
+                Ok(core.replace(", you know,", ""))
+            }
+        };
+        let out = tauri::async_runtime::block_on(run(
+            &prepared(SAID, &[]),
+            &rules_text,
+            &jobs,
+            false,
+            ask,
+        ));
+        assert_eq!(
+            out.as_deref(),
+            Some(
+                "The build is green again. The release notes are done and shared with the \
+                team. The tests, you know, all pass now. Thanks for the help today and for \
+                staying late. We can ship on Friday. Please send the final numbers to the \
+                whole team before lunch."
+            )
+        );
+    }
+
+    /// The wait after release on the real built-in engine, with nothing
+    /// cleaned while speaking (as before) and with the parts sent as the
+    /// text is committed (`speak`). Three made-up dictations,
+    /// then the benchmark's long ones checked with their patterns when
+    /// `training/cleanup/long.json` is there:
+    /// `LIPIK_CLEANUP_MODEL=<file.gguf> cargo test --lib release_wait -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn release_wait_with_the_builtin_engine() {
+        use super::super::engine::{chat_body, post_chat, Engine};
+        use std::time::{Duration, Instant};
+        let bin_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("llama-server/bin");
+        let binary = bin_dir.join("llama-server-aarch64-apple-darwin");
+        let model = std::path::PathBuf::from(std::env::var("LIPIK_CLEANUP_MODEL").unwrap());
+        let engine = Engine::new(Some(binary));
+        let conn = tauri::async_runtime::block_on(engine.ensure(&model, llm::SMALL_CONTEXT))
+            .expect("engine starts");
+        let call = |job: &Job| {
+            tauri::async_runtime::block_on(post_chat(
+                &conn,
+                &chat_body(&job.messages, Some(job.limit)),
+                true,
+            ))
+        };
+        let setup = |app: &str| Setup {
+            kind: StyleKind::Formal,
+            vocabulary: Vec::new(),
+            label: app.to_string(),
+        };
+        let warm = |app: &str| {
+            let warm = cleanup_messages(app, StyleKind::Formal, &[], false, "ok");
+            tauri::async_runtime::block_on(post_chat(&conn, &chat_body(&warm, Some(1)), false))
+                .expect("warm-up");
+        };
+        // The text and the wait after release; `early` answers the requests
+        // made while speaking.
+        let release = |app: &str, said: &str, early: &HashMap<String, String>| {
+            let p = prepared(said, &[]);
+            let started = Instant::now();
+            let text = match plan(&p, &setup(app)).unwrap() {
+                Plan::Rules { text, .. } => text,
+                Plan::Model {
+                    rules_text,
+                    jobs,
+                    whole,
+                    ..
+                } => {
+                    // The requests one after the other, as `run` sends them,
+                    // made before it because a runtime can't block inside one.
+                    let replies: Vec<_> = jobs
+                        .iter()
+                        .map(|j| early.get(j.key()).cloned().map_or_else(|| call(j), Ok))
+                        .collect();
+                    let ask = |i: usize| std::future::ready(replies[i].clone());
+                    tauri::async_runtime::block_on(run(&p, &rules_text, &jobs, whole, ask))
+                        .unwrap_or(rules_text.clone())
+                }
+            };
+            (text, started.elapsed())
+        };
+        let none = HashMap::new();
+        let both = |app: &str, said: &str| {
+            warm(app);
+            let before = release(app, said, &none);
+            warm(app);
+            let started = Instant::now();
+            let early = speak(said, &setup(app), |j| call(j).ok());
+            let speaking = started.elapsed();
+            let with_early = release(app, said, &early);
+            (before, with_early, speaking)
+        };
+
+        let made_up = [
+            ("short", "Slack", "so can you send me the report by friday you know"),
+            ("medium", "Slack", "Hey team, quick update on the garden project. We planted, you know, the tomatoes and the beans on Saturday. The water pump is still broken, so I I will call the shop on Monday. Can someone pick up the new hose from the store this week. Thanks a lot, see you all on Thursday."),
+            ("long", "Mail", "Hi Ravel, thanks for the notes on the bakery plan. I went through all of them and I agree with most of the changes. The oven, you know, should arrive by the end of the month, and the electrician comes the week after. We still need to pick a supplier for the flour. I think the one near the river is cheaper, but the one in town, you know, delivers faster. Can you check both prices before Friday. The menu is almost done. We have twelve breads and eight cakes, and the the coffee list is still open. I would like to keep it short, maybe five drinks, so the morning rush stays quick. The opening day is still the third of March. Actually no, it is the fifth of March, because the painters need two more days. Please share the plan with Lumi and Tavo, and let me know if anything looks wrong. Thanks again for all the help, talk soon."),
+        ];
+        for (name, app, said) in made_up {
+            let ((a, wa), (c, wc), speaking) = both(app, said);
+            println!(
+                "{name} ({} words): before {wa:?}, while speaking {wc:?} (+{speaking:?} while speaking), same text {}",
+                said.split_whitespace().count(),
+                a == c
+            );
+        }
+
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../training/cleanup/long.json");
+        let Ok(json) = std::fs::read_to_string(&path) else {
+            println!(
+                "{} is not there; skipping the long dictations",
+                path.display()
+            );
+            engine.stop();
+            return;
+        };
+        let cases: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        let passes = |text: &str, case: &serde_json::Value| {
+            let all = |key: &str, want: bool| {
+                case[key].as_array().unwrap().iter().all(|r| {
+                    regex::Regex::new(r.as_str().unwrap())
+                        .unwrap()
+                        .is_match(text)
+                        == want
+                })
+            };
+            all("has", true) && all("not", false)
+        };
+        let mut pass = [0; 2];
+        let mut waits: [Vec<Duration>; 2] = Default::default();
+        let mut same = 0;
+        for case in &cases {
+            let (app, said) = (
+                case["app"].as_str().unwrap(),
+                case["spoken"].as_str().unwrap(),
+            );
+            let ((a, wa), (c, wc), _) = both(app, said);
+            same += (a == c) as usize;
+            for (k, (text, wait)) in [(&a, wa), (&c, wc)].into_iter().enumerate() {
+                pass[k] += passes(text, case) as usize;
+                waits[k].push(wait);
+            }
+            println!(
+                "{} ({} words): before {wa:?} {}, while speaking {wc:?} {}",
+                case["id"],
+                said.split_whitespace().count(),
+                passes(&a, case),
+                passes(&c, case)
+            );
+            if a != c {
+                println!("  before: {a}\n  now:    {c}");
+            }
+        }
+        let n = cases.len();
+        for (k, name) in ["before", "while speaking"].into_iter().enumerate() {
+            waits[k].sort();
+            println!(
+                "long.json {name}: {}/{n} pass, median wait {:?}, max {:?}",
+                pass[k],
+                waits[k][n / 2],
+                waits[k][n - 1]
+            );
+        }
+        println!("same text with and without replies while speaking: {same}/{n}");
         engine.stop();
     }
 

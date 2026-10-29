@@ -11,6 +11,7 @@ pub fn front_bundle_id() -> Option<String> {
     context::front_app().bundle_id
 }
 
+pub mod early;
 pub mod engine;
 mod gate;
 pub mod hindi;

@@ -424,6 +424,20 @@ fn trimmed(text: &str, start: usize, end: usize) -> (usize, usize) {
     (start + lead, start + lead + s.trim().len())
 }
 
+/// Where the last sentence of `text` starts.
+pub fn last_sentence_start(text: &str) -> usize {
+    sentence_spans(text).last().map_or(0, |s| s.0)
+}
+
+/// The non-empty sentences of `text`, without the spaces around them.
+pub fn sentence_spans(text: &str) -> Vec<(usize, usize)> {
+    sentences(text)
+        .into_iter()
+        .filter(|&(a, b)| !text[a..b].trim().is_empty())
+        .map(|(a, b)| trimmed(text, a, b))
+        .collect()
+}
+
 /// The parts of `text` (rules text) the model should clean, in order; empty
 /// when nothing needs it. A list sends the whole text. A sentence that
 /// starts with a correction ("Actually no, ...") brings the sentence before

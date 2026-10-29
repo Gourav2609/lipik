@@ -248,7 +248,10 @@
       <p class="sub" id="updated">Loading from GitHub…</p>
       <div class="tiles">
         <div class="tile">
-          <span>Downloads, all releases</span><b id="total">–</b>
+          <span>App downloads (new installs)</span><b id="total">–</b>
+        </div>
+        <div class="tile">
+          <span>One-click updates</span><b id="updates">–</b>
         </div>
         <div class="tile"><span>GitHub stars</span><b id="stars">–</b></div>
         <div class="tile"><span>Forks</span><b id="forks">–</b></div>
@@ -260,6 +263,7 @@
             <th>Release</th>
             <th>Published</th>
             <th class="n">Downloads</th>
+            <th class="n">Updates</th>
             <th style="width: 34%"></th>
           </tr>
         </thead>
@@ -267,12 +271,13 @@
       </table>
       <p class="note">
         Installs and active people come from the app's anonymous count, sent
-        every 3 hours (a random ID, the version and the macOS version; people
-        can turn it off in Settings → Privacy), so they only include versions
-        0.1.5 and later. Days are India time. Downloads count the .dmg from
-        GitHub Releases, which includes Terminal installs. Website visits are in
-        the Cloudflare dashboard under Web Analytics. This page isn't linked
-        from the site and asks search engines not to list it.
+        every 3 hours (a random ID, the version, the macOS version and the chip
+        type; people can turn it off in Settings → Privacy), so they only
+        include versions 0.1.5 and later. Days are India time. Downloads count
+        the .dmg from GitHub Releases, which includes Terminal installs; updates
+        count one-click updates from inside the app. Website visits are in the
+        Cloudflare dashboard under Web Analytics. This page isn't linked from
+        the site and asks search engines not to list it.
       </p>
     </main>
     <script>
@@ -355,34 +360,32 @@
         const saved = sessionStorage.getItem("lipik-admin");
         if (saved) showEmails(saved);
       } catch {}
-      Promise.all([
-        fetch("https://api.github.com/repos/Gourav2609/lipik").then((r) =>
-          r.json(),
-        ),
-        fetch(
-          "https://api.github.com/repos/Gourav2609/lipik/releases?per_page=100",
-        ).then((r) => r.json()),
-      ])
-        .then(([repo, releases]) => {
-          $("stars").textContent = fmt(repo.stargazers_count ?? 0);
-          $("forks").textContent = fmt(repo.forks_count ?? 0);
-          $("issues").textContent = fmt(repo.open_issues_count ?? 0);
-          const list = (Array.isArray(releases) ? releases : []).map((r) => ({
-            tag: r.tag_name,
-            date: new Date(r.published_at),
-            n: r.assets.reduce((s, a) => s + a.download_count, 0),
+      fetch("/api/github")
+        .then((r) => {
+          if (!r.ok) throw new Error();
+          return r.json();
+        })
+        .then((g) => {
+          $("stars").textContent = fmt(g.stars ?? 0);
+          $("forks").textContent = fmt(g.forks ?? 0);
+          $("issues").textContent = fmt(g.issues ?? 0);
+          const list = g.releases.map((r) => ({
+            tag: r.tag,
+            date: new Date(r.published),
+            n: r.installs,
+            u: r.updates,
           }));
-          const total = list.reduce((s, r) => s + r.n, 0);
+          $("total").textContent = fmt(list.reduce((s, r) => s + r.n, 0));
+          $("updates").textContent = fmt(list.reduce((s, r) => s + r.u, 0));
           const max = Math.max(1, ...list.map((r) => r.n));
-          $("total").textContent = fmt(total);
           $("rows").innerHTML = list
             .map(
               (r) =>
-                `<tr><td>${r.tag}</td><td>${r.date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td><td class="n">${fmt(r.n)}</td><td><div class="bar" style="width:${(r.n / max) * 100}%"></div></td></tr>`,
+                `<tr><td>${r.tag}</td><td>${r.date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td><td class="n">${fmt(r.n)}</td><td class="n">${fmt(r.u)}</td><td><div class="bar" style="width:${(r.n / max) * 100}%"></div></td></tr>`,
             )
             .join("");
           $("updated").textContent =
-            `Live from GitHub, ${new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`;
+            `From GitHub, refreshed every 10 minutes. Shown ${new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`;
         })
         .catch(() => {
           $("updated").textContent =

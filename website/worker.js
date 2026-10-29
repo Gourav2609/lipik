@@ -4,6 +4,7 @@
 // /api/ping   POST {id, version, os, arch}  every 3 hours from the app
 // /api/email  POST {email, updates}         from the setup step
 // /api/stats  GET                           counts for /stats (no emails)
+// /api/github GET                           stars and release downloads, cached 10 minutes
 // /api/admin/emails  GET, Authorization: Bearer ADMIN_KEY
 // /install.sh is counted, then served from the static files.
 
@@ -205,6 +206,54 @@ async function stats(env) {
   });
 }
 
+// GitHub allows 60 unsigned requests an hour per address, which one visitor
+// can use up; the Worker asks once and shares the answer for 10 minutes.
+async function github(request, ctx) {
+  const cache = caches.default;
+  const key = new Request(new URL("/api/github", request.url));
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const get = (path) =>
+    fetch(`https://api.github.com/repos/Gourav2609/lipik${path}`, {
+      headers: {
+        "user-agent": "lipik-site",
+        accept: "application/vnd.github+json",
+      },
+    }).then((r) => {
+      if (!r.ok) throw new Error(`GitHub ${r.status}`);
+      return r.json();
+    });
+  const [repo, releases] = await Promise.all([
+    get(""),
+    get("/releases?per_page=100"),
+  ]);
+  const count = (assets, name) =>
+    assets
+      .filter((a) => a.name === name)
+      .reduce((s, a) => s + a.download_count, 0);
+  const body = {
+    stars: repo.stargazers_count,
+    forks: repo.forks_count,
+    issues: repo.open_issues_count,
+    releases: releases
+      .filter((r) => !r.draft)
+      .map((r) => ({
+        tag: r.tag_name,
+        published: r.published_at,
+        installs: count(r.assets, "Lipik.dmg"),
+        updates: count(r.assets, "Lipik.app.tar.gz"),
+      })),
+  };
+  const res = new Response(JSON.stringify(body), {
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "public, max-age=600",
+    },
+  });
+  ctx.waitUntil(cache.put(key, res.clone()));
+  return res;
+}
+
 async function adminEmails(request, env) {
   const key = (request.headers.get("authorization") || "").replace(
     /^Bearer /,
@@ -229,6 +278,8 @@ export default {
         return await email(request, env);
       if (pathname === "/api/stats" && method === "GET")
         return await stats(env);
+      if (pathname === "/api/github" && method === "GET")
+        return await github(request, ctx);
       if (pathname === "/api/admin/emails" && method === "GET")
         return await adminEmails(request, env);
       if (pathname.startsWith("/api/")) return json({ ok: false }, 404);

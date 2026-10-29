@@ -193,6 +193,32 @@ stay). The research behind the steps is in `training/cleanup/`
    Other styles (casual, very casual) change punctuation and capitals
    everywhere, so the whole text always goes to the model.
 
+   **Clean-up while speaking** (`early.rs`, formal style). While a live
+   transcription runs (not with the post-processing shortcut), each time it
+   commits a new complete sentence, the committed text goes through the
+   transcriber's own last steps (fillers, custom words; until the end the
+   language comes from the text itself), replacements, snippets and the
+   rules, and its parts are found as above. Every part but the last (it
+   may still join with what follows), and none in the sentence still being
+   said, is sent in the background, one at a time, as the request above
+   would send it. Each reply is kept with its exact request (app,
+   dictionary words, style line and text). The app is the one read when
+   the recording started. Nothing is sent for a list, for another style,
+   for text with Hindi words, or when the model is not loaded at a large
+   enough size (this never loads or resizes the model).
+
+   At release, clean-up makes exactly the requests above. A request
+   identical to one already answered uses that reply; one still being
+   answered is waited for, and one clean-up no longer needs is stopped
+   (the engine answers one request at a time). Every reply goes through
+   the checks below against the final text, so the text is the same
+   whether or not replies came back in time; they only make it faster. A
+   part the final transcript changed or joined with more is sent again,
+   and a text that goes whole uses none. The replies belong to that
+   dictation only: a retry from History or the next dictation never uses
+   them, and a cancel or failure stops them. The log line gives how many
+   parts were cleaned while speaking.
+
 3. **Model**. The built-in engine or Ollama (below, "Clean-up engine").
    Ollama: the Notetaker's `ollama_url` /
    `ollama_model` settings, default `qwen3:8b` at `127.0.0.1:11434`,
@@ -476,9 +502,10 @@ installs. Settings schema 3 moves stores on the old default
 
 Events:
 
-- `pill-mic` `{ name: string; recommended: boolean }`: on every recording
-  start. `recommended` is true for the built-in microphone, whose name is
-  then given as "Built-in mic".
+- `pill-mic` `{ name: string; recommended: boolean }`: at recording start,
+  only when the microphone differs from the one named last time
+  (`last_pill_mic`). `recommended` is true for the built-in microphone, whose
+  name is then given as "Built-in mic".
 - `pill-hidden` `number | null`: unix ms the pill is hidden until, or null when shown again.
 - `textflow-changed` `"dictionary" | "snippets" | "style" | "transforms"`: after any change.
 

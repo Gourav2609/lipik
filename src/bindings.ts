@@ -1626,7 +1626,7 @@ whats_new_last_seen_version?: string; selected_model?: string; onboarding_comple
  * The user reached the end of setup. Separate from `onboarding_completed`,
  * which turns true as soon as the first speech model is chosen.
  */
-setup_finished?: boolean; always_on_microphone?: boolean; selected_microphone?: string | null; 
+setup_finished?: boolean; always_on_microphone?: boolean; selected_microphone?: string | null; last_pill_mic?: string | null; 
 /**
  * Which input channel to use on the selected microphone device.
  * None means "average all channels" (original behavior).

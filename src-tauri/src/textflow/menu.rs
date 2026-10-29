@@ -112,11 +112,12 @@ fn is_builtin(name: &str) -> bool {
     name.contains("macbook") || name.contains("built-in") || name.contains("internal")
 }
 
-/// Emits `pill-mic` with the input the recording uses. Call off the main
-/// thread: listing devices can take tens of milliseconds.
+/// Emits `pill-mic` with the input the recording uses, only when it differs
+/// from the one named last time. Call off the main thread: listing devices
+/// can take tens of milliseconds.
 pub fn emit_pill_mic(app: &AppHandle) {
-    let settings = crate::settings::get_settings(app);
-    let name = settings.selected_microphone.or_else(|| {
+    let mut settings = crate::settings::get_settings(app);
+    let name = settings.selected_microphone.clone().or_else(|| {
         lipik_recorder::list_input_devices()
             .ok()?
             .into_iter()
@@ -126,6 +127,11 @@ pub fn emit_pill_mic(app: &AppHandle) {
     let Some(name) = name else {
         return;
     };
+    if settings.last_pill_mic.as_deref() == Some(name.as_str()) {
+        return;
+    }
+    settings.last_pill_mic = Some(name.clone());
+    crate::settings::write_settings(app, settings);
     let recommended = is_builtin(&name);
     let payload = PillMic {
         name: if recommended {

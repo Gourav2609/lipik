@@ -10,8 +10,9 @@ use transcribe_cpp::StreamOptions;
 use super::chunked::ChunkedDecode;
 use super::policy::LiveDecode;
 use super::{
-    effective_language_for_model, emit_stream_text, join_chunks, lock_perf, run_setup,
-    PreviewScript, RunOutcome, RunSetup, StreamFinalizeReply, StreamPerf, TranscriptionManager,
+    effective_language_for_model, emit_stream_text, join_chunks, lock_perf,
+    post_process_transcription_text, run_setup, PreviewScript, RunOutcome, RunSetup,
+    StreamFinalizeReply, StreamPerf, TranscriptionManager,
 };
 use crate::audio_toolkit::OutputLanguageEvidence;
 use crate::engine_supervisor::{EngineError, LoadedInfo, StreamHandle, StreamProgress};
@@ -40,6 +41,7 @@ impl<'a> LiveSession<'a> {
         mode: LiveDecode,
         info: &LoadedInfo,
         model_id: &str,
+        early_cleanup: Option<u64>,
     ) -> Option<Self> {
         if mode == LiveDecode::None {
             return None;
@@ -52,9 +54,14 @@ impl<'a> LiveSession<'a> {
         let setup = run_setup(info, &settings, &effective_language);
         let decoder = match mode {
             LiveDecode::None => unreachable!("returned above"),
-            LiveDecode::Stream => {
-                LiveDecoder::Stream(StreamSession::begin(tm, info, &settings, &setup, model_id)?)
-            }
+            LiveDecode::Stream => LiveDecoder::Stream(StreamSession::begin(
+                tm,
+                info,
+                &settings,
+                &setup,
+                model_id,
+                early_cleanup,
+            )?),
             LiveDecode::Chunked => {
                 info!("Live long-form chunking started (model '{}')", model_id);
                 LiveDecoder::Chunked(Box::new(ChunkedDecode::new(
@@ -143,9 +150,9 @@ impl<'a> StreamSession<'a> {
         settings: &AppSettings,
         setup: &RunSetup,
         model_id: &str,
+        early_cleanup: Option<u64>,
     ) -> Option<Self> {
         let output_language = setup.output_language(settings, None);
-
         // Feed results arrive on the engine's thread; this callback only
         // converts and emits preview text.
         let perf = Arc::new(Mutex::new(StreamPerf::new()));
@@ -163,6 +170,9 @@ impl<'a> StreamSession<'a> {
                     let (committed, tentative) =
                         preview_script.convert(&text.committed, &text.tentative, &languages);
                     emit_stream_text(&app_handle, &committed, &tentative);
+                    if let Some(id) = early_cleanup {
+                        crate::textflow::early::committed(id, &text.committed);
+                    }
                 }
                 perf.maybe_log();
             }
@@ -186,6 +196,24 @@ impl<'a> StreamSession<'a> {
             }
         };
 
+        // The final text is finished with the language the model detects at
+        // the end; until then the text's own detection stands in (a request
+        // that comes out different is sent again at release).
+        if let Some(id) = early_cleanup {
+            let settings = settings.clone();
+            let prompted = setup.custom_words_prompted();
+            let output_language = output_language.clone();
+            let languages = setup.languages.clone();
+            crate::textflow::early::begin(&tm.app_handle, id, move |text| {
+                post_process_transcription_text(
+                    text,
+                    &settings,
+                    prompted,
+                    &output_language,
+                    &languages,
+                )
+            });
+        }
         tm.stream_active.store(true, Ordering::Release);
         info!(
             "Live streaming transcription started (model '{}', backend '{}')",

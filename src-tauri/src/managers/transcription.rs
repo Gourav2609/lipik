@@ -787,6 +787,12 @@ impl TranscriptionManager {
         self.engine.loaded().map(|info| info.backend)
     }
 
+    /// The live transcription running now (0 when none): it identifies the
+    /// dictation its clean-up while speaking belongs to.
+    pub fn stream_worker_id(&self) -> u64 {
+        self.active_stream_worker.load(Ordering::Acquire)
+    }
+
     /// Whether a live streaming run is currently in flight.
     pub fn is_streaming(&self) -> bool {
         self.stream_active.load(Ordering::Acquire)
@@ -809,10 +815,14 @@ impl TranscriptionManager {
     /// worker idles until finalize/cancel and reports `None` so the caller
     /// falls back to batch transcription. Frames sent before the decode begins
     /// queue on the channel and are not lost.
-    pub fn start_stream(&self) {
+    ///
+    /// Returns the live transcription's id (0 when none started), which
+    /// identifies the dictation; with `early_cleanup` its text is cleaned
+    /// up while the user speaks (`textflow::early`).
+    pub fn start_stream(&self, early_cleanup: bool) -> u64 {
         if self.router.is_open() || self.active_stream_worker.load(Ordering::Acquire) != 0 {
             warn!("start_stream called while a stream worker is already active");
-            return;
+            return 0;
         }
         let worker_id = self.next_stream_worker_id.fetch_add(1, Ordering::Relaxed);
         if self
@@ -821,13 +831,14 @@ impl TranscriptionManager {
             .is_err()
         {
             warn!("start_stream lost a race with another stream worker");
-            return;
+            return 0;
         }
         let (rx, cancelled) = self.router.open();
         self.stream_active.store(false, Ordering::Release);
 
         let manager = self.clone();
-        thread::spawn(move || manager.run_stream_worker(rx, cancelled, worker_id));
+        thread::spawn(move || manager.run_stream_worker(rx, cancelled, worker_id, early_cleanup));
+        worker_id
     }
 
     fn run_stream_worker(
@@ -835,6 +846,7 @@ impl TranscriptionManager {
         rx: mpsc::Receiver<StreamCmd>,
         cancelled: Arc<AtomicBool>,
         worker_id: u64,
+        early_cleanup: bool,
     ) {
         let _worker = StreamWorkerGuard {
             worker_id,
@@ -880,7 +892,13 @@ impl TranscriptionManager {
             ModelTraits::of(&info),
             get_settings(&self.app_handle).long_form_chunking,
         );
-        let Some(mut session) = LiveSession::begin(self, mode, &info, &model_id) else {
+        let Some(mut session) = LiveSession::begin(
+            self,
+            mode,
+            &info,
+            &model_id,
+            early_cleanup.then_some(worker_id),
+        ) else {
             // Nothing to decode live: the recording is transcribed in batch.
             self.router.clear();
             drain_until_finalize(rx);
@@ -903,12 +921,15 @@ impl TranscriptionManager {
                     return;
                 }
                 // Dropping the session resets the worker's stream.
-                StreamCmd::Cancel => return,
+                StreamCmd::Cancel => break,
             }
         }
-        // The channel closed without finalize/cancel; dropping the session
-        // resets the worker's stream. `_worker` drops after, clearing this
-        // worker's flags.
+        // Cancelled, or the channel closed without finalize: dropping the
+        // session resets the worker's stream, and `_worker` drops after,
+        // clearing this worker's flags. No clean-up will take this
+        // dictation's clean-up while speaking, which may have begun after the
+        // cancel was sent (while the model loaded), so it ends here.
+        crate::textflow::early::stop(worker_id);
     }
 
     /// Flush the live decode (a stream, or chunks decoded while recording)
@@ -942,6 +963,7 @@ impl TranscriptionManager {
     /// Abandon any live decode without producing text (e.g. on cancel). A
     /// chunk already decoding finishes; audio queued behind it is dropped.
     pub fn cancel_stream(&self) {
+        crate::textflow::early::stop(self.stream_worker_id());
         if let Some(route) = self.router.take() {
             route.cancelled.store(true, Ordering::Release);
             let _ = route.tx.send(StreamCmd::Cancel);

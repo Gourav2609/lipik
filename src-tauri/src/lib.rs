@@ -616,7 +616,7 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
     let processed = args.clean.as_deref().map(|bundle_id| {
         let target = crate::textflow::Target::for_bundle(bundle_id);
         tauri::async_runtime::block_on(crate::actions::process_transcription_output(
-            app, &text, false, &target,
+            app, &text, false, &target, None,
         ))
     });
     let best_ms = times_ms.iter().copied().min().unwrap_or(0);
