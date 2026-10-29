@@ -7,6 +7,7 @@ import {
   isBusy,
   moveNote,
   openInWindow,
+  redoNoteInHinglish,
   regenerateNote,
   renameNote,
   type Folder,
@@ -56,7 +57,7 @@ export type NoteMenuMode = "main" | "rename" | "folder" | "delete";
 
 const WIDTH = 240;
 
-/** Options for one note: open, rename, folder, regenerate, delete. */
+/** Options for one note: open, rename, folder, regenerate, Hinglish redo, delete. */
 export const NoteMenu = ({
   note,
   folders,
@@ -137,6 +138,14 @@ export const NoteMenu = ({
           >
             Write summary again
           </MenuItem>
+          {note.hasAudio && (
+            <MenuItem
+              disabled={isBusy(note)}
+              onClick={() => void run(() => redoNoteInHinglish(note.id))}
+            >
+              Redo transcript in Hinglish
+            </MenuItem>
+          )}
           <div className="mx-[8px] my-[4px] h-px bg-[var(--fk-border)]" />
           <MenuItem danger onClick={() => setMode("delete")}>
             Delete note

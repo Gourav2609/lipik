@@ -151,6 +151,15 @@ pub async fn notetaker_regenerate(manager: Manager<'_>, id: String) -> Result<()
     blocking(move || m.regenerate(&id)).await
 }
 
+/// Hears the meeting again with the Hinglish speech model (fetched first if
+/// needed), then writes its notes again.
+#[tauri::command]
+#[specta::specta]
+pub async fn notetaker_redo_in_hinglish(manager: Manager<'_>, id: String) -> Result<(), String> {
+    let m = manager.inner().clone();
+    blocking(move || m.redo_in_hinglish_now(&id)).await
+}
+
 /// Today's and tomorrow's calendar events. Asks for calendar access the first
 /// time.
 #[tauri::command]

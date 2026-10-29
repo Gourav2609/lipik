@@ -753,6 +753,8 @@ mod tests {
             summary_error: None,
             mic_offset_ms: None,
             system_offset_ms: None,
+            hinglish_redo: None,
+            has_audio: false,
         }
     }
 

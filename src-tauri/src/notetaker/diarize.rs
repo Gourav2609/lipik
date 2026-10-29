@@ -92,7 +92,7 @@ pub fn is_default_label(label: &str) -> bool {
 }
 
 /// A stretch of one speaker, in WAV time.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Turn {
     pub start_ms: i64,
     pub end_ms: i64,

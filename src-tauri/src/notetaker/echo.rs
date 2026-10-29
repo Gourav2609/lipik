@@ -611,6 +611,66 @@ pub fn remove_call_echo(
     }))
 }
 
+/// An echo-likeness at least this high means a mic piece is the call heard
+/// from the speakers. On two recorded calls the mic during call lines scored
+/// 0.37 to 0.78 for 9 in 10 lines (median 0.5), the user talking alone 0 to
+/// 0.12.
+pub const ECHO_LIKENESS: f32 = 0.3;
+
+/// Taking the call out of a piece of echo leaves at most this share of its
+/// energy; with the user talking over the call much more is left.
+pub const ECHO_REMOVED_SHARE: f32 = 0.25;
+
+/// Whether a mic piece is the call heard from the speakers: taking the call
+/// out left little of it (`cleaned` against `raw`, see
+/// [`ECHO_REMOVED_SHARE`]) and `raw` looks like `call` ([`echo_likeness`]),
+/// so the user talking over the call is kept.
+pub fn is_echo_piece(raw: &[f32], cleaned: &[f32], call: &[f32]) -> bool {
+    let energy = |x: &[f32]| x.iter().map(|&v| v as f64 * v as f64).sum::<f64>();
+    energy(cleaned) <= ECHO_REMOVED_SHARE as f64 * energy(raw)
+        && echo_likeness(raw, call) >= ECHO_LIKENESS
+}
+
+/// How much `mic` looks like a stretch of `call`: the largest correlation
+/// (-1..1, sign ignored) between `mic` and any stretch of `call` as long as
+/// it, so `call` is read longer by the delays to try. 0 when either is
+/// silent or `call` is shorter than `mic`.
+pub fn echo_likeness(mic: &[f32], call: &[f32]) -> f32 {
+    let (n, m) = (mic.len(), call.len());
+    let mic_energy: f64 = mic.iter().map(|&x| x as f64 * x as f64).sum();
+    if n == 0 || m < n || mic_energy <= 0.0 {
+        return 0.0;
+    }
+    let len = (n + m).next_power_of_two();
+    let mut planner = FftPlanner::<f32>::new();
+    let (fwd, inv) = (planner.plan_fft_forward(len), planner.plan_fft_inverse(len));
+    let spectrum = |x: &[f32]| {
+        let mut buf: Vec<Complex32> = x.iter().map(|&v| Complex32::new(v, 0.0)).collect();
+        buf.resize(len, Complex32::default());
+        fwd.process(&mut buf);
+        buf
+    };
+    let a = spectrum(mic);
+    let mut cross = spectrum(call);
+    for (c, a) in cross.iter_mut().zip(&a) {
+        *c *= a.conj();
+    }
+    inv.process(&mut cross);
+    let mut window: f64 = call[..n].iter().map(|&x| x as f64 * x as f64).sum();
+    let mut best = 0.0f32;
+    for shift in 0..=m - n {
+        if shift > 0 {
+            let (out, add) = (call[shift - 1] as f64, call[shift + n - 1] as f64);
+            window = (window - out * out + add * add).max(0.0);
+        }
+        if window > 1e-9 {
+            let dot = cross[shift].re as f64 / len as f64;
+            best = best.max((dot.abs() / (mic_energy * window).sqrt()) as f32);
+        }
+    }
+    best
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -679,6 +739,49 @@ mod tests {
             .unwrap();
         }
         (delays, out)
+    }
+
+    #[test]
+    fn a_piece_is_echo_only_when_taking_the_call_out_left_little() {
+        let call = talk(7, 12.0);
+        let user = talk(11, 12.0);
+        let echo = heard(&call, 592);
+        let (from, to) = (4 * RATE, 8 * RATE);
+        let played = &call[from - 592 - RATE..to - 592 + RATE];
+        let piece = |x: &[f32]| x[from..to].to_vec();
+        let scale = rms(&piece(&user)) / rms(&piece(&echo));
+        let loud_echo: Vec<f32> = echo.iter().map(|x| x * scale).collect();
+        let both = mix(&[&user, &loud_echo]);
+        assert!(echo_likeness(&piece(&both), played) >= ECHO_LIKENESS);
+        assert!(
+            !is_echo_piece(&piece(&both), &piece(&user), played),
+            "the user over the call at the same loudness is kept"
+        );
+        let left: Vec<f32> = echo.iter().map(|x| 0.1 * x).collect();
+        assert!(is_echo_piece(&piece(&echo), &piece(&left), played));
+        let quiet_user: Vec<f32> = user.iter().map(|x| 0.1 * x).collect();
+        assert!(!is_echo_piece(&piece(&user), &piece(&quiet_user), played));
+    }
+
+    #[test]
+    fn tells_a_piece_of_echo_from_the_user_talking() {
+        let call = talk(7, 12.0);
+        let user = talk(11, 12.0);
+        let echo = heard(&call, 592);
+        let (from, to) = (4 * RATE, 8 * RATE);
+        let search = RATE;
+        let played = &call[from - 592 - search..to - 592 + search];
+        assert!(echo_likeness(&echo[from..to], played) >= ECHO_LIKENESS);
+        assert!(echo_likeness(&user[from..to], played) < ECHO_LIKENESS);
+        let soft_echo: Vec<f32> = echo.iter().map(|x| 0.2 * x).collect();
+        let user_over_echo = mix(&[&user, &soft_echo]);
+        assert!(echo_likeness(&user_over_echo[from..to], played) < ECHO_LIKENESS);
+        assert_eq!(echo_likeness(&[0.0; 100], &[0.0; 300]), 0.0);
+        assert_eq!(
+            echo_likeness(&user[..300], &call[..100]),
+            0.0,
+            "call too short"
+        );
     }
 
     #[test]

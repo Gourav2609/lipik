@@ -721,9 +721,11 @@ export const NoteView = ({
         </button>
       </div>
       <Tabs value={shownTab} onChange={setTab} live={live} writing={writing} />
-      {improving && (
+      {(improving || meeting.hinglish_redo) && (
         <p className="pt-[12px] text-[13px] leading-[18px] text-[var(--fk-text-muted)]">
-          Hindi heard: improving the transcript…
+          {meeting.hinglish_redo === "asked"
+            ? "Redoing the transcript in Hinglish…"
+            : "Hindi heard: improving the transcript…"}
         </p>
       )}
       <div key={shownTab} className="nt-fade pt-[16px]">

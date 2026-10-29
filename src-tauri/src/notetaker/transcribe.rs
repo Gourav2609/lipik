@@ -138,24 +138,37 @@ fn read_span(path: &Path, offset_ms: i64, start_ms: i64, end_ms: i64) -> Result<
 /// Every line heard again by `hear` from its stream's audio, in pieces cut
 /// by `rules`, each piece keeping its line's speaker key and label. A piece
 /// `hear` fails on counts as heard empty; a line whose audio can't be read
-/// or in which nothing is heard keeps its text. `streams` maps a source to
-/// its WAV and offset; `scorer` makes the speech detector for each line.
-/// `keep_going` gets the share of lines done and can stop the rest, which
-/// then keep their text.
+/// or in which nothing is heard keeps its text, and one without text (a
+/// stretch the first pass wrote nothing for) is left out. A piece heard in
+/// such a stretch is left out too when `is_echo` says it is the call heard
+/// by the mic. `streams` maps a source to its WAV and offset; `scorer` makes
+/// the speech detector for each line. `keep_going` gets the share of the
+/// lines' time done and can stop the rest, which then keep their text.
 pub fn redo_lines(
     lines: &[Segment],
     streams: &[(&str, &Path, i64)],
     rules: super::audio::CutRules,
     scorer: impl Fn() -> Option<Box<dyn SpeechScorer>>,
     mut hear: impl FnMut(Vec<f32>) -> Result<String>,
+    mut is_echo: impl FnMut(&Segment) -> bool,
     mut keep_going: impl FnMut(f32) -> bool,
 ) -> Vec<Segment> {
+    let keep = |line: &Segment, out: &mut Vec<Segment>| {
+        if !line.text.trim().is_empty() {
+            out.push(line.clone());
+        }
+    };
+    let total: i64 = lines.iter().map(|s| (s.end_ms - s.start_ms).max(0)).sum();
+    let mut done = 0;
     let mut out = Vec::new();
     for (n, line) in lines.iter().enumerate() {
-        if !keep_going(n as f32 / lines.len().max(1) as f32) {
-            out.extend(lines[n..].iter().cloned());
+        if !keep_going(done as f32 / total.max(1) as f32) {
+            for line in &lines[n..] {
+                keep(line, &mut out);
+            }
             break;
         }
+        done += (line.end_ms - line.start_ms).max(0);
         let audio = streams
             .iter()
             .find(|(source, ..)| *source == line.source)
@@ -165,10 +178,11 @@ pub fn redo_lines(
             Ok(audio) => audio,
             Err(e) => {
                 log::warn!("Notetaker kept a line it could not read again: {e}");
-                out.push(line.clone());
+                keep(line, &mut out);
                 continue;
             }
         };
+        let stretch = line.text.trim().is_empty();
         let mut track = SpeechTrack::new(scorer());
         track.push(&audio);
         let mut heard = Vec::new();
@@ -184,20 +198,183 @@ pub fn redo_lines(
                 continue;
             }
             let start_ms = line.start_ms + samples_to_ms(piece.start_sample);
-            heard.push(Segment {
+            let segment = Segment {
                 start_ms,
                 end_ms: (start_ms + samples_to_ms(piece.audio.len() as u64)).min(line.end_ms),
                 text: text.trim().to_string(),
                 ..line.clone()
-            });
+            };
+            if stretch && is_echo(&segment) {
+                continue;
+            }
+            heard.push(segment);
         }
         if heard.is_empty() {
-            out.push(line.clone());
+            keep(line, &mut out);
         } else {
             out.extend(heard);
         }
     }
     out
+}
+
+/// Longest stretch without lines heard again in one go.
+const UNHEARD_MAX_MS: i64 = 120_000;
+/// Shorter stretches between lines are not heard again.
+const UNHEARD_MIN_MS: i64 = 2_000;
+
+/// `lines` and, for each of `streams` (source, and where its audio starts
+/// and ends on the meeting's clock), a line with no text over every stretch
+/// of 2 s or more its lines leave uncovered, so hearing the lines again also
+/// hears speech the first pass wrote nothing for. In time order. Call
+/// stretches are cut where `call_turns` (the voice split, on the meeting's
+/// clock) change speaker and take that speaker; parts no turn covers, and
+/// stretches nobody split, are "Them". Mic stretches are "Me". Longer ones
+/// are cut into equal parts of at most two minutes.
+pub fn with_unheard_spans(
+    lines: &[Segment],
+    streams: &[(&str, i64, i64)],
+    call_turns: &[diarize::Turn],
+) -> Vec<Segment> {
+    let mut out = lines.to_vec();
+    for &(source, stream_start, stream_end) in streams {
+        let mut own: Vec<&Segment> = lines.iter().filter(|s| s.source == source).collect();
+        own.sort_by_key(|s| s.start_ms);
+        let mut gaps = Vec::new();
+        let mut from = stream_start;
+        for s in &own {
+            if s.start_ms > from {
+                gaps.push((from, s.start_ms.min(stream_end)));
+            }
+            from = from.max(s.end_ms);
+        }
+        gaps.push((from, stream_end));
+        let turns = if source == "system" { call_turns } else { &[] };
+        for (start, end) in gaps {
+            if end - start < UNHEARD_MIN_MS {
+                continue;
+            }
+            for (at, to, speaker) in by_speaker(start, end, turns) {
+                let (speaker_key, speaker) = match speaker {
+                    Some(n) => diarize::key_and_label(n),
+                    None => (
+                        diarize::key_for(source).to_string(),
+                        speaker_for(source).to_string(),
+                    ),
+                };
+                let count = (to - at + UNHEARD_MAX_MS - 1) / UNHEARD_MAX_MS;
+                for n in 0..count {
+                    out.push(Segment {
+                        source: source.to_string(),
+                        speaker: speaker.clone(),
+                        speaker_key: speaker_key.clone(),
+                        start_ms: at + (to - at) * n / count,
+                        end_ms: at + (to - at) * (n + 1) / count,
+                        text: String::new(),
+                    });
+                }
+            }
+        }
+    }
+    out.sort_by(|a, b| (a.start_ms, &a.source).cmp(&(b.start_ms, &b.source)));
+    out
+}
+
+/// Parts of a stretch shorter than this are not heard on their own.
+const SHORT_PART_MS: i64 = 2_000;
+/// How far a short part of one speaker is widened either way, so words at
+/// its edges are heard whole.
+const SHORT_PART_PAD_MS: i64 = 250;
+
+/// `start..end` cut where `turns` begin and end, each part with the speaker
+/// whose turn covers it (None where no turn does), neighbours of one speaker
+/// joined. A short part no turn covers goes to the part before it (else the
+/// one after); a short part that is still alone is widened by
+/// [`SHORT_PART_PAD_MS`] each way within `start..end`.
+fn by_speaker(start: i64, end: i64, turns: &[diarize::Turn]) -> Vec<(i64, i64, Option<usize>)> {
+    let mut cuts = vec![start, end];
+    for t in turns {
+        cuts.extend(
+            [t.start_ms, t.end_ms]
+                .into_iter()
+                .filter(|&c| c > start && c < end),
+        );
+    }
+    cuts.sort_unstable();
+    cuts.dedup();
+    let mut parts: Vec<(i64, i64, Option<usize>)> = Vec::new();
+    for w in cuts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let speaker = turns
+            .iter()
+            .filter(|t| t.start_ms < b && t.end_ms > a)
+            .max_by_key(|t| b.min(t.end_ms) - a.max(t.start_ms))
+            .map(|t| t.speaker)
+            .filter(|&n| n != diarize::UNKNOWN);
+        parts.push((a, b, speaker));
+    }
+    for i in 0..parts.len() {
+        let (a, b, speaker) = parts[i];
+        if speaker.is_none() && b - a < SHORT_PART_MS {
+            let neighbour = if i > 0 {
+                parts.get(i - 1)
+            } else {
+                parts.get(i + 1)
+            };
+            if let Some(&(.., n)) = neighbour {
+                parts[i].2 = n;
+            }
+        }
+    }
+    let mut joined: Vec<(i64, i64, Option<usize>)> = Vec::new();
+    for part in parts {
+        match joined.last_mut() {
+            Some(last) if last.2 == part.2 => last.1 = part.1,
+            _ => joined.push(part),
+        }
+    }
+    for part in &mut joined {
+        if part.2.is_some() && part.1 - part.0 < SHORT_PART_MS {
+            part.0 = (part.0 - SHORT_PART_PAD_MS).max(start);
+            part.1 = (part.1 + SHORT_PART_PAD_MS).min(end);
+        }
+    }
+    joined
+}
+
+/// Searched either side of the measured delay when checking a mic piece for
+/// the call: the delay drifts during a call.
+const ECHO_SEARCH_MS: i64 = 1_000;
+
+/// Whether `piece` (meeting clock) of the mic is the call it heard, judged
+/// from the raw and the cleaned mic audio (both starting at `mic.2`) against
+/// the call `delay_ms` earlier; see [`super::echo::is_echo_piece`].
+pub fn call_in_mic(
+    mic: (&Path, &Path, i64),
+    system: (&Path, i64),
+    delay_ms: i64,
+    piece: &Segment,
+) -> bool {
+    let (raw, cleaned, offset) = mic;
+    let read = |path: &Path| read_span(path, offset, piece.start_ms.max(offset), piece.end_ms);
+    let (heard, left) = match (read(raw), read(cleaned)) {
+        (Ok(heard), Ok(left)) => (heard, left),
+        _ => return false,
+    };
+    let from = piece.start_ms.max(offset) - delay_ms - ECHO_SEARCH_MS;
+    let lead = (system.1 - from).max(0);
+    let played = match read_span(
+        system.0,
+        system.1,
+        from + lead,
+        piece.end_ms - delay_ms + ECHO_SEARCH_MS,
+    ) {
+        Ok(played) => played,
+        Err(_) => return false,
+    };
+    let mut call = vec![0.0; (lead.max(0) as usize) * RATE / 1000];
+    call.extend(played);
+    super::echo::is_echo_piece(&heard, &left, &call)
 }
 
 /// Share of Devanagari words when `hear` (Qwen3-ASR) hears a few lines
@@ -270,7 +447,7 @@ pub fn piece_segment(
 /// fraction of the file done. With `speakers`, pieces also end where the
 /// speaker changes and each line is labelled with its speaker. With
 /// `hinglish` (Qwen3-ASR), pieces are shorter and go to it instead of the
-/// dictation model.
+/// dictation model. Also returns how much speech the pieces held, in ms.
 pub fn transcribe_file(
     app: &AppHandle,
     path: &Path,
@@ -279,7 +456,7 @@ pub fn transcribe_file(
     speakers: Option<&Speakers>,
     hinglish: Option<&SideEngine>,
     mut progress: impl FnMut(f32),
-) -> Result<Vec<Segment>> {
+) -> Result<(Vec<Segment>, i64)> {
     let rules = match hinglish {
         Some(_) => super::hinglish::RULES,
         None => super::audio::FINAL_RULES,
@@ -291,6 +468,7 @@ pub fn transcribe_file(
         track.set_cuts(s.change_samples());
     }
     let mut out = Vec::new();
+    let mut speech = 0u64;
     let mut block = Vec::with_capacity(8 * RATE);
     let mut read = 0usize;
     let mut samples = reader.samples::<i16>();
@@ -303,6 +481,7 @@ pub fn transcribe_file(
         read += block.len();
         track.push(&block);
         while let Some(piece) = track.take(rules, done) {
+            speech += piece.speech_samples;
             let text = match hinglish {
                 Some(side) => transcribe_side(app, side, piece.audio.clone()).unwrap_or_else(|e| {
                     log::warn!("Notetaker skipped a piece Qwen3-ASR could not decode: {e}");
@@ -326,7 +505,7 @@ pub fn transcribe_file(
         }
     }
     progress(1.0);
-    Ok(out)
+    Ok((out, samples_to_ms(speech)))
 }
 
 /// Short or very common words that say nothing about where a line came from.
@@ -456,6 +635,7 @@ mod tests {
         let piece = Piece {
             start_sample: 28 * RATE as u64,
             audio: vec![0.0; 10 * RATE],
+            speech_samples: 0,
         };
         let s = piece_segment(&piece, 1_500, "system", "hi".into(), Some(&speakers));
         assert_eq!(
@@ -510,6 +690,7 @@ mod tests {
                 }
                 Ok(format!("piece {heard}"))
             },
+            |_| false,
             |_| true,
         );
         let system: Vec<&Segment> = out.iter().filter(|s| s.source == "system").collect();
@@ -567,10 +748,178 @@ mod tests {
             crate::notetaker::hinglish::RULES,
             || None,
             |_| Ok("new".into()),
+            |_| false,
             |done| done < 0.3,
         );
         let texts: Vec<&str> = out.iter().map(|s| s.text.as_str()).collect();
         assert_eq!(texts, vec!["one", "two", "three"]);
+    }
+
+    fn turn(start_ms: i64, end_ms: i64, speaker: usize) -> diarize::Turn {
+        diarize::Turn {
+            start_ms,
+            end_ms,
+            speaker,
+        }
+    }
+
+    fn spans(lines: &[Segment]) -> Vec<(&str, i64, i64, &str, &str)> {
+        lines
+            .iter()
+            .filter(|s| s.text.is_empty())
+            .map(|s| {
+                (
+                    s.source.as_str(),
+                    s.start_ms,
+                    s.end_ms,
+                    s.speaker_key.as_str(),
+                    s.speaker.as_str(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn stretches_take_their_speakers_from_the_voice_split() {
+        let mut named = seg("system", 20_000, 24_000, "hello");
+        named.speaker = "Priya Nair".into();
+        named.speaker_key = "s2".into();
+        let lines = vec![named];
+        // Call audio from 5 s to 200 s on the meeting clock. Speaker 1 talks
+        // 5-12 s, nobody 12-15 s, speaker 2 (Priya) 15-20 s and 24-60 s,
+        // speaker 3 from 60 s to 190 s.
+        let turns = [
+            turn(5_000, 12_000, 0),
+            turn(15_000, 20_000, 1),
+            turn(24_000, 60_000, 1),
+            turn(60_000, 190_000, 2),
+        ];
+        let all = with_unheard_spans(&lines, &[("system", 5_000, 200_000)], &turns);
+        assert_eq!(
+            spans(&all),
+            vec![
+                ("system", 5_000, 12_000, "s1", "Speaker 1"),
+                ("system", 12_000, 15_000, "them", THEM),
+                ("system", 15_000, 20_000, "s2", "Speaker 2"),
+                ("system", 24_000, 60_000, "s2", "Speaker 2"),
+                ("system", 60_000, 125_000, "s3", "Speaker 3"),
+                ("system", 125_000, 190_000, "s3", "Speaker 3"),
+                ("system", 190_000, 200_000, "them", THEM),
+            ]
+        );
+    }
+
+    #[test]
+    fn short_call_stretches_join_their_speaker_or_widen() {
+        let lines = vec![
+            seg("system", 0, 10_000, "pehle"),
+            seg("system", 30_000, 40_000, "baad"),
+        ];
+        // Speaker 1 pauses half a second at 15 s, speaker 2 says one word at
+        // 20-21 s, and nobody talks in the last 0.4 s of the stretch.
+        let turns = [
+            turn(10_000, 15_000, 0),
+            turn(15_500, 20_000, 0),
+            turn(20_000, 21_000, 1),
+            turn(21_000, 29_600, 0),
+        ];
+        let all = with_unheard_spans(&lines, &[("system", 0, 40_000)], &turns);
+        assert_eq!(
+            spans(&all),
+            vec![
+                ("system", 10_000, 20_000, "s1", "Speaker 1"),
+                ("system", 19_750, 21_250, "s2", "Speaker 2"),
+                ("system", 21_000, 30_000, "s1", "Speaker 1"),
+            ]
+        );
+    }
+
+    #[test]
+    fn stretches_start_where_each_stream_starts_and_mic_ones_are_me() {
+        let lines = vec![seg("mic", 3_000, 9_000, "one")];
+        let all = with_unheard_spans(
+            &lines,
+            &[("mic", 1_500, 12_000), ("system", 2_000, 8_000)],
+            &[],
+        );
+        assert_eq!(
+            spans(&all),
+            vec![
+                ("system", 2_000, 8_000, "them", THEM),
+                ("mic", 9_000, 12_000, "me", ME),
+            ]
+        );
+        let starts: Vec<i64> = all.iter().map(|s| s.start_ms).collect();
+        assert!(starts.windows(2).all(|w| w[0] <= w[1]), "{starts:?}");
+    }
+
+    fn tone_wav(dir: &Path, name: &str, seconds: usize) -> std::path::PathBuf {
+        let path = dir.join(name);
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: RATE as u32,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut wav = hound::WavWriter::create(&path, spec).unwrap();
+        for i in 0..seconds * RATE {
+            wav.write_sample(((i as f32 * 0.3).sin() * 8_000.0) as i16)
+                .unwrap();
+        }
+        wav.finalize().unwrap();
+        path
+    }
+
+    #[test]
+    fn only_new_stretches_go_through_the_echo_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let mic = tone_wav(dir.path(), "mic.wav", 12);
+        let mut stretch = seg("mic", 6_000, 12_000, "");
+        stretch.text.clear();
+        let lines = vec![seg("mic", 0, 6_000, "pehle"), stretch];
+        let mut checked = Vec::new();
+        let out = redo_lines(
+            &lines,
+            &[("mic", mic.as_path(), 0)],
+            crate::notetaker::hinglish::RULES,
+            || None,
+            |_| Ok("suna".into()),
+            |piece| {
+                checked.push(piece.start_ms);
+                true
+            },
+            |_| true,
+        );
+        assert!(!checked.is_empty());
+        assert!(checked.iter().all(|&ms| ms >= 6_000), "{checked:?}");
+        assert!(
+            out.iter().all(|s| s.start_ms < 6_000),
+            "echo pieces dropped"
+        );
+    }
+
+    #[test]
+    fn redo_progress_follows_the_audio_heard() {
+        let lines = vec![
+            seg("mic", 0, 1_000, "one"),
+            seg("mic", 1_000, 10_000, "two"),
+            seg("mic", 10_000, 11_000, "three"),
+        ];
+        let mut seen = Vec::new();
+        redo_lines(
+            &lines,
+            &[],
+            crate::notetaker::hinglish::RULES,
+            || None,
+            |_| Ok("new".into()),
+            |_| false,
+            |done| {
+                seen.push(done);
+                true
+            },
+        );
+        let rounded: Vec<i32> = seen.iter().map(|d| (d * 100.0).round() as i32).collect();
+        assert_eq!(rounded, vec![0, 9, 91]);
     }
 
     #[test]

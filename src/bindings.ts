@@ -1411,6 +1411,18 @@ async notetakerRegenerate(id: string) : Promise<Result<null, string>> {
 }
 },
 /**
+ * Hears the meeting again with the Hinglish speech model (fetched first if
+ * needed), then writes its notes again.
+ */
+async notetakerRedoInHinglish(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_redo_in_hinglish", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Today's and tomorrow's calendar events. Asks for calendar access the first
  * time.
  */
@@ -1765,6 +1777,11 @@ export type Dictionary = { words: DictionaryWord[]; replacements: Replacement[] 
 export type DictionaryWord = { id: string; word: string; starred: boolean; auto_learned: boolean; shared: boolean }
 export type FolderInfo = { name: string; count: number }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
+/**
+ * Why a meeting is being redone in Hinglish: Hindi was heard in it, or the
+ * user asked.
+ */
+export type HinglishRedo = "auto" | "asked"
 export type HistoryCorrection = { entry: HistoryEntry; 
 /**
  * Dictionary words learned from this edit.
@@ -1827,7 +1844,15 @@ export type Meeting = { id: string; title: string;
  * The title was made up (app name or AI) rather than given by the user or
  * the calendar; notes may replace it.
  */
-title_auto: boolean; start_ms: number; end_ms: number | null; app: string | null; bundle_id: string | null; calendar_event_id: string | null; attendees: Attendee[]; folder: string | null; status: MeetingStatus; summary_status: SummaryStatus; summary_error: string | null; mic_offset_ms: number | null; system_offset_ms: number | null }
+title_auto: boolean; start_ms: number; end_ms: number | null; app: string | null; bundle_id: string | null; calendar_event_id: string | null; attendees: Attendee[]; folder: string | null; status: MeetingStatus; summary_status: SummaryStatus; summary_error: string | null; mic_offset_ms: number | null; system_offset_ms: number | null; 
+/**
+ * Set while the meeting is being redone in Hinglish.
+ */
+hinglish_redo?: HinglishRedo | null; 
+/**
+ * Its recording is still on disk, so it can be redone.
+ */
+has_audio?: boolean }
 export type MeetingDetail = { meeting: Meeting; segments: Segment[]; 
 /**
  * The user's own notes ("My notes"), markdown.

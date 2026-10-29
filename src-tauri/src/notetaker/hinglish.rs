@@ -54,8 +54,8 @@ pub const PROBE_HINDI: f32 = 0.15;
 
 /// Share of words (3+ letters, not all capitals) in an English transcript
 /// that are neither common English words nor names, above which Hindi was
-/// likely spoken. A Hinglish standup gave 0.087; English meetings 0.018 to
-/// 0.038 (0.065 for one short, noisy test call).
+/// likely spoken. Hinglish meetings gave 0.077 to 0.164; English meetings
+/// 0.018 to 0.038 (0.065 for one short, noisy test call).
 pub const ODD_WORDS_HINDI: f32 = 0.07;
 /// Fewer words than this say too little to judge.
 pub const ODD_WORDS_MIN: usize = 200;
@@ -66,6 +66,23 @@ pub const ODD_WORDS_MIN: usize = 200;
 /// meeting that was mostly English.
 pub const HINDI_WORDS_SHARE: f32 = 0.002;
 pub const HINDI_WORDS_MIN: usize = 3;
+/// ... or the English model wrote few words for the speech it was given: it
+/// leaves out most Hindi, while jargon still comes out as words. Words per
+/// minute of speech (as the speech detector heard it, call plus mic with the
+/// call taken out): English meetings 159 to 169, meetings partly in Hindi
+/// 80 to 97, Hinglish meetings 37 to 68 (33 and 59 for two under 3
+/// minutes).
+pub const FEW_WORDS_PER_MIN: f32 = 100.0;
+/// So few words per minute of speech mean Hindi even when the transcript is
+/// too short for [`ODD_WORDS_MIN`]. Hinglish meetings went down to 37.
+pub const VERY_FEW_WORDS_PER_MIN: f32 = 50.0;
+/// ... as long as this share of non-English words (of at least
+/// [`VERY_FEW_JUDGED_MIN`]) is there too: an English meeting where a video
+/// or music played also gets few words for its speech.
+pub const VERY_FEW_ODD_WORDS: f32 = 0.05;
+pub const VERY_FEW_JUDGED_MIN: usize = 50;
+/// Less speech than this says too little about the word rate.
+pub const RATE_MIN_SPEECH_MS: i64 = 3 * 60_000;
 /// Everyday Hindi words in Roman letters; those that are also English words
 /// don't count.
 const HINDI_SIGNAL: &[&str] = &[
@@ -119,37 +136,73 @@ pub fn devanagari_share<'a>(texts: impl IntoIterator<Item = &'a str>) -> f32 {
     }
 }
 
-/// Whether an English transcript sounds like Hindi was spoken: enough
-/// words that are not English (see [`odd_word_share`]) and enough Hindi
-/// words among them (see [`HINDI_WORDS_SHARE`]).
-pub fn hindi_likely(segments: &[Segment], names: &[String]) -> bool {
-    let Some(odd) = odd_word_share(segments, names) else {
-        return false;
+/// Whether an English transcript sounds like Hindi was spoken; see
+/// [`sounds_hindi`]. `speech` is how much speech the English model was given
+/// per source; only those sources' words count for the word rate (a mic
+/// that still holds the call is left out).
+pub fn hindi_likely(segments: &[Segment], names: &[String], speech: &[(&str, i64)]) -> bool {
+    let (odd, judged) = odd_words(segments, names);
+    let words_of = |s: &Segment| -> Vec<String> {
+        s.text
+            .split(|c: char| !c.is_ascii_alphabetic())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect()
     };
-    let words: Vec<String> = segments
-        .iter()
-        .flat_map(|s| s.text.split(|c: char| !c.is_ascii_alphabetic()))
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect();
+    let words: Vec<String> = segments.iter().flat_map(words_of).collect();
     let signal: HashSet<&str> = HINDI_SIGNAL
         .iter()
         .copied()
         .filter(|w| !crate::textflow::commands::is_common_word(w))
         .collect();
     let hindi = words.iter().filter(|w| signal.contains(w.as_str())).count();
+    let rate_words: usize = segments
+        .iter()
+        .filter(|s| speech.iter().any(|(source, _)| *source == s.source))
+        .map(|s| words_of(s).len())
+        .sum();
+    let speech_ms: i64 = speech.iter().map(|(_, ms)| ms).sum();
+    let share = odd as f32 / judged.max(1) as f32;
     log::info!(
-        "Notetaker: non-English words {odd:.3}, Hindi words {hindi} of {}",
-        words.len()
+        "Notetaker: non-English words {share:.3} of {judged}, Hindi words {hindi} of {}, {:.0} words per minute of {:.1} min of speech",
+        words.len(),
+        words_per_minute(rate_words, speech_ms),
+        speech_ms as f32 / 60_000.0
     );
-    odd >= ODD_WORDS_HINDI
-        && hindi >= HINDI_WORDS_MIN
-        && hindi as f32 >= words.len() as f32 * HINDI_WORDS_SHARE
+    sounds_hindi(share, judged, hindi, words.len(), (rate_words, speech_ms))
+}
+
+fn words_per_minute(words: usize, speech_ms: i64) -> f32 {
+    words as f32 * 60_000.0 / speech_ms.max(1) as f32
+}
+
+/// Hindi was likely spoken when enough of the `judged` words are not English
+/// (`odd`, [`ODD_WORDS_HINDI`]) and either the English model still wrote
+/// some Hindi words or it wrote few words for the speech
+/// ([`FEW_WORDS_PER_MIN`]); or when it wrote very few words for a lot of
+/// speech ([`VERY_FEW_WORDS_PER_MIN`]) and some are not English.
+/// `rate` is the words and the ms of speech they came from.
+fn sounds_hindi(odd: f32, judged: usize, hindi: usize, words: usize, rate: (usize, i64)) -> bool {
+    let (rate_words, speech_ms) = rate;
+    let rate = (speech_ms >= RATE_MIN_SPEECH_MS).then(|| words_per_minute(rate_words, speech_ms));
+    let hindi_words = hindi >= HINDI_WORDS_MIN && hindi as f32 >= words as f32 * HINDI_WORDS_SHARE;
+    let few_words = rate.is_some_and(|r| r < FEW_WORDS_PER_MIN);
+    let very_few_words = rate.is_some_and(|r| r < VERY_FEW_WORDS_PER_MIN);
+    (judged >= ODD_WORDS_MIN && odd >= ODD_WORDS_HINDI && (hindi_words || few_words))
+        || (very_few_words && judged >= VERY_FEW_JUDGED_MIN && odd >= VERY_FEW_ODD_WORDS)
 }
 
 /// Share of the transcript's words that are not English (see
 /// [`ODD_WORDS_HINDI`]), or `None` when it is too short to tell.
-pub fn odd_word_share(segments: &[Segment], names: &[String]) -> Option<f32> {
+#[cfg(test)]
+fn odd_word_share(segments: &[Segment], names: &[String]) -> Option<f32> {
+    let (odd, judged) = odd_words(segments, names);
+    (judged >= ODD_WORDS_MIN).then(|| odd as f32 / judged as f32)
+}
+
+/// How many of the transcript's words (3+ letters, not all capitals) are
+/// neither common English words nor names, and how many there are.
+fn odd_words(segments: &[Segment], names: &[String]) -> (usize, usize) {
     let names: HashSet<String> = names
         .iter()
         .flat_map(|n| n.split(|c: char| !c.is_alphabetic()))
@@ -164,9 +217,6 @@ pub fn odd_word_share(segments: &[Segment], names: &[String]) -> Option<f32> {
                 .map(str::to_lowercase),
         );
     }
-    if words.len() < ODD_WORDS_MIN {
-        return None;
-    }
     let mut known: std::collections::HashMap<&str, bool> = Default::default();
     let odd = words
         .iter()
@@ -176,7 +226,7 @@ pub fn odd_word_share(segments: &[Segment], names: &[String]) -> Option<f32> {
             })
         })
         .count();
-    Some(odd as f32 / words.len() as f32)
+    (odd, words.len())
 }
 
 fn is_devanagari(c: char) -> bool {
@@ -671,10 +721,96 @@ mod tests {
     fn english_jargon_is_not_hindi() {
         let jargon = line("Merged the PR for webhook retries, the repo config had a stale env var so the deploy to staging failed, opened a Jira for the flaky onboarding test, Okta SAML callback throws, Terraform plan for VPC peering, GitHub Actions cache busted");
         let names = vec!["Varun Mehta".to_string()];
-        assert!(odd_word_share(&vec![jargon.clone(); 10], &names).unwrap() > ODD_WORDS_HINDI);
-        assert!(!hindi_likely(&vec![jargon; 10], &names));
+        let lines = vec![jargon; 20];
+        assert!(odd_word_share(&lines, &names).unwrap() > ODD_WORDS_HINDI);
+        let words = lines
+            .iter()
+            .flat_map(|s| s.text.split(|c: char| !c.is_ascii_alphabetic()))
+            .filter(|w| !w.is_empty())
+            .count() as i64;
+        let speech_ms_at = |words_per_min: i64| words * 60_000 / words_per_min;
+        assert!(!hindi_likely(
+            &lines,
+            &names,
+            &[("system", speech_ms_at(150))]
+        ));
+        assert!(!hindi_likely(&lines, &names, &[]));
         let hinglish = line("Kalka kya result aya shaduka monday ka tomain bataya diya tha rerun karna dobara correction hai");
-        assert!(hindi_likely(&vec![hinglish; 20], &names));
+        assert!(hindi_likely(&vec![hinglish; 20], &names, &[]));
+    }
+
+    #[test]
+    fn the_word_rate_counts_only_streams_whose_speech_was_measured() {
+        let names = vec!["Varun Mehta".to_string()];
+        let mut lines =
+            vec![line("Kalka result aya shaduka monday tomain bataya rerun dobara correction"); 30];
+        for s in lines.iter_mut().take(20) {
+            s.source = "mic".into();
+        }
+        // The mic's echo could not be taken out, so only the call counts:
+        // its 100 words in 3 minutes of speech are few.
+        assert!(hindi_likely(&lines, &names, &[("system", 180_000)]));
+        // Counting the mic's 200 words against the same speech hides that.
+        assert!(!hindi_likely(
+            &lines,
+            &names,
+            &[("system", 180_000), ("mic", 0)]
+        ));
+    }
+
+    #[test]
+    fn few_words_for_the_speech_mean_hindi() {
+        let minute = 60_000;
+        // (non-English share, words judged, Hindi words, words, speech).
+        let english = [
+            (0.023, 4000, 0, 5620, 35 * minute + 24_000),
+            (0.026, 1300, 0, 1808, 10 * minute + 42_000),
+        ];
+        let partly_hindi = [
+            (0.038, 2100, 5, 3018, 31 * minute + 6_000),
+            (0.036, 5000, 20, 7020, 88 * minute + 6_000),
+        ];
+        let hinglish = [
+            (0.087, 1000, 4, 1366, 26 * minute + 24_000),
+            (0.077, 290, 2, 384, 7 * minute + 12_000),
+            (0.164, 380, 2, 492, 13 * minute + 20_032),
+        ];
+        for (odd, judged, hindi, words, speech) in english.into_iter().chain(partly_hindi) {
+            assert!(
+                !sounds_hindi(odd, judged, hindi, words, (words, speech)),
+                "{words}"
+            );
+        }
+        for (odd, judged, hindi, words, speech) in hinglish {
+            assert!(
+                sounds_hindi(odd, judged, hindi, words, (words, speech)),
+                "{words}"
+            );
+        }
+        assert!(
+            !sounds_hindi(0.164, 380, 2, 492, (492, 0)),
+            "no speech measured"
+        );
+        assert!(
+            !sounds_hindi(0.02, 1500, 0, 2000, (2000, 15 * minute)),
+            "133 a minute"
+        );
+        assert!(
+            sounds_hindi(0.09, 110, 0, 150, (150, 5 * minute)),
+            "30 a minute, too few words for the share alone"
+        );
+        assert!(
+            !sounds_hindi(0.03, 110, 0, 150, (150, 5 * minute)),
+            "30 a minute of English: a video or music played"
+        );
+        assert!(
+            !sounds_hindi(0.2, 10, 0, 12, (12, 5 * minute)),
+            "too few words"
+        );
+        assert!(
+            !sounds_hindi(0.2, 30, 0, 40, (40, 2 * minute)),
+            "too little speech"
+        );
     }
 
     #[test]

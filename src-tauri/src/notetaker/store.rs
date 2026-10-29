@@ -143,6 +143,8 @@ fn meeting_from_row(row: &Row) -> rusqlite::Result<Meeting> {
         summary_error: row.get(12)?,
         mic_offset_ms: row.get(13)?,
         system_offset_ms: row.get(14)?,
+        hinglish_redo: None,
+        has_audio: false,
     })
 }
 
@@ -748,6 +750,8 @@ mod tests {
             summary_error: None,
             mic_offset_ms: None,
             system_offset_ms: None,
+            hinglish_redo: None,
+            has_audio: false,
         }
     }
 

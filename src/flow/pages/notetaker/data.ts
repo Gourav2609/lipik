@@ -7,6 +7,7 @@ import {
   type Attendee,
   type CalendarAccess,
   type CalendarEvent,
+  type HinglishRedo,
   type Meeting as BackendMeeting,
   type MeetingDetail,
   type MeetingStatus,
@@ -49,6 +50,10 @@ export interface Note {
   status: MeetingStatus;
   summaryStatus: SummaryStatus;
   summaryError: string | null;
+  /** Set while it is being redone in Hinglish. */
+  hinglishRedo: HinglishRedo | null;
+  /** Its recording is still on disk. */
+  hasAudio: boolean;
 }
 
 export interface Folder {
@@ -83,6 +88,8 @@ export const toNote = (m: BackendMeeting): Note => ({
   status: m.status,
   summaryStatus: m.summary_status,
   summaryError: m.summary_error,
+  hinglishRedo: m.hinglish_redo ?? null,
+  hasAudio: m.has_audio ?? false,
 });
 
 /** Runs a backend call; shows the error as a toast and returns null on failure. */
@@ -143,8 +150,13 @@ export const moveNote = (id: string, folder: string | null) =>
 export const regenerateNote = (id: string) =>
   succeeds(async () => unwrap(await commands.notetakerRegenerate(id)));
 
+export const redoNoteInHinglish = (id: string) =>
+  succeeds(async () => unwrap(await commands.notetakerRedoInHinglish(id)));
+
 export const isBusy = (note: Note) =>
-  note.status === "recording" || note.status === "processing";
+  note.status === "recording" ||
+  note.status === "processing" ||
+  note.hinglishRedo !== null;
 
 type Loadable<T> = { data: T; loading: boolean };
 

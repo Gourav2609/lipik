@@ -346,6 +346,8 @@ const MIN_SPEECH_MS: usize = 250;
 pub struct Piece {
     pub start_sample: u64,
     pub audio: Vec<f32>,
+    /// Samples the detector heard as speech.
+    pub speech_samples: u64,
 }
 
 /// A stream's audio scored for speech, cut into pieces at pauses. Pieces with
@@ -483,6 +485,7 @@ impl SpeechTrack {
         Some(Piece {
             start_sample: start + from as u64,
             audio: audio[from..to].to_vec(),
+            speech_samples: (speech_frames * self.frame) as u64,
         })
     }
 }
