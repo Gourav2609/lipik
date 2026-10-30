@@ -17,6 +17,7 @@ let settings: NotetakerSettings = {
   ollama_url: "http://127.0.0.1:11434",
   ollama_model: "qwen3:8b",
   language: "auto",
+  meeting_window_names: false,
 };
 
 let calendar = (params.get("calendar") ?? "not_determined") as CalendarAccess;

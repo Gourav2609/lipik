@@ -37,6 +37,7 @@ const DEFAULTS: Settings = {
   ollama_url: "http://127.0.0.1:11434",
   ollama_model: "qwen3:8b",
   language: "auto",
+  meeting_window_names: false,
 };
 
 const NOTIFY_OPTIONS = [
@@ -381,6 +382,18 @@ export default function NotetakerSettings() {
                 options={LANGUAGE_OPTIONS}
                 disabled={loading}
                 onChange={(v) => update({ language: v as MeetingLanguage })}
+              />
+            }
+          />
+          <SettingRow
+            title="Names from Slack huddles"
+            description="Reads who Slack shows as talking in a huddle to name speakers. Only the huddle tiles, never messages."
+            control={
+              <Toggle
+                label="Names from Slack huddles"
+                checked={s.meeting_window_names}
+                disabled={loading}
+                onChange={(on) => update({ meeting_window_names: on })}
               />
             }
           />

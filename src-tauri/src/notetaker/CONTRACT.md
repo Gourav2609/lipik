@@ -190,6 +190,7 @@ the notes or thoughts).
 | `ollama_url: string`            | `http://127.0.0.1:11434` | Ollama server, when the engine is Ollama             |
 | `ollama_model: string`          | `qwen3:8b`               | Model used on that server                            |
 | `language: "auto" \| "english" \| "hinglish"` | `auto`  | Meeting language, see Hinglish meetings below        |
+| `meeting_window_names: boolean` | `false`                  | Names from Slack huddles (see Speakers)              |
 
 The backend does not show the next meeting in the menu bar.
 
@@ -287,6 +288,29 @@ Names, in order, only for speakers still on their default label:
 1. A saved voice: the speaker's average voice matches a voice profile at cosine
    0.8 or more, and beats the next profile by 0.05.
 2. The calendar: exactly one other invitee and one voice heard.
+   The huddle window (setting `meeting_window_names`, "Names from Slack
+   huddles"): while the recording is linked to a Slack call, every 700 ms the
+   huddle is read through Accessibility into `window-speakers.jsonl` in the
+   meeting folder, one line per reading: `{"ms_since_meeting_start",
+   "speaking": [names], "present": [names], "user"}`, or
+   `{"ms_since_meeting_start", "gap": true}` when the huddle can't be read (no
+   huddle, its window on another Space or minimised, or reading took over
+   20 ms; 60 ms for the rest of the huddle after three such readings in a
+   row). Outside the huddle only roles, DOM classes and children are read,
+   plus the description of Slack's signed-in user button ("User: <name>",
+   looked for with its own 4 ms per reading until found); inside the huddle, the tiles' names and talking marks.
+   A call voice is named X when at least 10 s of its speech falls where the
+   window shows exactly one person other than the user talking, and X has at
+   least 70% of that. The user's tiles: those whose full name is one of the
+   user's own names (emails ignored), and the tile the signed-in name fits
+   (equal, or one a whole-word prefix of the other). The tile shown talking
+   while only the microphone speaks (6 s, 3x any other tile, the first 1.5 s
+   after each mark change ignored) picks among several that fit; when none
+   fits or it disagrees, it is the user's too. A tile that two voices each
+   talk under for 10 s or more names neither. The meeting's log gets one
+   line, e.g. "Slack names: 84 reads, 0 gaps, user found". This beats the calendar and the
+   notes model, never a saved voice that disagrees (logged) or a name the
+   user gave. No invite is needed.
 3. The notes model: per speaker, only when the name is said in at least two of
    the lines it points to, each said by that speaker (an introduction) or said
    by someone else right before that speaker talks. Never the user's own name or

@@ -44,7 +44,7 @@
         "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS (Apple silicon, M1 or later)",
-        "softwareVersion": "0.1.11",
+        "softwareVersion": "0.1.12",
         "dateModified": "2026-10-30",
         "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
         "url": "https://lipik.pages.dev/",
@@ -125,7 +125,7 @@
           <p class="rel-sub">
             What changed in each version of Lipik. The newest is at the top.
           </p>
-          <p class="rel-sub">Latest: 0.1.11, 30 Oct 2026.</p>
+          <p class="rel-sub">Latest: 0.1.12, 30 Oct 2026.</p>
           <p class="rel-sub">
             To install or update, paste this into Terminal and press Return. It
             keeps your settings, history and permissions:
@@ -146,6 +146,41 @@
         </div>
       </section>
       <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.12">
+          <header class="rel-head">
+            <h2>Lipik 0.1.12</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-30">30 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.12"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>Real names in Slack huddles, from Slack's own talking marker.</p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Real names in Slack huddles.</strong> Slack marks
+                whoever is talking in a huddle. Lipik can now read that marker
+                while it records a huddle and put each person&#x27;s Slack name
+                on their voice, even in a first meeting where nobody says a
+                name. It reads only the huddle tiles, never messages, and keeps
+                the names and times with the meeting on your Mac. Turn it on in
+                <strong>Settings → Meetings → Names from Slack huddles</strong>.
+                Keep the huddle on the desktop you&#x27;re using: macOS
+                can&#x27;t read windows on another desktop.
+              </li>
+              <li>
+                <strong>Careful by design.</strong> A voice is named only when
+                Slack&#x27;s marker clearly matches it for at least 10 seconds.
+                Two people sharing one laptop, or a tile that matches two
+                voices, stay as Speaker 1 and Speaker 2. Names you set yourself
+                always win.
+              </li>
+            </ul>
+          </div>
+        </article>
         <article class="rel" id="v0.1.11">
           <header class="rel-head">
             <h2>Lipik 0.1.11</h2>

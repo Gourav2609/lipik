@@ -256,78 +256,12 @@ fn capture(_with_title: bool) -> AppContext {
 
 #[cfg(target_os = "macos")]
 mod ax {
-    use std::ffi::{c_char, c_void, CStr, CString};
-
-    type CfTypeRef = *const c_void;
-    const UTF8: u32 = 0x0800_0100;
+    use crate::ax::{copy, string, Cf, CfTypeRef};
 
     #[link(name = "ApplicationServices", kind = "framework")]
     unsafe extern "C" {
         fn AXUIElementCreateApplication(pid: i32) -> CfTypeRef;
-        fn AXUIElementCopyAttributeValue(
-            element: CfTypeRef,
-            attribute: CfTypeRef,
-            value: *mut CfTypeRef,
-        ) -> i32;
         fn AXUIElementSetMessagingTimeout(element: CfTypeRef, seconds: f32) -> i32;
-    }
-
-    #[link(name = "CoreFoundation", kind = "framework")]
-    unsafe extern "C" {
-        fn CFStringCreateWithCString(
-            allocator: CfTypeRef,
-            text: *const c_char,
-            encoding: u32,
-        ) -> CfTypeRef;
-        fn CFStringGetCString(
-            string: CfTypeRef,
-            buffer: *mut c_char,
-            size: isize,
-            encoding: u32,
-        ) -> u8;
-        fn CFGetTypeID(value: CfTypeRef) -> usize;
-        fn CFStringGetTypeID() -> usize;
-        fn CFRelease(value: CfTypeRef);
-    }
-
-    struct Cf(CfTypeRef);
-
-    impl Drop for Cf {
-        fn drop(&mut self) {
-            if !self.0.is_null() {
-                // SAFETY: every Cf holds a reference returned by a Create/Copy call.
-                unsafe { CFRelease(self.0) };
-            }
-        }
-    }
-
-    fn copy(element: &Cf, attribute: &str) -> Option<Cf> {
-        let name = CString::new(attribute).ok()?;
-        // SAFETY: name is a valid NUL-terminated string.
-        let name = Cf(unsafe { CFStringCreateWithCString(std::ptr::null(), name.as_ptr(), UTF8) });
-        let mut value: CfTypeRef = std::ptr::null();
-        // SAFETY: element and name are live; value receives a +1 reference.
-        let error = unsafe { AXUIElementCopyAttributeValue(element.0, name.0, &mut value) };
-        (error == 0 && !value.is_null()).then(|| Cf(value))
-    }
-
-    fn string(value: &Cf) -> Option<String> {
-        // SAFETY: value is live and read as a string only after its type is
-        // checked; the buffer is NUL-terminated on success.
-        unsafe {
-            if CFGetTypeID(value.0) != CFStringGetTypeID() {
-                return None;
-            }
-            let mut buffer = [0 as c_char; 1024];
-            if CFStringGetCString(value.0, buffer.as_mut_ptr(), buffer.len() as isize, UTF8) == 0 {
-                return None;
-            }
-            Some(
-                CStr::from_ptr(buffer.as_ptr())
-                    .to_string_lossy()
-                    .into_owned(),
-            )
-        }
     }
 
     pub fn focused_window_title(pid: i32) -> Option<String> {
@@ -338,8 +272,8 @@ mod ax {
         }
         // SAFETY: app is a live AXUIElement.
         unsafe { AXUIElementSetMessagingTimeout(app.0, 0.3) };
-        let window = copy(&app, "AXFocusedWindow")?;
-        string(&copy(&window, "AXTitle")?)
+        let window = copy(&app, "AXFocusedWindow").ok()?;
+        string(&copy(&window, "AXTitle").ok()?)
     }
 }
 

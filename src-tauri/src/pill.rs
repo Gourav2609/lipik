@@ -313,14 +313,10 @@ fn left_button_down() -> bool {
 
 #[cfg(target_os = "macos")]
 mod ax {
-    use std::ffi::{c_char, c_void, CStr, CString};
+    use crate::ax::{cf_string, copy, string, AxError, Cf, CfTypeRef, AX_ERROR_NO_VALUE};
+    use std::ffi::c_void;
     use std::time::Duration;
 
-    type CfTypeRef = *const c_void;
-    type AxError = i32;
-
-    const AX_ERROR_NO_VALUE: AxError = -25212;
-    const UTF8: u32 = 0x0800_0100;
     const EDITABLE_ROLES: [&str; 3] = ["AXTextField", "AXTextArea", "AXComboBox"];
     /// Focus on one of these is clearly not on text. Generic roles (window,
     /// group, unknown) are left out: terminals and half-built Electron trees
@@ -345,11 +341,6 @@ mod ax {
     #[link(name = "ApplicationServices", kind = "framework")]
     unsafe extern "C" {
         fn AXUIElementCreateSystemWide() -> CfTypeRef;
-        fn AXUIElementCopyAttributeValue(
-            element: CfTypeRef,
-            attribute: CfTypeRef,
-            value: *mut CfTypeRef,
-        ) -> AxError;
         fn AXUIElementSetAttributeValue(
             element: CfTypeRef,
             attribute: CfTypeRef,
@@ -369,69 +360,6 @@ mod ax {
     #[link(name = "CoreFoundation", kind = "framework")]
     unsafe extern "C" {
         static kCFBooleanTrue: CfTypeRef;
-        fn CFStringCreateWithCString(
-            allocator: CfTypeRef,
-            text: *const c_char,
-            encoding: u32,
-        ) -> CfTypeRef;
-        fn CFStringGetCString(
-            string: CfTypeRef,
-            buffer: *mut c_char,
-            size: isize,
-            encoding: u32,
-        ) -> u8;
-        fn CFGetTypeID(value: CfTypeRef) -> usize;
-        fn CFStringGetTypeID() -> usize;
-        fn CFRelease(value: CfTypeRef);
-    }
-
-    /// An owned (+1) Core Foundation reference.
-    struct Cf(CfTypeRef);
-
-    impl Drop for Cf {
-        fn drop(&mut self) {
-            if !self.0.is_null() {
-                // SAFETY: every Cf holds a reference returned by a Create/Copy call.
-                unsafe { CFRelease(self.0) };
-            }
-        }
-    }
-
-    fn cf_string(text: &str) -> Cf {
-        let text = CString::new(text).unwrap_or_default();
-        // SAFETY: text is a valid NUL-terminated UTF-8 string.
-        Cf(unsafe { CFStringCreateWithCString(std::ptr::null(), text.as_ptr(), UTF8) })
-    }
-
-    fn copy(element: &Cf, attribute: &str) -> Result<Cf, AxError> {
-        let name = cf_string(attribute);
-        let mut value: CfTypeRef = std::ptr::null();
-        // SAFETY: element and name are live references; value receives a +1 reference.
-        let error = unsafe { AXUIElementCopyAttributeValue(element.0, name.0, &mut value) };
-        match (error, value.is_null()) {
-            (0, false) => Ok(Cf(value)),
-            (0, true) => Err(AX_ERROR_NO_VALUE),
-            _ => Err(error),
-        }
-    }
-
-    fn string(value: &Cf) -> Option<String> {
-        // SAFETY: value is a live CF reference, read as a string only after
-        // its type is checked; the buffer is NUL-terminated on success.
-        unsafe {
-            if CFGetTypeID(value.0) != CFStringGetTypeID() {
-                return None;
-            }
-            let mut buffer = [0 as c_char; 64];
-            if CFStringGetCString(value.0, buffer.as_mut_ptr(), buffer.len() as isize, UTF8) == 0 {
-                return None;
-            }
-            Some(
-                CStr::from_ptr(buffer.as_ptr())
-                    .to_string_lossy()
-                    .into_owned(),
-            )
-        }
     }
 
     /// kAXValueCFRangeType

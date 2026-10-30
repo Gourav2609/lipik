@@ -18,6 +18,7 @@ mod live;
 pub mod mcp;
 mod store;
 mod transcribe;
+mod window;
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
@@ -50,6 +51,8 @@ pub struct NotetakerSettings {
     /// What people speak in meetings; Hinglish keeps Hindi words and names
     /// in the final transcript.
     pub language: MeetingLanguage,
+    /// Read who Slack shows as talking in a huddle to name speakers.
+    pub meeting_window_names: bool,
 }
 
 /// `Auto` decides per meeting by listening for Hindi; see `hinglish`.
@@ -72,6 +75,7 @@ impl Default for NotetakerSettings {
             ollama_url: "http://127.0.0.1:11434".to_string(),
             ollama_model: "qwen3:8b".to_string(),
             language: MeetingLanguage::default(),
+            meeting_window_names: false,
         }
     }
 }
@@ -1032,6 +1036,20 @@ impl NotetakerManager {
                     .ok()
             })
             .collect();
+        #[cfg(target_os = "macos")]
+        let window = settings(&self.app)
+            .meeting_window_names
+            .then(|| {
+                let this = self.clone();
+                let dir = self.meeting_dir(id);
+                let stop = stop.clone();
+                std::thread::Builder::new()
+                    .name("notetaker-window".into())
+                    .spawn(move || window::record(|| this.linked_bundle(), &dir, started, &stop))
+                    .inspect_err(|e| log::warn!("Notetaker huddle reader did not start: {e}"))
+                    .ok()
+            })
+            .flatten();
         let max = Duration::from_secs(settings(&self.app).max_recording_minutes.max(1) as u64 * 60);
         let mut last_status = String::new();
         let mut next_mic_retry = Instant::now();
@@ -1071,6 +1089,10 @@ impl NotetakerManager {
         }
         for worker in workers {
             let _ = worker.join();
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(window) = window {
+            let _ = window.join();
         }
     }
 
@@ -1738,7 +1760,27 @@ impl NotetakerManager {
             log::warn!("Notetaker could not save the voices of {id}: {e}");
         }
         let profiles = self.store.voice_profiles(Some(id)).unwrap_or_default();
-        for (n, name) in diarize::known_names(speakers, &profiles, &meeting.attendees) {
+        let mut names = diarize::known_names(speakers, &profiles, &meeting.attendees);
+        let window = window_namings(
+            &self.meeting_dir(id),
+            meeting,
+            &speakers.turns,
+            segments,
+            &own_names_in(meeting),
+        );
+        let from_voice = |name: &str| profiles.iter().any(|p| p.name == name);
+        for (key, ..) in diarize::add_window_names(&mut names, &from_voice, &window) {
+            log::info!(
+                "Notetaker kept the saved voice for {key} of {id}: the huddle window showed someone else"
+            );
+        }
+        if !window.is_empty() {
+            log::info!(
+                "Notetaker named {:?} of {id} from the huddle window",
+                window.iter().map(|n| n.key.as_str()).collect::<Vec<_>>()
+            );
+        }
+        for (n, name) in names {
             diarize::apply_name(segments, &diarize::speaker_key(n), &name);
         }
     }
@@ -2381,6 +2423,38 @@ fn background_priority() {
     }
 }
 
+/// Names the huddle window gives the call's voices (`turns` in WAV time).
+fn window_namings(
+    dir: &std::path::Path,
+    meeting: &Meeting,
+    turns: &[diarize::Turn],
+    segments: &[Segment],
+    own: &[String],
+) -> Vec<diarize::Naming> {
+    let samples = window::load(dir);
+    if samples.is_empty() {
+        return Vec::new();
+    }
+    let offset = meeting.system_offset_ms.unwrap_or(0);
+    let turns: Vec<(i64, i64, String)> = turns
+        .iter()
+        .filter(|t| t.speaker != diarize::UNKNOWN)
+        .map(|t| {
+            (
+                t.start_ms + offset,
+                t.end_ms + offset,
+                diarize::speaker_key(t.speaker),
+            )
+        })
+        .collect();
+    let mic: Vec<(i64, i64)> = segments
+        .iter()
+        .filter(|s| s.source == "mic")
+        .map(|s| (s.start_ms, s.end_ms))
+        .collect();
+    diarize::window_names(&samples, &turns, &mic, own)
+}
+
 /// The user's names and emails from the invite and the Mac account.
 fn own_names_in(meeting: &Meeting) -> Vec<String> {
     let mut own: Vec<String> = meeting
@@ -2722,7 +2796,9 @@ mod tests {
     /// system.wav> and LIPIK_TRANSCRIBE_WORKER_EXE=<built lipik> first redoes
     /// the transcript in Hinglish the way a redo does (the result is also
     /// written to <out>.segments.json). LIPIK_TEST_SEGMENTS=<such a file>
-    /// uses a transcript redone before.
+    /// uses a transcript redone before. LIPIK_TEST_WINDOW=<folder with
+    /// copies of window-speakers.jsonl and call-turns.json> adds the names
+    /// from the huddle window.
     #[test]
     #[ignore]
     fn naming_check() {
@@ -2857,10 +2933,32 @@ mod tests {
                 speech_ms: vec![0; count],
             };
             let profiles = store.voice_profiles(Some(&id)).unwrap();
-            for (n, name) in diarize::known_names(&speakers, &profiles, &meeting.attendees) {
+            let mut names = diarize::known_names(&speakers, &profiles, &meeting.attendees);
+            let from_voice = |name: &str| profiles.iter().any(|p| p.name == name);
+            let window = match std::env::var("LIPIK_TEST_WINDOW") {
+                Ok(dir) => {
+                    let dir = PathBuf::from(dir);
+                    let turns = load_call_turns(&dir).expect("no call-turns.json");
+                    window_namings(&dir, &meeting, &turns, &segments, &own)
+                }
+                Err(_) => Vec::new(),
+            };
+            let kept = diarize::add_window_names(&mut names, &from_voice, &window);
+            println!(
+                "NAMING window named {} voices; saved voices kept over the window: {}",
+                window.len(),
+                kept.len()
+            );
+            for (n, name) in names {
                 let key = diarize::speaker_key(n);
-                let voice = profiles.iter().any(|p| p.name == name);
-                rules.insert(key.clone(), if voice { "voice" } else { "calendar_1to1" });
+                let rule = if from_voice(&name) {
+                    "voice"
+                } else if window.iter().any(|w| w.key == key && w.name == name) {
+                    "window"
+                } else {
+                    "calendar_1to1"
+                };
+                rules.insert(key.clone(), rule);
                 diarize::apply_name(&mut segments, &key, &name);
             }
         }
@@ -2881,6 +2979,7 @@ mod tests {
                     diarize::NameRule::Introduction => "introduction",
                     diarize::NameRule::Addressed => "addressed",
                     diarize::NameRule::HandedOver => "handed_over",
+                    diarize::NameRule::Window => "window",
                 },
             );
             diarize::apply_name(&mut segments, &n.key, &n.name);

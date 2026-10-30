@@ -5,6 +5,8 @@ mod apple_speech;
 mod audio_feedback;
 pub mod audio_toolkit;
 mod autostart;
+#[cfg(target_os = "macos")]
+mod ax;
 mod brand;
 mod catalog;
 mod chinese_script;

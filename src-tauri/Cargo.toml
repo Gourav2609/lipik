@@ -1,6 +1,6 @@
 [package]
 name = "lipik"
-version = "0.1.11"
+version = "0.1.12"
 description = "Lipik"
 authors = ["Gourav"]
 edition = "2021"

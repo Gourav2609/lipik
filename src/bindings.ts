@@ -1943,7 +1943,11 @@ max_recording_minutes: number; ollama_url: string; ollama_model: string;
  * What people speak in meetings; Hinglish keeps Hindi words and names
  * in the final transcript.
  */
-language: MeetingLanguage }
+language: MeetingLanguage; 
+/**
+ * Read who Slack shows as talking in a huddle to name speakers.
+ */
+meeting_window_names: boolean }
 export type NotetakerState = { recording: boolean; meeting_id: string | null }
 export type NotetakerStatus = { recording: boolean; 
 /**

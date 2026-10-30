@@ -1,0 +1,201 @@
+[
+  {
+    "r": "AXWindow",
+    "k": [
+      {
+        "r": "AXGroup",
+        "dc": "p-client_workspace",
+        "k": [
+          {
+            "r": "AXGroup",
+            "dc": "p-message_pane c-message_list",
+            "k": [
+              {
+                "r": "AXStaticText",
+                "va": "SECRET message text"
+              },
+              {
+                "r": "AXGroup",
+                "dc": "p-huddle_window_content",
+                "k": [
+                  {
+                    "r": "AXCell",
+                    "dc": "p-huddle_peer_tile",
+                    "de": "View Ravi's profile"
+                  }
+                ]
+              }
+            ],
+            "de": "SECRET message list"
+          },
+          {
+            "r": "AXGroup",
+            "dc": "toolbarContainer bottomBar",
+            "k": [
+              {
+                "r": "AXStaticText",
+                "va": "Huddle with "
+              },
+              {
+                "r": "AXStaticText",
+                "va": "SECRET Priya"
+              }
+            ]
+          },
+          {
+            "r": "AXToolbar",
+            "dc": "p-control_strip",
+            "de": "SECRET Control strip",
+            "k": [
+              {
+                "r": "AXPopUpButton",
+                "dc": "c-button-unstyled p-ia__nav__user__button",
+                "de": "User: Mohan"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "de": "SECRET channel name - Slack"
+  },
+  {
+    "r": "AXWindow",
+    "k": [
+      {
+        "r": "AXGroup",
+        "dc": "p-view_contents p-view_contents--primary p-view_contents--huddle",
+        "k": [
+          {
+            "r": "AXGroup",
+            "dc": "p-huddle_window_content p-huddle_window_content--expanded-view",
+            "de": "Gallery",
+            "k": [
+              {
+                "r": "AXGroup",
+                "dc": "p-huddle_background__container"
+              },
+              {
+                "r": "AXGroup",
+                "dc": "p-huddle_window_content__container",
+                "k": [
+                  {
+                    "r": "AXCheckBox",
+                    "de": "AI Notes: Off",
+                    "va": "0"
+                  },
+                  {
+                    "r": "AXToolbar",
+                    "dc": "p-huddle_window_content__gallery_toolbar",
+                    "k": [
+                      {
+                        "r": "AXTable",
+                        "dc": "p-huddle_grid_component",
+                        "k": [
+                          {
+                            "r": "AXRow",
+                            "dc": "p-bp__grid_row offscreen",
+                            "de": "View Mohan's profile View Priya's profile",
+                            "k": [
+                              {
+                                "r": "AXCell",
+                                "dc": "p-huddle_peer_tile",
+                                "de": "View Mohan's profile",
+                                "k": [
+                                  {
+                                    "r": "AXGroup"
+                                  },
+                                  {
+                                    "r": "AXGroup",
+                                    "dc": "p-huddle_peer_tile__mic_overlay p-huddle_peer_tile__overlay--active_speaker",
+                                    "k": [
+                                      {
+                                        "r": "AXGroup",
+                                        "dc": "micIcon__XE9Cj"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "r": "AXButton",
+                                    "dc": "p-huddle_peer_tile__name_overlay p-huddle_peer_tile__name_overlay--unmuted",
+                                    "de": "video is off, audio is on",
+                                    "k": [
+                                      {
+                                        "r": "AXStaticText",
+                                        "va": "Mohan"
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "r": "AXPopUpButton",
+                                    "de": "More actions"
+                                  }
+                                ]
+                              },
+                              {
+                                "r": "AXCell",
+                                "dc": "p-huddle_peer_tile",
+                                "de": "View Priya’s profile",
+                                "k": [
+                                  {
+                                    "r": "AXGroup"
+                                  },
+                                  {
+                                    "r": "AXGroup",
+                                    "dc": "p-huddle_peer_tile__name_overlay p-huddle_peer_tile__name_overlay--unmuted",
+                                    "k": [
+                                      {
+                                        "r": "AXStaticText",
+                                        "va": "Priya"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "r": "AXButton",
+                                "dc": "p-huddle_peer_tile",
+                                "k": [
+                                  {
+                                    "r": "AXGroup",
+                                    "dc": "p-huddle_peer_tile__name_overlay",
+                                    "k": [
+                                      {
+                                        "r": "AXStaticText",
+                                        "va": "Asha"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "r": "AXColumn",
+                            "k": [
+                              {
+                                "r": "AXCell",
+                                "dc": "p-huddle_peer_tile",
+                                "de": "View Ravi's profile",
+                                "k": [
+                                  {
+                                    "r": "AXGroup",
+                                    "dc": "p-huddle_peer_tile__mic_overlay p-huddle_peer_tile__overlay--active_speaker"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

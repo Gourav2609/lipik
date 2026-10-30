@@ -795,6 +795,258 @@ pub fn known_names(
     names
 }
 
+/// Time step for matching the huddle window with the audio.
+const WINDOW_STEP_MS: i64 = 100;
+/// A window sample stands for the time until the next one, at most this
+/// long: a stalled reader says nothing about the time it missed.
+const WINDOW_SAMPLE_MS: i64 = 1_500;
+/// Speech a voice needs while the window shows one other person talking.
+const WINDOW_MIN_MS: i64 = 10_000;
+/// Share of that speech one name needs.
+const WINDOW_SHARE: f64 = 0.7;
+/// The tile shown talking while only the microphone speaks is the user's
+/// when it is shown for at least this long and at least `WINDOW_OWN_RATIO`
+/// times as long as any other tile.
+const WINDOW_OWN_MS: i64 = 6_000;
+const WINDOW_OWN_RATIO: i64 = 3;
+/// Slack's talking marks trail the voice: right after a mark changes, the
+/// window may still show the person who just stopped.
+const WINDOW_MARK_LAG_MS: i64 = 1_500;
+
+/// Names from the call window's "talking" marks (`window::Sample`, meeting
+/// time): a call voice (turns in meeting time) is named X when at least
+/// `WINDOW_MIN_MS` of its speech falls where the window shows exactly one
+/// person other than the user talking, and X has at least `WINDOW_SHARE` of
+/// it. A tile that a second voice also talks under for `WINDOW_MIN_MS`
+/// (e.g. a room on one laptop) names neither.
+/// The user's tiles: those whose full name is one of `own` (emails are
+/// ignored), and the tile Slack's signed-in label ("User: X") fits, equal
+/// or one a whole-word prefix of the other. The tile shown talking while
+/// only the microphone (`mic` spans) speaks picks among several that fit;
+/// when none fits, or it disagrees, it is the user's too.
+pub fn window_names(
+    samples: &[super::window::Sample],
+    turns: &[(i64, i64, String)],
+    mic: &[(i64, i64)],
+    own: &[String],
+) -> Vec<Naming> {
+    let end = turns
+        .iter()
+        .map(|t| t.1)
+        .chain(mic.iter().map(|m| m.1))
+        .chain(
+            samples
+                .iter()
+                .map(|s| s.ms_since_meeting_start + WINDOW_SAMPLE_MS),
+        )
+        .max()
+        .unwrap_or(0);
+    let steps = (end.max(0) / WINDOW_STEP_MS + 1) as usize;
+    let index = |ms: i64| ((ms.max(0) / WINDOW_STEP_MS) as usize).min(steps);
+
+    let mut keys: Vec<&str> = Vec::new();
+    let mut voice: Vec<Option<usize>> = vec![None; steps];
+    for (start, end, key) in turns {
+        let k = match keys.iter().position(|k| k == key) {
+            Some(k) => k,
+            None => {
+                keys.push(key);
+                keys.len() - 1
+            }
+        };
+        for v in &mut voice[index(*start)..index(*end).max(index(*start))] {
+            *v = Some(k);
+        }
+    }
+    let mut on_mic = vec![false; steps];
+    for &(start, end) in mic {
+        for m in &mut on_mic[index(start)..index(end).max(index(start))] {
+            *m = true;
+        }
+    }
+    let mut shown: Vec<Option<usize>> = vec![None; steps];
+    let mut settled: Vec<i64> = vec![0; samples.len()];
+    let mut marks: Option<&[String]> = None;
+    let mut changed_at = 0;
+    for (n, s) in samples.iter().enumerate() {
+        if s.gap {
+            marks = None;
+            continue;
+        }
+        if marks != Some(s.speaking.as_slice()) {
+            changed_at = s.ms_since_meeting_start;
+            marks = Some(&s.speaking);
+        }
+        settled[n] = changed_at + WINDOW_MARK_LAG_MS;
+        let start = s.ms_since_meeting_start;
+        let until = samples
+            .get(n + 1)
+            .map_or(i64::MAX, |next| next.ms_since_meeting_start)
+            .min(start + WINDOW_SAMPLE_MS);
+        for at in &mut shown[index(start)..index(until).max(index(start))] {
+            *at = Some(n);
+        }
+    }
+
+    let full = |name: &str| {
+        name.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    };
+    let own: HashSet<String> = own
+        .iter()
+        .filter(|o| !o.contains('@'))
+        .map(|o| full(o))
+        .collect();
+    let labels: Vec<Vec<String>> = samples
+        .iter()
+        .filter_map(|s| s.user.as_deref())
+        .map(|u| full(u).split(' ').map(str::to_string).collect())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let tiles: HashSet<&str> = samples
+        .iter()
+        .flat_map(|s| s.present.iter().chain(&s.speaking))
+        .map(String::as_str)
+        .collect();
+    let labelled: HashSet<&str> = tiles
+        .iter()
+        .copied()
+        .filter(|t| {
+            let words: Vec<String> = full(t).split(' ').map(str::to_string).collect();
+            labels
+                .iter()
+                .any(|l| words.starts_with(l) || l.starts_with(&words))
+        })
+        .collect();
+
+    let mut mic_alone: HashMap<&str, i64> = HashMap::new();
+    for i in 0..steps {
+        let Some(n) = shown[i] else { continue };
+        if !on_mic[i] || voice[i].is_some() || (i as i64) * WINDOW_STEP_MS < settled[n] {
+            continue;
+        }
+        for name in &samples[n].speaking {
+            *mic_alone.entry(name).or_default() += WINDOW_STEP_MS;
+        }
+    }
+    let mut by_mic: Vec<(&str, i64)> = mic_alone.into_iter().collect();
+    by_mic.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    let on_mic_alone = by_mic.first().and_then(|&(name, ms)| {
+        let next = by_mic.get(1).map_or(0, |n| n.1);
+        (ms >= WINDOW_OWN_MS && ms >= WINDOW_OWN_RATIO * next).then_some(name)
+    });
+
+    let mut users: HashSet<&str> = tiles
+        .iter()
+        .copied()
+        .filter(|t| own.contains(&full(t)))
+        .collect();
+    match on_mic_alone {
+        Some(mic) if labelled.is_empty() || labelled.contains(mic) => {
+            users.insert(mic);
+        }
+        Some(mic) => {
+            users.insert(mic);
+            users.extend(&labelled);
+        }
+        None => users.extend(&labelled),
+    }
+
+    let mut heard: Vec<HashMap<&str, i64>> = vec![HashMap::new(); keys.len()];
+    for i in 0..steps {
+        let (Some(k), Some(n)) = (voice[i], shown[i]) else {
+            continue;
+        };
+        let others: Vec<&str> = samples[n]
+            .speaking
+            .iter()
+            .map(String::as_str)
+            .filter(|n| !users.contains(n))
+            .collect();
+        if let [name] = others[..] {
+            *heard[k].entry(name).or_default() += WINDOW_STEP_MS;
+        }
+    }
+    let shared = |name: &str| {
+        let mut under: Vec<i64> = heard
+            .iter()
+            .filter_map(|names| names.get(name).copied())
+            .filter(|&ms| ms >= WINDOW_MIN_MS)
+            .collect();
+        under.sort_unstable_by(|a, b| b.cmp(a));
+        under.len() > 1
+    };
+    let mut out: Vec<Naming> = Vec::new();
+    for (k, names) in heard.iter().enumerate() {
+        let total: i64 = names.values().sum();
+        let best = names.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)));
+        let Some((&name, &ms)) = best else { continue };
+        let most = heard
+            .iter()
+            .all(|other| other.get(name).is_none_or(|&o| o <= ms));
+        if ms >= WINDOW_MIN_MS && ms as f64 >= WINDOW_SHARE * total as f64 && most && !shared(name)
+        {
+            out.push(Naming {
+                key: keys[k].to_string(),
+                name: name.to_string(),
+                rule: NameRule::Window,
+                lines: Vec::new(),
+            });
+        }
+    }
+    out.sort_by(|a, b| a.key.cmp(&b.key));
+    out
+}
+
+/// Adds the window's names to those known from saved voices and the
+/// calendar. The window beats the calendar; a saved voice beats the window,
+/// both on its own voice and for a name the window would give another.
+/// Returns each disagreement with a saved voice as (key, saved, window).
+pub fn add_window_names(
+    known: &mut HashMap<usize, String>,
+    from_voice: &dyn Fn(&str) -> bool,
+    window: &[Naming],
+) -> Vec<(String, String, String)> {
+    let mut kept = Vec::new();
+    for n in window {
+        let Some(i) = n
+            .key
+            .strip_prefix('s')
+            .and_then(|i| i.parse::<usize>().ok())
+            .and_then(|i| i.checked_sub(1))
+        else {
+            continue;
+        };
+        let same = |a: &str| a.trim().eq_ignore_ascii_case(n.name.trim());
+        if let Some(current) = known.get(&i) {
+            if same(current) {
+                continue;
+            }
+            if from_voice(current) {
+                kept.push((n.key.clone(), current.clone(), n.name.clone()));
+                continue;
+            }
+        }
+        let elsewhere: Vec<usize> = known
+            .iter()
+            .filter(|&(&other, name)| other != i && same(name))
+            .map(|(&other, _)| other)
+            .collect();
+        if let Some(&other) = elsewhere.iter().find(|&&o| from_voice(&known[&o])) {
+            kept.push((speaker_key(other), known[&other].clone(), n.name.clone()));
+            continue;
+        }
+        for other in elsewhere {
+            known.remove(&other);
+        }
+        known.insert(i, n.name.clone());
+    }
+    kept
+}
+
 /// A voice counts as answering a name said before it only if it talks at
 /// least `HANDOVER_TALK_MS` within `HANDOVER_WINDOW_MS` after that line: a
 /// "Yeah." from someone else between the name and the person named is not
@@ -1117,6 +1369,8 @@ pub enum NameRule {
     Addressed,
     /// Hand-overs alone, without a model guess.
     HandedOver,
+    /// The call app's window showed who was talking (`window_names`).
+    Window,
 }
 
 /// A name given to a speaker, with the lines that back it.
@@ -2486,6 +2740,277 @@ mod tests {
             let voices: Vec<Vec<f32>> = s.voices.iter().flatten().cloned().collect();
             std::fs::write(out, serde_json::to_string(&voices).unwrap()).unwrap();
         }
+    }
+
+    use super::super::window::{self, Sample};
+
+    /// Window samples every 700 ms from `from` to `to`, `speaking` shown
+    /// talking, Mohan and Priya present, Mohan signed in to Slack.
+    fn shown(from: i64, to: i64, speaking: &[&str]) -> Vec<Sample> {
+        (from..to)
+            .step_by(700)
+            .map(|ms| Sample {
+                ms_since_meeting_start: ms,
+                speaking: speaking.iter().map(|s| s.to_string()).collect(),
+                present: vec!["Mohan".into(), "Priya".into()],
+                gap: false,
+                user: Some("Mohan".into()),
+            })
+            .collect()
+    }
+
+    /// The samples as read when Slack's signed-in name was not found.
+    fn unsigned(mut samples: Vec<Sample>) -> Vec<Sample> {
+        for s in &mut samples {
+            s.user = None;
+        }
+        samples
+    }
+
+    fn turn(start: i64, end: i64, key: &str) -> (i64, i64, String) {
+        (start, end, key.to_string())
+    }
+
+    fn mohan() -> Vec<String> {
+        vec![
+            "Mohan Lal".to_string(),
+            "mohan.kumar@example.com".to_string(),
+        ]
+    }
+
+    fn window_named(
+        samples: &[Sample],
+        turns: &[(i64, i64, String)],
+        mic: &[(i64, i64)],
+        own: &[String],
+    ) -> Vec<(String, String)> {
+        window_names(samples, turns, mic, own)
+            .into_iter()
+            .inspect(|n| assert_eq!(n.rule, NameRule::Window))
+            .map(|n| (n.key, n.name))
+            .collect()
+    }
+
+    #[test]
+    fn the_window_names_the_voice_it_shows_talking() {
+        let samples = window::parse(include_str!("window_speakers_fixture.jsonl"));
+        let turns = [
+            turn(2_300, 19_800, "s1"),
+            turn(30_400, 44_500, "s1"),
+            turn(45_000, 50_000, "s1"),
+            turn(50_300, 57_900, "s2"),
+        ];
+        let mic = [(20_200, 29_600), (38_000, 41_000)];
+        let named = window_named(&samples, &turns, &mic, &mohan());
+        assert_eq!(named, [("s1".to_string(), "Priya".to_string())]);
+        let named = window_named(&unsigned(samples), &turns, &mic, &[]);
+        assert_eq!(
+            named,
+            [("s1".to_string(), "Priya".to_string())],
+            "Mohan is found as the user by talking while only the microphone does"
+        );
+    }
+
+    #[test]
+    fn a_short_overlap_names_nobody() {
+        let samples = shown(0, 9_000, &["Priya"]);
+        let named = window_named(&samples, &[turn(0, 9_000, "s1")], &[], &mohan());
+        assert!(named.is_empty());
+    }
+
+    #[test]
+    fn a_mixed_voice_needs_most_of_its_speech_under_one_name() {
+        let mut samples = shown(0, 12_600, &["Priya"]);
+        samples.extend(shown(12_600, 21_000, &["Ravi"]));
+        let named = window_named(&samples, &[turn(0, 21_000, "s1")], &[], &mohan());
+        assert!(named.is_empty(), "60% Priya is not enough");
+    }
+
+    #[test]
+    fn the_users_own_tile_never_names_a_call_voice() {
+        let samples = shown(0, 20_000, &["Mohan"]);
+        let turns = [turn(0, 20_000, "s1")];
+        assert!(window_named(&samples, &turns, &[], &mohan()).is_empty());
+
+        let mut samples = shown(0, 9_000, &["Mohan"]);
+        samples.extend(shown(9_100, 29_000, &["Mohan", "Priya"]));
+        let named = window_named(
+            &unsigned(samples),
+            &[turn(9_100, 29_000, "s1")],
+            &[(0, 9_000)],
+            &[],
+        );
+        assert_eq!(
+            named,
+            [("s1".to_string(), "Priya".to_string())],
+            "talking over the user still counts for the other person"
+        );
+    }
+
+    #[test]
+    fn the_user_is_known_by_full_name_never_by_first_name_or_email() {
+        let samples: Vec<Sample> = unsigned(shown(0, 20_000, &["Mohan Kumar"]));
+        let turns = [turn(0, 20_000, "s1")];
+        assert_eq!(
+            window_named(&samples, &turns, &[], &mohan()),
+            [("s1".to_string(), "Mohan Kumar".to_string())],
+            "Mohan Lal's colleague Mohan Kumar is not the user"
+        );
+        let own = ["Mohan  kumar".to_string()];
+        assert!(window_named(&samples, &turns, &[], &own).is_empty());
+    }
+
+    #[test]
+    fn slacks_signed_in_name_is_the_user() {
+        let mut samples = shown(0, 20_000, &["Priya"]);
+        for s in &mut samples {
+            s.user = Some("Priya".into());
+        }
+        let turns = [turn(0, 20_000, "s1")];
+        assert!(window_named(&samples, &turns, &[], &[]).is_empty());
+    }
+
+    /// Samples with only `tiles` present, `speaking` talking, Slack's
+    /// signed-in label `user`.
+    fn tiles(from: i64, to: i64, tiles: &[&str], speaking: &[&str], user: &str) -> Vec<Sample> {
+        shown(from, to, speaking)
+            .into_iter()
+            .map(|mut s| {
+                s.present = tiles.iter().map(|t| t.to_string()).collect();
+                s.user = Some(user.to_string());
+                s
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_voice_talking_over_the_user_never_gets_the_users_name() {
+        let both = ["Mohan Kumar", "Priya"];
+        for label in ["Mohan", "Mohan Kumar Rao"] {
+            let mut samples = tiles(0, 10_000, &both, &["Mohan Kumar"], label);
+            samples.extend(tiles(10_000, 30_000, &both, &["Mohan Kumar"], label));
+            let turns = [turn(10_000, 30_000, "s1")];
+            let mic = [(0, 30_000)];
+            assert!(
+                window_named(&samples, &turns, &mic, &[]).is_empty(),
+                "label {label}: the call voice talked over Mohan Kumar's tile"
+            );
+        }
+    }
+
+    #[test]
+    fn the_label_matching_two_tiles_is_settled_by_the_microphone() {
+        let all = ["Mohan Kumar", "Mohan Lal"];
+        let mut samples = tiles(0, 10_000, &all, &["Mohan Kumar"], "Mohan");
+        samples.extend(tiles(10_000, 30_000, &all, &["Mohan Lal"], "Mohan"));
+        let named = window_named(&samples, &[turn(10_000, 30_000, "s1")], &[(0, 10_000)], &[]);
+        assert_eq!(named, [("s1".to_string(), "Mohan Lal".to_string())]);
+    }
+
+    #[test]
+    fn a_label_matching_no_tile_falls_back_to_the_microphone() {
+        let all = ["Mohan", "Priya"];
+        let mut samples = tiles(0, 10_000, &all, &["Mohan"], "Gourav");
+        samples.extend(tiles(10_000, 30_000, &all, &["Mohan"], "Gourav"));
+        let named = window_named(&samples, &[turn(10_000, 30_000, "s1")], &[(0, 10_000)], &[]);
+        assert!(named.is_empty(), "Mohan is the user by the microphone");
+    }
+
+    #[test]
+    fn the_microphone_fallback_ignores_marks_that_trail_the_voice() {
+        let mut samples = Vec::new();
+        let mut mic = Vec::new();
+        for j in 0..10 {
+            let t = j * 3_000;
+            samples.extend(shown(t, t + 1_400, &["Priya"]));
+            samples.extend(shown(t + 1_400, t + 3_000, &[]));
+            mic.push((t, t + 1_400));
+        }
+        samples.extend(shown(30_000, 50_000, &["Priya"]));
+        let named = window_named(&unsigned(samples), &[turn(30_000, 50_000, "s1")], &mic, &[]);
+        assert_eq!(
+            named,
+            [("s1".to_string(), "Priya".to_string())],
+            "Priya's mark still on while the user starts talking does not make her the user"
+        );
+    }
+
+    #[test]
+    fn two_voices_one_name_goes_to_the_one_heard_more() {
+        let samples = shown(0, 60_000, &["Priya"]);
+        let turns = [turn(0, 9_000, "s1"), turn(9_000, 55_000, "s2")];
+        let named = window_named(&samples, &turns, &[], &mohan());
+        assert_eq!(named, [("s2".to_string(), "Priya".to_string())]);
+
+        let turns = [turn(0, 11_000, "s1"), turn(11_000, 55_000, "s2")];
+        assert!(
+            window_named(&samples, &turns, &[], &mohan()).is_empty(),
+            "a second voice with 10 s or more under the tile names neither"
+        );
+
+        let turns = [turn(0, 12_000, "s1"), turn(12_000, 30_000, "s2")];
+        assert!(
+            window_named(&samples, &turns, &[], &mohan()).is_empty(),
+            "a tile shared by two voices that both talk a lot names neither"
+        );
+
+        let turns = [turn(0, 15_000, "s1"), turn(15_000, 30_000, "s2")];
+        assert!(
+            window_named(&samples, &turns, &[], &mohan()).is_empty(),
+            "a tie names neither"
+        );
+    }
+
+    #[test]
+    fn gaps_and_a_stalled_reader_count_for_nothing() {
+        let mut samples = shown(0, 5_000, &["Priya"]);
+        samples.push(Sample {
+            ms_since_meeting_start: 5_000,
+            gap: true,
+            ..Default::default()
+        });
+        samples.extend(shown(20_000, 23_000, &["Priya"]));
+        let turns = [turn(0, 26_000, "s1")];
+        assert!(window_named(&samples, &turns, &[], &mohan()).is_empty());
+
+        let sparse: Vec<Sample> = shown(0, 30_000, &["Priya"])
+            .into_iter()
+            .step_by(10)
+            .collect();
+        assert!(
+            window_named(&sparse, &[turn(0, 30_000, "s1")], &[], &mohan()).is_empty(),
+            "one sample every 7 s stands for 1.5 s each"
+        );
+    }
+
+    #[test]
+    fn the_window_beats_the_calendar_but_not_a_saved_voice() {
+        let naming = |key: &str, name: &str| Naming {
+            key: key.into(),
+            name: name.into(),
+            rule: NameRule::Window,
+            lines: Vec::new(),
+        };
+        let saved = |name: &str| name == "Asha";
+
+        let mut known = HashMap::from([(0, "Ravi".to_string())]);
+        let kept = add_window_names(&mut known, &saved, &[naming("s1", "Priya")]);
+        assert_eq!(known, HashMap::from([(0, "Priya".to_string())]));
+        assert!(kept.is_empty());
+
+        let mut known = HashMap::from([(0, "Asha".to_string())]);
+        let kept = add_window_names(&mut known, &saved, &[naming("s1", "Priya")]);
+        assert_eq!(known, HashMap::from([(0, "Asha".to_string())]));
+        assert_eq!(kept, [("s1".into(), "Asha".into(), "Priya".into())]);
+
+        let mut known = HashMap::from([(1, "Asha".to_string())]);
+        let kept = add_window_names(&mut known, &saved, &[naming("s1", "asha")]);
+        assert_eq!(known, HashMap::from([(1, "Asha".to_string())]));
+        assert_eq!(kept.len(), 1, "the name already belongs to a saved voice");
+
+        let mut known = HashMap::from([(1, "Priya".to_string())]);
+        add_window_names(&mut known, &saved, &[naming("s1", "Priya")]);
+        assert_eq!(known, HashMap::from([(0, "Priya".to_string())]));
     }
 
     #[test]
