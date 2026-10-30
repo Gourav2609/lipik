@@ -163,6 +163,11 @@
           sans-serif;
         cursor: pointer;
       }
+      .pct {
+        color: var(--muted);
+        font-size: 13px;
+        margin-left: 6px;
+      }
       .note {
         color: var(--muted);
         font-size: 14px;
@@ -223,6 +228,50 @@
           <tbody id="u-systems"></tbody>
         </table>
       </div>
+      <h2>How far setup got</h2>
+      <div class="split">
+        <table>
+          <thead>
+            <tr>
+              <th>Reached</th>
+              <th class="n">All time</th>
+              <th class="n">Last 30 days</th>
+            </tr>
+          </thead>
+          <tbody id="u-funnel"></tbody>
+        </table>
+        <table>
+          <thead>
+            <tr>
+              <th>Came back, of people who dictated at least once</th>
+              <th class="n">Dictated</th>
+              <th class="n">Came back</th>
+            </tr>
+          </thead>
+          <tbody id="u-retention"></tbody>
+        </table>
+      </div>
+      <p class="note">
+        Each install counts at the furthest step it reached. Installs on app
+        versions that don't send the step are left out. Come-back counts only
+        include installs that dictated at least once. Day 2: of those first seen
+        at least 2 days ago, the ones active again on a later day. Day 7: of
+        those first seen at least 7 days ago, the ones active on day 7 or later.
+        "First seen" is the day of first open for versions that send the step
+        (the count starts after the first setup screen); for older versions it
+        is the day setup was finished.
+      </p>
+      <h2>Website downloads, last 30 days</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Page</th>
+            <th class="n">.dmg clicks</th>
+            <th class="n">Install command copies</th>
+          </tr>
+        </thead>
+        <tbody id="u-site"></tbody>
+      </table>
       <h2>Emails</h2>
       <div class="admin">
         <input
@@ -271,13 +320,15 @@
       </table>
       <p class="note">
         Installs and active people come from the app's anonymous count, sent
-        every 3 hours (a random ID, the version, the macOS version and the chip
-        type; people can turn it off in Settings → Privacy), so they only
-        include versions 0.1.5 and later. Days are India time. Downloads count
-        the .dmg from GitHub Releases, which includes Terminal installs; updates
-        count one-click updates from inside the app. Website visits are in the
-        Cloudflare dashboard under Web Analytics. This page isn't linked from
-        the site and asks search engines not to list it.
+        every 3 hours (a random ID, the version, the macOS version, the chip
+        type and how far setup got; people can turn it off in Settings →
+        Privacy), so they only include versions 0.1.5 and later. Days are India
+        time. Downloads count the .dmg from GitHub Releases, which includes
+        Terminal installs; updates count one-click updates from inside the app.
+        Website downloads count clicks on the .dmg links and copies of the
+        install command on this site (the page and the day only). Website visits
+        are in the Cloudflare dashboard under Web Analytics. This page isn't
+        linked from the site and asks search engines not to list it.
       </p>
     </main>
     <script>
@@ -323,6 +374,40 @@
           $("u-versions").innerHTML = rows(u.versions);
           $("u-countries").innerHTML = rows(u.countries);
           $("u-systems").innerHTML = rows(u.systems);
+          const pct = (n, of) => (of ? `${Math.round((n / of) * 100)}%` : "–");
+          const cell = (f, i) =>
+            `${fmt(f.steps[i].n)} <span class="pct">${pct(f.steps[i].n, f.steps[0].n)}</span>`;
+          const STEP_NAMES = {
+            installed: "Opened the app",
+            permissions: "Allowed microphone and accessibility",
+            model_ready: "Speech model ready",
+            first_dictation: "First dictation pasted",
+          };
+          $("u-funnel").innerHTML = u.funnel.all.steps
+            .map(
+              (st, i) =>
+                `<tr><td>${esc(STEP_NAMES[st.name] || st.name)}</td><td class="n">${cell(u.funnel.all, i)}</td><td class="n">${cell(u.funnel.last30, i)}</td></tr>`,
+            )
+            .join("");
+          $("u-retention").innerHTML = u.retention
+            .map(
+              (r) =>
+                `<tr><td>${r.name === "day2" ? "Day 2" : "Day 7"}</td><td class="n">${fmt(r.installs)}</td><td class="n">${fmt(r.kept)} <span class="pct">${pct(r.kept, r.installs)}</span></td></tr>`,
+            )
+            .join("");
+          const site = u.siteEvents || [];
+          const sum = (k) => site.reduce((s, r) => s + r[k], 0);
+          $("u-site").innerHTML = site.length
+            ? [
+                { page: "All pages", dmg: sum("dmg"), curl: sum("curl") },
+                ...site,
+              ]
+                .map(
+                  (r) =>
+                    `<tr><td>${esc(r.page)}</td><td class="n">${fmt(r.dmg)}</td><td class="n">${fmt(r.curl)}</td></tr>`,
+                )
+                .join("")
+            : `<tr><td colspan="3">None yet</td></tr>`;
           $("usage-updated").textContent =
             `Live, ${new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`;
         })

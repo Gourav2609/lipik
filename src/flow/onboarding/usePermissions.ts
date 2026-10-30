@@ -51,6 +51,16 @@ const initShortcuts = () => {
   });
 };
 
+let permissionsNoted = false;
+const notePermissions = () => {
+  if (permissionsNoted) return;
+  permissionsNoted = true;
+  commands.reachSetupStep("permissions").catch((e) => {
+    permissionsNoted = false;
+    console.warn("Failed to save the setup step:", e);
+  });
+};
+
 const PANES: Record<PermissionKind, string> = {
   microphone: "Privacy_Microphone",
   accessibility: "Privacy_Accessibility",
@@ -62,7 +72,6 @@ export const openPrivacyPane = (kind: PermissionKind) =>
     `x-apple.systempreferences:com.apple.preference.security?${PANES[kind]}`,
   ).catch((e) => console.warn("Failed to open System Settings:", e));
 
-const asked = new Set<PermissionKind>();
 const TIMEOUT_MS = 30_000;
 
 const PREVIEW: PermissionState = { microphone: true, accessibility: false };
@@ -81,6 +90,7 @@ export const usePermissions = () => {
         readAccessibility(),
       ]);
       if (accessibility) initShortcuts();
+      if (microphone && accessibility) notePermissions();
       setState((prev) =>
         prev.microphone === microphone && prev.accessibility === accessibility
           ? prev
@@ -98,6 +108,7 @@ export const usePermissions = () => {
   }, [refresh]);
 
   const [timedOut, setTimedOut] = useState<PermissionKind | null>(null);
+  const [openedPane, setOpenedPane] = useState<PermissionKind | null>(null);
   const waiting = useRef<{ kind: PermissionKind; since: number } | null>(null);
 
   useEffect(() => {
@@ -119,21 +130,23 @@ export const usePermissions = () => {
       }, TIMEOUT_MS);
       try {
         if (kind === "microphone") {
+          // After a "Don't Allow" macOS never shows its prompt again.
           if (!isMac()) await commands.openMicrophonePrivacySettings();
-          else if (asked.has("microphone")) await openPrivacyPane("microphone");
-          else await requestMicrophonePermission();
+          else if ((await commands.microphonePermissionStatus()) === "denied") {
+            setOpenedPane("microphone");
+            await openPrivacyPane("microphone");
+          } else await requestMicrophonePermission();
         } else if (isMac()) {
           await requestAccessibilityPermission();
         }
       } catch (e) {
         console.warn(`Failed to request ${kind} permission:`, e);
       }
-      asked.add(kind);
       refresh();
     },
     [refresh],
   );
 
   const needsAccessibility = isMac();
-  return { ...state, request, timedOut, needsAccessibility };
+  return { ...state, request, timedOut, openedPane, needsAccessibility };
 };

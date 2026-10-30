@@ -2,7 +2,7 @@ use crate::apple_speech::{pick, AppleSpeech, JobControl};
 use crate::audio_toolkit::chunking;
 use crate::audio_toolkit::{
     apply_custom_words, detect_output_language, normalize_transcription_output,
-    remove_filler_words, OutputLanguageEvidence,
+    remove_filler_words_keeping, OutputLanguageEvidence,
 };
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::engine_supervisor::{
@@ -1906,11 +1906,12 @@ fn post_process_transcription_text(
             raw
         };
 
-        let without_fillers = remove_filler_words(
+        let without_fillers = remove_filler_words_keeping(
             &corrected,
             &output_language,
             &settings.custom_filler_words,
             settings.filler_word_removal_enabled,
+            &settings.custom_words,
         );
 
         normalize_transcription_output(&without_fillers)

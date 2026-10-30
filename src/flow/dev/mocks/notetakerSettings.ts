@@ -18,6 +18,7 @@ let settings: NotetakerSettings = {
   ollama_model: "qwen3:8b",
   language: "auto",
   meeting_window_names: false,
+  learn_own_voice: true,
 };
 
 let calendar = (params.get("calendar") ?? "not_determined") as CalendarAccess;

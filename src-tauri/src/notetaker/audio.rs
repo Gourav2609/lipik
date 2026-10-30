@@ -348,6 +348,8 @@ pub struct Piece {
     pub audio: Vec<f32>,
     /// Samples the detector heard as speech.
     pub speech_samples: u64,
+    /// The detector's highest speech probability in the piece.
+    pub peak: f32,
 }
 
 /// A stream's audio scored for speech, cut into pieces at pauses. Pieces with
@@ -380,6 +382,11 @@ impl SpeechTrack {
         cuts.sort_unstable();
         cuts.dedup();
         self.cuts = cuts.into();
+    }
+
+    /// Whether a speech detector (not loudness) scores the audio.
+    pub fn has_detector(&self) -> bool {
+        self.scorer.is_some()
     }
 
     pub fn push(&mut self, samples: &[f32]) {
@@ -486,6 +493,7 @@ impl SpeechTrack {
             start_sample: start + from as u64,
             audio: audio[from..to].to_vec(),
             speech_samples: (speech_frames * self.frame) as u64,
+            peak: probs.iter().copied().fold(0.0, f32::max),
         })
     }
 }

@@ -1,8 +1,9 @@
 // lipik-site: the usage counts and the installer. The site itself lives on
 // lipik.pages.dev, whose /api/* and /install.sh come here through a service
 // binding. Every other request (the old lipik.refflux.dev pages) is sent there.
-// /api/ping   POST {id, version, os, arch}  every 3 hours from the app
+// /api/ping   POST {id, version, os, arch, step}  every 3 hours from the app
 // /api/email  POST {email, updates}         from the setup step
+// /api/event  POST {kind, page}             website .dmg clicks and install-command copies
 // /api/stats  GET                           counts for /stats (no emails)
 // /api/github GET                           stars and release downloads, cached 10 minutes
 // /api/admin/emails  GET, Authorization: Bearer ADMIN_KEY
@@ -13,7 +14,27 @@ const UUID =
 const VERSION = /^\d{1,3}\.\d{1,3}\.\d{1,3}[0-9A-Za-z.-]{0,16}$/;
 const OS = /^\d{1,2}(\.\d{1,5}){0,3}$/;
 const ARCH = new Set(["arm64", "x86_64"]);
+// Setup steps in order; installs.step stores the position (0 = not sent).
+const STEPS = ["installed", "permissions", "model_ready", "first_dictation"];
 const EMAIL = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/;
+const EVENT_KINDS = new Set(["dmg_click", "curl_copy"]);
+// The site's pages, as in sitemap.xml.
+const PAGES = new Set([
+  "/",
+  "/pricing",
+  "/releases",
+  "/hinglish",
+  "/hinglish-speech-to-text",
+  "/hindi-voice-typing-mac",
+  "/meeting-notes",
+  "/free-dictation-mac",
+  "/benchmark",
+  "/wispr-flow-alternative",
+  "/superwhisper-alternative",
+  "/macwhisper-alternative",
+  "/granola-alternative",
+]);
+const MAX_BODY = 2048;
 const SITE = "https://lipik.pages.dev";
 
 // Days are counted in India time, where the owner reads them.
@@ -38,10 +59,23 @@ async function readBody(request) {
   ) {
     return null;
   }
-  const text = await request.text();
-  if (text.length > 2048) return null;
+  if (Number(request.headers.get("content-length")) > MAX_BODY) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return null;
+  const body = new Uint8Array(MAX_BODY);
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (size + value.length > MAX_BODY) {
+      await reader.cancel();
+      return null;
+    }
+    body.set(value, size);
+    size += value.length;
+  }
   try {
-    return JSON.parse(text);
+    return JSON.parse(new TextDecoder().decode(body.subarray(0, size)));
   } catch {
     return null;
   }
@@ -62,15 +96,17 @@ async function ping(request, env) {
     !UUID.test(b.id || "") ||
     !VERSION.test(b.version || "") ||
     !OS.test(b.os || "") ||
-    !ARCH.has(b.arch)
+    !ARCH.has(b.arch) ||
+    (b.step !== undefined && !STEPS.includes(b.step))
   ) {
     return json({ ok: false }, 400);
   }
+  const step = STEPS.indexOf(b.step) + 1;
   if (await limited(request, env)) return json({ ok: false }, 429);
   const day = today();
   // A check-in within the hour on the same day changes nothing worth a write.
   const seen = await env.DB.prepare(
-    "SELECT last_day, last_seen, version FROM installs WHERE id = ?1",
+    "SELECT last_day, last_seen, version, step FROM installs WHERE id = ?1",
   )
     .bind(b.id)
     .first();
@@ -78,6 +114,7 @@ async function ping(request, env) {
     seen &&
     seen.last_day === day &&
     seen.version === b.version &&
+    seen.step >= step &&
     Date.now() - seen.last_seen < 3600_000
   ) {
     return json({ ok: true });
@@ -85,10 +122,10 @@ async function ping(request, env) {
   const country = String(request.cf?.country || "").slice(0, 2) || "??";
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO installs (id, first_day, last_day, version, os, arch, country, last_seen)
-       VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7)
-       ON CONFLICT (id) DO UPDATE SET last_day = ?2, version = ?3, os = ?4, arch = ?5, country = ?6, last_seen = ?7`,
-    ).bind(b.id, day, b.version, b.os, b.arch, country, Date.now()),
+      `INSERT INTO installs (id, first_day, last_day, version, os, arch, country, last_seen, step)
+       VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+       ON CONFLICT (id) DO UPDATE SET last_day = ?2, version = ?3, os = ?4, arch = ?5, country = ?6, last_seen = ?7, step = MAX(step, ?8)`,
+    ).bind(b.id, day, b.version, b.os, b.arch, country, Date.now(), step),
     env.DB.prepare(
       "INSERT OR IGNORE INTO active_days (day, id, version) VALUES (?1, ?2, ?3)",
     ).bind(day, b.id, b.version),
@@ -117,6 +154,21 @@ async function email(request, env) {
   return json({ ok: true });
 }
 
+async function event(request, env) {
+  const b = await readBody(request);
+  if (!b || !EVENT_KINDS.has(b.kind) || !PAGES.has(b.page)) {
+    return json({ ok: false }, 400);
+  }
+  if (await limited(request, env)) return json({ ok: false }, 429);
+  await env.DB.prepare(
+    `INSERT INTO site_events (day, kind, page, n) VALUES (?1, ?2, ?3, 1)
+     ON CONFLICT (day, kind, page) DO UPDATE SET n = n + 1`,
+  )
+    .bind(today(), b.kind, b.page)
+    .run();
+  return json({ ok: true });
+}
+
 async function countInstaller(env) {
   await env.DB.prepare(
     `INSERT INTO installer_runs (day, runs) VALUES (?1, 1)
@@ -137,6 +189,21 @@ async function stats(env) {
       .bind(...args)
       .first("n");
   const since30 = daysAgo(29);
+  // Of the installs that dictated at least once and were first seen at least
+  // `days` days ago, how many were active again on or after first_day + `after`.
+  const kept = (days, after) =>
+    env.DB.prepare(
+      `SELECT COUNT(*) AS installs,
+         COALESCE(SUM(EXISTS (SELECT 1 FROM active_days a
+           WHERE a.id = i.id AND a.day >= date(i.first_day, ?2))), 0) AS kept
+       FROM installs i WHERE i.first_day <= ?1 AND i.step = ?3`,
+    )
+      .bind(
+        daysAgo(days),
+        `+${after} days`,
+        STEPS.indexOf("first_dictation") + 1,
+      )
+      .first();
   const [
     installs,
     activeNow,
@@ -151,6 +218,11 @@ async function stats(env) {
     versions,
     countries,
     systems,
+    stepsAll,
+    steps30,
+    day2,
+    day7,
+    siteEvents,
   ] = await Promise.all([
     one("SELECT COUNT(*) AS n FROM installs"),
     one(
@@ -187,7 +259,32 @@ async function stats(env) {
     all(
       "SELECT os AS name, COUNT(*) AS n FROM installs GROUP BY os ORDER BY n DESC LIMIT 8",
     ),
+    all("SELECT step, COUNT(*) AS n FROM installs GROUP BY step"),
+    all(
+      "SELECT step, COUNT(*) AS n FROM installs WHERE first_day >= ?1 GROUP BY step",
+      since30,
+    ),
+    kept(2, 1),
+    kept(7, 6),
+    all(
+      `SELECT page,
+         SUM(CASE WHEN kind = 'dmg_click' THEN n ELSE 0 END) AS dmg,
+         SUM(CASE WHEN kind = 'curl_copy' THEN n ELSE 0 END) AS curl
+       FROM site_events WHERE day >= ?1 GROUP BY page ORDER BY dmg + curl DESC LIMIT 100`,
+      since30,
+    ),
   ]);
+  // An install that reached a step also passed every step before it.
+  const reached = (rows) => {
+    const at = (k) => rows.find((r) => r.step === k)?.n || 0;
+    return {
+      unknown: at(0),
+      steps: STEPS.map((name, i) => ({
+        name,
+        n: STEPS.slice(i).reduce((sum, _, j) => sum + at(i + j + 1), 0),
+      })),
+    };
+  };
   return json({
     today: today(),
     installs,
@@ -203,6 +300,12 @@ async function stats(env) {
     versions,
     countries,
     systems,
+    funnel: { all: reached(stepsAll), last30: reached(steps30) },
+    retention: [
+      { name: "day2", installs: day2.installs, kept: day2.kept },
+      { name: "day7", installs: day7.installs, kept: day7.kept },
+    ],
+    siteEvents,
   });
 }
 
@@ -276,6 +379,8 @@ export default {
         return await ping(request, env);
       if (pathname === "/api/email" && method === "POST")
         return await email(request, env);
+      if (pathname === "/api/event" && method === "POST")
+        return await event(request, env);
       if (pathname === "/api/stats" && method === "GET")
         return await stats(env);
       if (pathname === "/api/github" && method === "GET")

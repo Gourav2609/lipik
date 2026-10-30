@@ -767,7 +767,7 @@ fn at_the_rate(text: &str) -> String {
 
 /// Consonant sounds, with the letters transcribers mix up grouped together
 /// ("Gourav" and "Gorbai" both give "261"). "8" is usually a heard "at".
-fn sound_key(text: &str) -> String {
+pub(crate) fn sound_key(text: &str) -> String {
     let mut key = String::new();
     for c in text.to_lowercase().replace('8', "at").chars() {
         let group = match c {

@@ -824,6 +824,13 @@ async openMicrophonePrivacySettings() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * macOS microphone access: "granted", "denied" (also when restricted) or
+ * "not_determined", when macOS would still show its prompt.
+ */
+async microphonePermissionStatus() : Promise<string> {
+    return await TAURI_INVOKE("microphone_permission_status");
+},
 async getAvailableMicrophones() : Promise<Result<AudioDevice[], string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_available_microphones") };
@@ -1258,6 +1265,15 @@ async setCleanupEngine(engine: CleanupEngine) : Promise<void> {
 async changeReleaseCheckSetting(enabled: boolean) : Promise<void> {
     await TAURI_INVOKE("change_release_check_setting", { enabled });
 },
+/**
+ * The welcome screen's tick box, sent when the user presses Continue.
+ */
+async answerUsagePing(enabled: boolean) : Promise<void> {
+    await TAURI_INVOKE("answer_usage_ping", { enabled });
+},
+async reachSetupStep(step: SetupStep) : Promise<void> {
+    await TAURI_INVOKE("reach_setup_step", { step });
+},
 async changeUsagePingSetting(enabled: boolean) : Promise<void> {
     await TAURI_INVOKE("change_usage_ping_setting", { enabled });
 },
@@ -1637,7 +1653,16 @@ usage_ping_enabled?: boolean;
 /**
  * Random ID sent with the usage ping, made on first launch.
  */
-install_id?: string; show_whats_new_on_update?: boolean; 
+install_id?: string; 
+/**
+ * The furthest setup step reached. Only ever moves forward.
+ */
+setup_step?: SetupStep; 
+/**
+ * The user answered the usage-count tick box on the welcome screen. No
+ * ping is sent before this.
+ */
+usage_ping_answered?: boolean; show_whats_new_on_update?: boolean; 
 /**
  * The app version whose What's New the user has already seen. Fresh installs
  * default to the current version (nothing is "new" to them). Existing users
@@ -1905,7 +1930,12 @@ export type Note = { id: string; title: string; body: string;
  */
 updated_at: number }
 export type NoteSection = { heading?: string; bullets?: string[] }
-export type NoteSummary = { title: string | null; overview: string; sections: NoteSection[]; key_points: string[]; decisions: string[]; action_items: ActionItem[] }
+export type NoteSummary = { title: string | null; overview: string; sections: NoteSection[]; key_points: string[]; decisions: string[]; action_items: ActionItem[]; 
+/**
+ * The transcript words behind each decision and proposal, kept for
+ * checking, not shown.
+ */
+quotes?: Quote[] }
 export type NotepadMeeting = { meeting_id: string }
 export type NotetakerCallDetected = { app: string; bundle_id: string }
 export type NotetakerCallEnded = { app: string; bundle_id: string }
@@ -1947,7 +1977,12 @@ language: MeetingLanguage;
 /**
  * Read who Slack shows as talking in a huddle to name speakers.
  */
-meeting_window_names: boolean }
+meeting_window_names: boolean; 
+/**
+ * Learn the user's voice from their dictation recordings, to tell them
+ * apart from other people at the same Mac.
+ */
+learn_own_voice: boolean }
 export type NotetakerState = { recording: boolean; meeting_id: string | null }
 export type NotetakerStatus = { recording: boolean; 
 /**
@@ -2011,6 +2046,11 @@ export type ProcessingStage =
  * the share downloaded.
  */
 "downloading"
+export type Quote = { 
+/**
+ * The decision, or the proposal line as shown.
+ */
+item: string; quote: string }
 export type RecordingRetentionPeriod = "never" | 
 /**
  * Keep every recording and transcript; same as `Never` (never delete).
@@ -2077,6 +2117,11 @@ start_ms: number; end_ms: number; text: string }
 /**
  * How the transcribe shortcut's key events drive a recording.
  */
+/**
+ * How far setup got, sent with the usage ping. Variants are in order: a
+ * later one is further along.
+ */
+export type SetupStep = "installed" | "permissions" | "model_ready" | "first_dictation"
 export type ShortcutActivation = 
 /**
  * Press to start, press again to stop.

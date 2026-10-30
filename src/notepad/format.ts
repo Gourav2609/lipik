@@ -127,9 +127,9 @@ export const summaryMarkdown = (summary: NoteSummary) => {
     if (!items.length) return;
     lines.push(`## ${heading}`, ...items.map((b) => `- ${b}`), "");
   };
+  list("Decisions", summary.decisions);
   summary.sections.forEach((s) => list(s.heading ?? "Notes", s.bullets ?? []));
   list("Key points", summary.key_points);
-  list("Decisions", summary.decisions);
   list(
     "Next steps",
     summary.action_items.map(

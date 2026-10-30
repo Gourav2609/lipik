@@ -111,6 +111,49 @@ fn get_string(object: AudioObjectID, selector: AudioObjectPropertySelector) -> O
     Some(s.to_string())
 }
 
+/// The UID of every audio device this process sees, its own private ones
+/// included.
+#[cfg(test)]
+pub fn device_uids() -> Vec<String> {
+    get_ids(
+        kAudioObjectSystemObject as AudioObjectID,
+        objc2_core_audio::kAudioHardwarePropertyDevices,
+    )
+    .into_iter()
+    .filter_map(|d| get_string(d, kAudioDevicePropertyDeviceUID))
+    .collect()
+}
+
+/// Whether any process is playing through or recording from the device.
+#[cfg(test)]
+pub fn device_running_somewhere(device: AudioObjectID) -> bool {
+    get_value::<u32>(
+        device,
+        objc2_core_audio::kAudioDevicePropertyDeviceIsRunningSomewhere,
+        None,
+    )
+    .is_some_and(|v| v != 0)
+}
+
+/// Whether a process other than this one is playing sound.
+pub fn others_playing() -> bool {
+    let own = std::process::id() as i32;
+    get_ids(
+        kAudioObjectSystemObject as AudioObjectID,
+        kAudioHardwarePropertyProcessObjectList,
+    )
+    .into_iter()
+    .filter(|&id| get_value::<i32>(id, kAudioProcessPropertyPID, None) != Some(own))
+    .any(|id| {
+        get_value::<u32>(
+            id,
+            objc2_core_audio::kAudioProcessPropertyIsRunningOutput,
+            None,
+        )
+        .is_some_and(|v| v != 0)
+    })
+}
+
 pub struct MicUser {
     pub pid: i32,
     pub bundle_id: String,

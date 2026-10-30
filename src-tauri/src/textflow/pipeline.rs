@@ -5,6 +5,7 @@ use super::store::{StyleCategory, StyleKind, TextFlow, Transform};
 use super::{context, early, gate, llm, rules, text};
 use once_cell::sync::Lazy;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
@@ -13,6 +14,11 @@ const MIN_MODEL_WORDS: usize = 8;
 /// The most dictionary words sent with one clean-up request.
 const MAX_VOCABULARY: usize = 40;
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(4);
+/// The first clean-up after the model loads runs on cold caches, so it gets
+/// longer, once.
+const CLEANUP_WARMUP_TIMEOUT: Duration = Duration::from_secs(10);
+/// Whether a clean-up has run since the model last loaded.
+static CLEANUP_WARM: AtomicBool = AtomicBool::new(false);
 /// Auto-apply runs before the paste, so it gets a short limit; ⌥n transforms
 /// have their own, longer one.
 const TRANSFORM_TIMEOUT: Duration = Duration::from_secs(8);
@@ -593,8 +599,12 @@ pub async fn clean_up(
     // and so does a long dictation when the model is loaded at a size too
     // small for it.
     let waits = auto_apply_transform(&tf).is_some();
-    let (context, timeout) = match (llm::loaded_context(&endpoint, needed).await, waits) {
-        (Some(n), false) if n >= needed => (n, CLEANUP_TIMEOUT),
+    let loaded = llm::loaded_context(&endpoint, needed).await;
+    if loaded.is_none() {
+        CLEANUP_WARM.store(false, Ordering::Relaxed);
+    }
+    let (context, timeout) = match (loaded, waits) {
+        (Some(n), false) if n >= needed => (n, cleanup_timeout(&CLEANUP_WARM)),
         (Some(n), _) => (n.max(needed), TRANSFORM_TIMEOUT),
         (None, true) => (needed, TRANSFORM_TIMEOUT),
         (None, false) => {
@@ -645,6 +655,19 @@ pub async fn clean_up(
             .unmask(&text)
             .unwrap_or_else(|| fallback(&rules_text)),
     )
+}
+
+/// How long a clean-up may take before the rules text is pasted instead.
+fn cleanup_timeout(warm: &AtomicBool) -> Duration {
+    if warm.swap(true, Ordering::Relaxed) {
+        return CLEANUP_TIMEOUT;
+    }
+    log::info!(
+        "First clean-up since the model loaded: allowing {:?} instead of {:?}",
+        CLEANUP_WARMUP_TIMEOUT,
+        CLEANUP_TIMEOUT
+    );
+    CLEANUP_WARMUP_TIMEOUT
 }
 
 /// The rules text with each part replaced by its cleaned text. A part out of
@@ -1714,5 +1737,14 @@ mod tests {
             "Hi there."
         );
         assert_eq!(strip_wrapping("\"Hi there.\""), "Hi there.");
+    }
+
+    #[test]
+    fn first_cleanup_after_load_gets_the_warm_up_time_once() {
+        let warm = AtomicBool::new(false);
+        assert_eq!(cleanup_timeout(&warm), CLEANUP_WARMUP_TIMEOUT);
+        assert_eq!(cleanup_timeout(&warm), CLEANUP_TIMEOUT);
+        warm.store(false, Ordering::Relaxed);
+        assert_eq!(cleanup_timeout(&warm), CLEANUP_WARMUP_TIMEOUT);
     }
 }

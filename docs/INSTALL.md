@@ -16,8 +16,8 @@ curl -fsSL https://lipik.pages.dev/install.sh | sh
 It checks your Mac, downloads the latest release from GitHub, copies
 **Lipik** into **Applications** and opens it. A download made from Terminal
 isn't marked as "downloaded from the internet", so macOS shows no security
-warning and you can skip step 2 below. If Lipik is already open, quit it
-first; run the same line again any time to update. Your settings, history and
+warning and you can skip step 2 below. If Lipik is already open, the script
+closes it for you; run the same line again any time to update. Your settings, history and
 meeting notes stay. The script is
 [website/install.sh](https://github.com/Gourav2609/lipik/blob/main/website/install.sh)
 if you want to read it first.

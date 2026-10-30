@@ -6,8 +6,14 @@
 set -eu
 
 REPO="Gourav2609/lipik"
-URL="https://github.com/$REPO/releases/latest/download/Lipik.dmg"
+URL="${LIPIK_DMG_URL:-https://github.com/$REPO/releases/latest/download/Lipik.dmg}"
 DEMO="${LIPIK_DEMO:-}"
+LEAF='H"f1a4bea1f48a60a814691e428ac100722d10a895"'
+APP_BIN='Lipik.app/Contents/MacOS/lipik$'
+# LIPIK_INSTALL_DIR is for testing: it also limits the running-app check to
+# that folder so the real Lipik is left alone.
+[ -n "${LIPIK_INSTALL_DIR:-}" ] && APP_BIN="$LIPIK_INSTALL_DIR/$APP_BIN"
+CURL_OPTS="--retry 3 --connect-timeout 15 --speed-time 30 --speed-limit 20000"
 
 # ---------- look ----------
 
@@ -78,7 +84,7 @@ step() {
   shift
   if [ -z "$FANCY" ]; then
     printf '  %s... ' "$label"
-    "$@"
+    "$@" || { say "failed"; return 1; }
     say "done"
     return
   fi
@@ -122,7 +128,9 @@ bar() {
 
 download() {
   if [ -n "$DEMO" ]; then
-    total=22597658 got=0
+    total=$(curl -fsIL $CURL_OPTS "$URL" 2>/dev/null | awk 'tolower($1) == "content-length:" { v = $2 } END { gsub("\r", "", v); print v + 0 }') || total=0
+    [ "${total:-0}" -gt 0 ] || total=23068672
+    got=0
     while [ -n "$FANCY" ] && [ $got -lt $total ]; do
       bar "$got" "$total"
       got=$((got + 1048576))
@@ -130,8 +138,8 @@ download() {
     done
     [ -n "$FANCY" ] && bar "$total" "$total"
   else
-    total=$(curl -fsIL "$URL" | awk 'tolower($1) == "content-length:" { v = $2 } END { gsub("\r", "", v); print v + 0 }')
-    curl -fsSL -o "$TMP/Lipik.dmg" "$URL" &
+    total=$(curl -fsIL $CURL_OPTS "$URL" | awk 'tolower($1) == "content-length:" { v = $2 } END { gsub("\r", "", v); print v + 0 }')
+    curl -fsSL $CURL_OPTS -o "$TMP/Lipik.dmg" "$URL" &
     pid=$!
     if [ -n "$FANCY" ] && [ "${total:-0}" -gt 0 ]; then
       while kill -0 "$pid" 2>/dev/null; do
@@ -150,10 +158,18 @@ download() {
   fi
 }
 
+# Only the main app counts: the `lipik --mcp` helpers that AI apps start keep
+# running, and replacing the app under them is fine.
+lipik_open() { pgrep -qf "$APP_BIN"; }
+
 close_lipik() {
-  osascript -e 'tell application "Lipik" to quit' >/dev/null 2>&1 || true
+  if [ -n "${LIPIK_INSTALL_DIR:-}" ]; then
+    pkill -f "$APP_BIN" || true
+  else
+    osascript -e 'tell application id "com.gourav.lipik" to quit' >/dev/null 2>&1 || true
+  fi
   i=0
-  while pgrep -xq lipik; do
+  while lipik_open; do
     i=$((i + 1))
     [ $i -gt 40 ] && return 1
     sleep 0.25
@@ -162,25 +178,40 @@ close_lipik() {
 
 check_mac() {
   [ -n "$DEMO" ] && { sleep 0.6; return 0; }
-  [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = arm64 ]
+  [ "$(uname -s)" = Darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]
 }
 
 latest_version() {
-  if [ -n "$DEMO" ]; then
-    sleep 0.5
-    echo "0.1.4" >"$TMP/version"
-    return 0
-  fi
-  curl -fsS "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
+  curl -fsS --connect-timeout 15 --max-time 30 "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
     sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n 1 >"$TMP/version" || true
 }
 
+check_app() {
+  [ -n "$DEMO" ] && { sleep 0.4; return 0; }
+  mkdir "$MNT"
+  hdiutil attach -quiet -nobrowse -readonly -mountpoint "$MNT" "$TMP/Lipik.dmg" &&
+    codesign --verify --deep --strict "$MNT/Lipik.app" 2>/dev/null &&
+    codesign --verify -R="identifier \"com.gourav.lipik\" and certificate leaf = $LEAF" "$MNT/Lipik.app" 2>/dev/null
+}
+
+# Copy next to the old app first, then swap, so a failure never leaves a
+# half-deleted Lipik behind.
 install_app() {
   [ -n "$DEMO" ] && { sleep 1.2; return 0; }
-  mkdir "$MNT"
-  hdiutil attach -quiet -nobrowse -readonly -mountpoint "$MNT" "$TMP/Lipik.dmg"
-  rm -rf "$DEST/Lipik.app"
-  ditto "$MNT/Lipik.app" "$DEST/Lipik.app"
+  new="$DEST/.Lipik.app.new.$$" old="$DEST/.Lipik.app.old.$$"
+  ditto "$MNT/Lipik.app" "$new" 2>/dev/null || { rm -rf "$new" 2>/dev/null; return 1; }
+  if [ -e "$DEST/Lipik.app" ]; then
+    mv "$DEST/Lipik.app" "$old" 2>/dev/null || { rm -rf "$new" 2>/dev/null; return 1; }
+  fi
+  if ! mv "$new" "$DEST/Lipik.app" 2>/dev/null; then
+    [ -e "$old" ] && mv "$old" "$DEST/Lipik.app" 2>/dev/null
+    rm -rf "$new" 2>/dev/null
+    return 1
+  fi
+  if [ -e "$old" ]; then
+    chmod -R u+w "$old" 2>/dev/null || true
+    rm -rf "$old" 2>/dev/null || true
+  fi
 }
 
 # A few seconds of the pill's sound bars, then the first thing to try.
@@ -221,7 +252,7 @@ logo
 
 step "Checking your Mac" check_mac ||
   fail "Lipik needs a Mac with Apple silicon (M1 or later)."
-if [ -z "$DEMO" ] && pgrep -xq lipik; then
+if [ -z "$DEMO" ] && lipik_open; then
   step "Closing the open Lipik" close_lipik ||
     fail "Couldn't close Lipik. Quit it from its menu bar icon, then run this again."
 fi
@@ -233,9 +264,13 @@ VERSION_LABEL=""
 
 download
 
-DEST=/Applications
+step "Checking it's the real Lipik" check_app ||
+  fail "This download isn't signed by Lipik. Nothing was installed. Try again later."
+
+DEST="${LIPIK_INSTALL_DIR:-/Applications}"
 [ -w "$DEST" ] || { DEST="$HOME/Applications"; mkdir -p "$DEST"; }
-step "Moving it into $DEST" install_app
+step "Moving it into $DEST" install_app ||
+  fail "Couldn't replace Lipik in $DEST. Quit Lipik and run this again, or drag Lipik.dmg into Applications."
 
 say ""
 listening
@@ -245,5 +280,5 @@ say "  Hold ${B}fn$R and start talking. Let go, and your words appear."
 say "  ${D}lipik.pages.dev$R"
 say ""
 
-[ -z "$DEMO" ] && open "$DEST/Lipik.app"
+[ -z "$DEMO" ] && [ -z "${LIPIK_INSTALL_DIR:-}" ] && open "$DEST/Lipik.app"
 exit 0

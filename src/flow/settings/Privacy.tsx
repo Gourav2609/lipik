@@ -47,9 +47,9 @@ const SavedVoices = () => {
   return (
     <SettingRow
       title={`Saved voices${people}`}
-      description="When you name a speaker in meeting notes, their voice is kept on this Mac so later meetings can name them too."
+      description="When you name a speaker in meeting notes, their voice is kept on this Mac so later meetings can name them too. Forgetting also forgets your own voice and turns off Know my voice."
       control={
-        <Button variant="secondary" disabled={!count} onClick={forget}>
+        <Button variant="secondary" disabled={count === null} onClick={forget}>
           Forget all voices
         </Button>
       }
@@ -122,7 +122,7 @@ export default function Privacy() {
           />
           <SettingRow
             title="Usage count"
-            description={`Every few hours ${APP_NAME} sends a random ID, the app version and the macOS version, so we know how many people use it. Never your voice, text or name.`}
+            description={`Every few hours ${APP_NAME} sends a random ID, the app version, the macOS version, the chip type, the country (worked out from the connection; the address itself isn't kept) and how far setup got, so we know how many people use it and whether setup works. Never your voice, text or name.`}
             control={
               <Toggle
                 label="Usage count"

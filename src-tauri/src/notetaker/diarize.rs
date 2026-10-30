@@ -41,6 +41,8 @@ pub const ME_KEY: &str = "me";
 pub const THEM_KEY: &str = "them";
 /// A turn whose voice matched no speaker: its lines stay "Them".
 pub const UNKNOWN: usize = usize::MAX;
+/// A turn of the user in the voice split of the microphone: its lines are "Me".
+pub const ME: usize = usize::MAX - 1;
 
 /// The key of the n-th speaker (0-based), in order of first appearance.
 pub fn speaker_key(n: usize) -> String {
@@ -51,6 +53,9 @@ pub fn speaker_key(n: usize) -> String {
 pub fn key_and_label(n: usize) -> (String, String) {
     if n == UNKNOWN {
         return (THEM_KEY.to_string(), super::transcribe::THEM.to_string());
+    }
+    if n == ME {
+        return (ME_KEY.to_string(), super::transcribe::ME.to_string());
     }
     let key = speaker_key(n);
     let label = default_label(&key);
@@ -343,15 +348,18 @@ pub fn run(models_dir: &Path, wav: &Path) -> Result<Speakers> {
 fn run_unlocked(models_dir: &Path, wav: &Path) -> Result<Speakers> {
     let seconds = hound::WavReader::open(wav)?.duration() / RATE as u32;
     if seconds > MAX_AUDIO_SECONDS {
-        bail!(
-            "{} min of call audio is over the 3 hour limit",
-            seconds / 60
-        );
+        bail!("{} min of audio is over the 3 hour limit", seconds / 60);
     }
+    split(models_dir, read_wav(wav)?)
+}
+
+/// The speakers in 16 kHz mono audio, numbered by first appearance, with
+/// small clusters folded as `tidy` does. Fails on under 5 s of audio or when
+/// nobody speaks.
+fn split(models_dir: &Path, audio: Vec<f32>) -> Result<Speakers> {
     limit_threads();
-    let audio = read_wav(wav)?;
     if audio.len() < MIN_AUDIO_SAMPLES {
-        bail!("too little call audio");
+        bail!("too little audio");
     }
     let mut pipeline =
         speakrs::OwnedDiarizationPipeline::from_dir(models_dir, speakrs::ExecutionMode::Cpu)
@@ -376,7 +384,7 @@ fn run_unlocked(models_dir: &Path, wav: &Path) -> Result<Speakers> {
     let voices = cluster_voices(&result.embeddings, &result.hard_clusters, count);
     let speakers = tidy(&turns, &voices);
     if speakers.count() == 0 {
-        bail!("no speech found in the call audio");
+        bail!("no speech found in the audio");
     }
     Ok(speakers)
 }
@@ -390,6 +398,355 @@ fn models_dir(app: &AppHandle) -> Result<PathBuf> {
         .inner()
         .clone();
     tauri::async_runtime::block_on(manager.ensure_speaker_models())
+}
+
+/// Dictation speech used for the user's voice, at most.
+const OWN_VOICE_MS: usize = 120_000;
+/// Taken from one dictation clip, at most, so the voice comes from several.
+const OWN_CLIP_MAX_MS: usize = 30_000;
+/// Clips shorter than this are skipped: a word or two says little.
+const OWN_CLIP_MIN_MS: usize = 2_000;
+/// Less speech than this makes no voice.
+const OWN_VOICE_MIN_MS: usize = 20_000;
+
+/// The user's voice from their dictation recordings (`clips`, newest
+/// first): the main voice of up to 30 s from each clip, until two minutes.
+/// None when they hold too little speech.
+pub fn detect_own_voice(app: &AppHandle, clips: &[PathBuf]) -> Result<Option<Vec<f32>>> {
+    let _turn = DIARIZE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = models_dir(app)?;
+    own_voice_unlocked(&dir, clips)
+}
+
+/// `detect_own_voice` with the models in `models_dir`.
+#[cfg(test)]
+pub fn own_voice(models_dir: &Path, clips: &[PathBuf]) -> Result<Option<Vec<f32>>> {
+    let _turn = DIARIZE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    own_voice_unlocked(models_dir, clips)
+}
+
+fn own_voice_unlocked(models_dir: &Path, clips: &[PathBuf]) -> Result<Option<Vec<f32>>> {
+    let ms = |n: usize| n * RATE / 1000;
+    let mut audio: Vec<f32> = Vec::new();
+    for clip in clips {
+        if audio.len() >= ms(OWN_VOICE_MS) {
+            break;
+        }
+        let Ok(mut samples) = read_wav(clip) else {
+            continue;
+        };
+        if samples.len() < ms(OWN_CLIP_MIN_MS) {
+            continue;
+        }
+        samples.truncate(ms(OWN_CLIP_MAX_MS));
+        audio.extend(samples);
+        audio.extend(std::iter::repeat_n(0.0, ms(500)));
+    }
+    if audio.len() < ms(OWN_VOICE_MIN_MS) {
+        return Ok(None);
+    }
+    let speakers = split(models_dir, audio)?;
+    let main = (0..speakers.count())
+        .filter(|&n| speakers.speech_ms[n] >= OWN_VOICE_MIN_MS as i64)
+        .max_by_key(|&n| speakers.speech_ms[n]);
+    Ok(main.and_then(|n| speakers.voices[n].clone()))
+}
+
+/// A mic voice at least this like the user's voice from dictation is the
+/// user. Measured on a meeting of four at one laptop: the user 0.71-0.75,
+/// the others 0.29-0.52.
+const OWN_MATCH: f32 = 0.6;
+/// During a call, another mic voice counts as someone else only when it is
+/// under this like the user's voice from dictation.
+const OTHER_THAN_OWN: f32 = 0.5;
+/// A mic voice at least this like a call voice is the call heard through the
+/// speakers.
+const CALL_ECHO: f32 = 0.6;
+/// So is a mic voice heard at least this share of its time while the call
+/// talks. On a recorded call the echo left in the mic measured 105% (turns
+/// are joined over short gaps), the user 21%.
+const CALL_OVERLAP: f64 = 0.5;
+/// A call with less speech than this, or under a tenth of the mic's, leaves
+/// the room as the meeting.
+const QUIET_CALL_MS: i64 = 60_000;
+/// During a call, someone else on the mic needs this share of its speech.
+const ROOM_SHARE: f64 = 0.1;
+/// With no voice from dictation, the mic voice heard most is the user only
+/// with this share of the mic's speech.
+const MOST_SPEECH_SHARE: f64 = 0.4;
+
+/// Whether a call with `call_speech_ms` of speech leaves the room as the
+/// meeting, for a mic with `mic_speech_ms`.
+pub fn quiet_call(call_speech_ms: i64, mic_speech_ms: i64) -> bool {
+    call_speech_ms < QUIET_CALL_MS || call_speech_ms * 10 < mic_speech_ms
+}
+
+/// The people in the room, from the voice split of the microphone (`mic`,
+/// with the call taken out). Mic voices that are the call heard through the
+/// speakers (like a call voice, or heard mostly while the call talks; `call`
+/// is in its WAV's time, `mic_to_call_ms` after the mic's) are left out of
+/// every choice and stay the user's.
+///
+/// During a call, the mic stays "Me" unless the user's voice from dictation
+/// (`own`) matches one mic voice and another is clearly someone else (unlike
+/// it, with a tenth of the mic's speech). With no call, the user is the mic
+/// voice matching `own`; with no `own`, the voice heard most if it has 40% of
+/// the mic's speech; otherwise nobody is "Me". Every other voice matching
+/// `own` is the user too (the model split them in two).
+///
+/// The user's turns become `ME`; other voices become speakers numbered after
+/// the call's voices, in order of first appearance, with `voices` and
+/// `speech_ms` at those numbers. None keeps the whole mic "Me".
+pub fn room_voices(
+    mic: &Speakers,
+    own: Option<&[f32]>,
+    call: &Speakers,
+    mic_to_call_ms: i64,
+    call_speech_ms: i64,
+) -> Option<Speakers> {
+    if mic.count() < 2 {
+        return None;
+    }
+    let first = call.count();
+    let total: i64 = mic.speech_ms.iter().sum();
+    let voice = |n: usize| mic.voices[n].as_deref();
+    let during_call = |n: usize| -> f64 {
+        let ms: i64 = mic
+            .turns
+            .iter()
+            .filter(|t| t.speaker == n)
+            .map(|t| {
+                overlap_ms(
+                    t.start_ms + mic_to_call_ms,
+                    t.end_ms + mic_to_call_ms,
+                    &call.turns,
+                )
+            })
+            .sum();
+        ms as f64 / mic.speech_ms[n].max(1) as f64
+    };
+    let call_like = |n: usize| {
+        voice(n).is_some_and(|v| {
+            call.voices
+                .iter()
+                .flatten()
+                .any(|c| cosine(v, c) >= CALL_ECHO)
+        }) || during_call(n) >= CALL_OVERLAP
+    };
+    let people: Vec<usize> = (0..mic.count())
+        .filter(|&n| voice(n).is_some() && !call_like(n))
+        .collect();
+    let like_own = |n: usize| match (voice(n), own) {
+        (Some(v), Some(own)) => cosine(v, own),
+        _ => f32::MIN,
+    };
+    let by_own = people
+        .iter()
+        .copied()
+        .filter(|&n| like_own(n) >= OWN_MATCH)
+        .max_by(|&a, &b| like_own(a).total_cmp(&like_own(b)));
+
+    let (user, room): (Option<usize>, Vec<usize>) = if !quiet_call(call_speech_ms, total) {
+        let user = by_own?;
+        let room = people
+            .iter()
+            .copied()
+            .filter(|&n| {
+                like_own(n) < OTHER_THAN_OWN && mic.speech_ms[n] as f64 >= ROOM_SHARE * total as f64
+            })
+            .collect();
+        (Some(user), room)
+    } else {
+        let user = match own {
+            Some(_) => by_own,
+            None => people
+                .iter()
+                .copied()
+                .max_by_key(|&n| (mic.speech_ms[n], std::cmp::Reverse(n)))
+                .filter(|&n| mic.speech_ms[n] as f64 >= MOST_SPEECH_SHARE * total as f64),
+        };
+        let room = people
+            .iter()
+            .copied()
+            .filter(|&n| Some(n) != user && like_own(n) < OWN_MATCH)
+            .collect();
+        (user, room)
+    };
+    if room.is_empty() {
+        return None;
+    }
+    let number = |n: usize| match room.iter().position(|&r| r == n) {
+        Some(k) => first + k,
+        None if user.is_some() => ME,
+        None => UNKNOWN,
+    };
+    let mut out = Speakers {
+        turns: Vec::new(),
+        voices: vec![None; first],
+        speech_ms: vec![0; first],
+    };
+    for &n in &room {
+        out.voices.push(mic.voices[n].clone());
+        out.speech_ms.push(mic.speech_ms[n]);
+    }
+    for t in &mic.turns {
+        let speaker = match t.speaker {
+            UNKNOWN => number(UNKNOWN),
+            n => number(n),
+        };
+        match out.turns.last_mut() {
+            Some(last) if last.speaker == speaker && t.start_ms <= last.end_ms + 1_000 => {
+                last.end_ms = last.end_ms.max(t.end_ms)
+            }
+            _ => out.turns.push(Turn {
+                speaker,
+                ..t.clone()
+            }),
+        }
+    }
+    Some(out)
+}
+
+/// At most this many stretches of the user alone on the mic are checked.
+const CHECK_WINDOWS: usize = 20;
+/// With fewer than this, the check says nothing.
+const CHECK_MIN_WINDOWS: usize = 5;
+/// A checked stretch is at least this long
+const CHECK_MIN_MS: i64 = 2_000;
+/// and its middle part this long at most.
+const CHECK_MAX_MS: i64 = 6_000;
+/// The speaker model hears this much audio at once.
+const EMBED_SAMPLES: usize = 10 * RATE;
+
+/// Up to 20 stretches of mic speech (`lines`, mic WAV time) while the call
+/// (`call`, its WAV `mic_to_call_ms` after the mic's) is silent, spread
+/// over the meeting: lines of at least 2 s, their middle 6 s at most.
+pub fn lone_mic_windows(
+    lines: &[(i64, i64)],
+    call: &[Turn],
+    mic_to_call_ms: i64,
+) -> Vec<(i64, i64)> {
+    let lone: Vec<(i64, i64)> = lines
+        .iter()
+        .filter(|&&(s, e)| {
+            e - s >= CHECK_MIN_MS && overlap_ms(s + mic_to_call_ms, e + mic_to_call_ms, call) == 0
+        })
+        .map(|&(s, e)| {
+            let cut = (e - s - CHECK_MAX_MS).max(0) / 2;
+            (s + cut, e - cut)
+        })
+        .collect();
+    let n = lone.len().min(CHECK_WINDOWS);
+    (0..n).map(|i| lone[i * lone.len() / n]).collect()
+}
+
+/// The checked stretches together must be at least this like the user's
+/// voice from dictation
+const CHECK_TOGETHER: f32 = 0.65;
+/// and none of them under this. One short stretch is noisy: on a call
+/// with only the user on the mic they measured 0.47-0.73.
+const CHECK_EACH: f32 = 0.55;
+/// The stretches are only where the call is silent, so someone at the
+/// laptop who talks only while the call talks is never in them: with more
+/// than this share of the mic's speech during call speech, the mic is split.
+pub const CHECK_MAX_DURING_CALL: f64 = 0.2;
+
+/// The share of mic speech (`lines`, mic WAV time) heard while the call
+/// (`call`, its WAV `mic_to_call_ms` after the mic's) talks.
+pub fn mic_during_call(lines: &[(i64, i64)], call: &[Turn], mic_to_call_ms: i64) -> f64 {
+    let total: i64 = lines.iter().map(|(s, e)| e - s).sum();
+    let during: i64 = lines
+        .iter()
+        .map(|&(s, e)| overlap_ms(s + mic_to_call_ms, e + mic_to_call_ms, call))
+        .sum();
+    during as f64 / total.max(1) as f64
+}
+
+/// Whether the checked stretches sound like the user's voice from
+/// dictation, so the mic holds nobody else and need not be split: their
+/// average voice is like it and no single stretch is far from it.
+pub fn only_user(window_voices: &[Vec<f32>], own: &[f32]) -> bool {
+    if window_voices.len() < CHECK_MIN_WINDOWS
+        || window_voices.iter().any(|v| cosine(v, own) < CHECK_EACH)
+    {
+        return false;
+    }
+    let mut sum = vec![0f32; own.len()];
+    for v in window_voices {
+        let norm = v
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            .sqrt()
+            .max(f32::MIN_POSITIVE);
+        for (s, x) in sum.iter_mut().zip(v) {
+            *s += x / norm;
+        }
+    }
+    cosine(&sum, own) >= CHECK_TOGETHER
+}
+
+/// The voice of each stretch (WAV ms) of a 16 kHz mono WAV. A stretch is
+/// repeated to fill the 10 s the speaker model hears.
+pub fn detect_window_voices(
+    app: &AppHandle,
+    wav: &Path,
+    windows: &[(i64, i64)],
+) -> Result<Vec<Vec<f32>>> {
+    let _turn = DIARIZE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = models_dir(app)?;
+    window_voices_unlocked(&dir, wav, windows)
+}
+
+/// `detect_window_voices` with the models in `models_dir`.
+#[cfg(test)]
+pub fn window_voices(
+    models_dir: &Path,
+    wav: &Path,
+    windows: &[(i64, i64)],
+) -> Result<Vec<Vec<f32>>> {
+    let _turn = DIARIZE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    window_voices_unlocked(models_dir, wav, windows)
+}
+
+fn window_voices_unlocked(
+    models_dir: &Path,
+    wav: &Path,
+    windows: &[(i64, i64)],
+) -> Result<Vec<Vec<f32>>> {
+    limit_threads();
+    let mut model = speakrs::inference::EmbeddingModel::new(
+        models_dir.join("wespeaker-voxceleb-resnet34.onnx"),
+    )
+    .map_err(|e| anyhow!("speaker model did not load: {e}"))?;
+    let mut reader = hound::WavReader::open(wav)?;
+    let mut out = Vec::new();
+    for &(start, end) in windows {
+        let at = |ms: i64| (ms.max(0) as usize * RATE / 1000) as u32;
+        reader.seek(at(start))?;
+        let piece: Vec<f32> = reader
+            .samples::<i16>()
+            .take((at(end) - at(start)) as usize)
+            .map(|s| s.map(|s| s as f32 / i16::MAX as f32))
+            .collect::<Result<_, _>>()?;
+        if piece.is_empty() {
+            continue;
+        }
+        let filled: Vec<f32> = piece.iter().copied().cycle().take(EMBED_SAMPLES).collect();
+        let voice = model
+            .embed(&filled)
+            .map_err(|e| anyhow!("speaker model failed: {e}"))?;
+        out.push(voice.to_vec());
+    }
+    Ok(out)
+}
+
+/// How much of `start_ms..end_ms` the turns cover.
+pub fn overlap_ms(start_ms: i64, end_ms: i64, turns: &[Turn]) -> i64 {
+    turns
+        .iter()
+        .map(|t| (end_ms.min(t.end_ms) - start_ms.max(t.start_ms)).max(0))
+        .sum()
 }
 
 /// A saved voice: its name and average embedding.
@@ -1068,15 +1425,18 @@ const HANDOVER_PAIRS: &[(&str, &str)] = &[
     ("you", "next"),
 ];
 
-/// The first call-audio line by another voice in the window after line
-/// `i`. Microphone lines between are skipped: without headphones they are
-/// often the call heard again.
+/// The first line by another split voice (call, or a person in the room)
+/// in the window after line `i`. The user's microphone lines between are
+/// skipped: without headphones they are often the call heard again.
 fn next_voice(segments: &[Segment], i: usize) -> Option<&Segment> {
     let line = segments.get(i)?;
     segments[i + 1..]
         .iter()
         .take_while(|s| s.start_ms < line.end_ms + HANDOVER_WINDOW_MS)
-        .find(|s| s.source != "mic" && s.speaker_key != line.speaker_key)
+        .find(|s| {
+            (s.source != "mic" || s.speaker_key.starts_with('s'))
+                && s.speaker_key != line.speaker_key
+        })
 }
 
 /// How long `key` talks in the window after line `i` ends.
@@ -1418,10 +1778,7 @@ pub fn judge_guesses(
 
     let mut label_key: HashMap<&str, &str> = HashMap::new();
     for s in segments {
-        if s.source == "system"
-            && s.speaker_key.starts_with('s')
-            && s.speaker == default_label(&s.speaker_key)
-        {
+        if s.speaker_key.starts_with('s') && s.speaker == default_label(&s.speaker_key) {
             label_key.insert(&s.speaker, &s.speaker_key);
         }
     }
@@ -1742,6 +2099,206 @@ mod tests {
         assert_eq!(s.turns[1].speaker, UNKNOWN);
         assert_eq!(s.speech_ms, vec![8_000]);
         assert_eq!(tidy(&[], &[]).count(), 0);
+    }
+
+    /// A mic split: voices on unit vectors at these angles (degrees), each
+    /// talking `ms` in turn, in this order.
+    fn mic_split(voices: &[(f32, i64)]) -> Speakers {
+        let mut at = 0;
+        let mut turns = Vec::new();
+        for (n, &(_, ms)) in voices.iter().enumerate() {
+            turns.push(Turn {
+                start_ms: at,
+                end_ms: at + ms,
+                speaker: n,
+            });
+            at += ms + 2_000;
+        }
+        Speakers {
+            turns,
+            voices: voices
+                .iter()
+                .map(|&(deg, _)| Some(vec![deg.to_radians().cos(), deg.to_radians().sin()]))
+                .collect(),
+            speech_ms: voices.iter().map(|&(_, ms)| ms).collect(),
+        }
+    }
+
+    /// A call with `n` voices and no turns.
+    fn no_call(n: usize) -> Speakers {
+        Speakers {
+            turns: Vec::new(),
+            voices: vec![None; n],
+            speech_ms: vec![0; n],
+        }
+    }
+
+    fn unit(deg: f32) -> Vec<f32> {
+        vec![deg.to_radians().cos(), deg.to_radians().sin()]
+    }
+
+    fn speakers_of(room: &Speakers) -> Vec<String> {
+        room.turns
+            .iter()
+            .map(|t| key_and_label(t.speaker).0)
+            .collect()
+    }
+
+    #[test]
+    fn a_meeting_in_the_room_splits_the_mic() {
+        // Three people at the laptop; the user (at 0°) talks less than the
+        // first colleague. No call audio.
+        let mic = mic_split(&[(80.0, 600_000), (0.0, 300_000), (150.0, 200_000)]);
+        let room = room_voices(&mic, Some(&unit(10.0)), &no_call(0), 0, 0).unwrap();
+        assert_eq!(speakers_of(&room), vec!["s1", "me", "s2"]);
+        assert_eq!(room.count(), 2);
+        assert_eq!(room.speech_ms, vec![600_000, 200_000]);
+        assert_eq!(key_and_label(ME), ("me".into(), "Me".into()));
+
+        // Without the user's voice from dictation, the voice heard most is
+        // the user when it has 40% of the speech.
+        let room = room_voices(&mic, None, &no_call(0), 0, 0).unwrap();
+        assert_eq!(speakers_of(&room), vec!["me", "s1", "s2"]);
+    }
+
+    #[test]
+    fn with_no_clear_user_nobody_in_the_room_is_me() {
+        let even = mic_split(&[(0.0, 300_000), (90.0, 300_000), (180.0, 300_000)]);
+        let room = room_voices(&even, None, &no_call(0), 0, 0).unwrap();
+        assert_eq!(speakers_of(&room), vec!["s1", "s2", "s3"]);
+        let room = room_voices(&even, Some(&unit(270.0)), &no_call(0), 0, 0).unwrap();
+        assert_eq!(
+            speakers_of(&room),
+            vec!["s1", "s2", "s3"],
+            "the voice from dictation matches nobody"
+        );
+    }
+
+    #[test]
+    fn a_second_voice_like_the_users_joins_me() {
+        let mic = mic_split(&[(0.0, 300_000), (50.0, 100_000), (54.0, 100_000)]);
+        let room = room_voices(&mic, Some(&unit(0.0)), &no_call(0), 0, 0).unwrap();
+        assert_eq!(speakers_of(&room), vec!["me", "me", "s1"]);
+    }
+
+    #[test]
+    fn room_voices_are_numbered_after_the_call_voices() {
+        let mic = mic_split(&[(0.0, 300_000), (90.0, 100_000)]);
+        let room = room_voices(&mic, Some(&unit(0.0)), &no_call(2), 0, 0).unwrap();
+        assert_eq!(speakers_of(&room), vec!["me", "s3"]);
+        assert_eq!(room.voices.len(), 3);
+        assert!(room.voices[..2].iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn during_a_call_the_mic_stays_the_user() {
+        let mut call = no_call(1);
+        call.voices = vec![Some(unit(120.0))];
+        let call_ms = 1_200_000;
+        let own = unit(0.0);
+        let split = |mic: &Speakers, own: Option<&[f32]>, call: &Speakers, shift, call_ms| {
+            room_voices(mic, own, call, shift, call_ms).map(|r| speakers_of(&r))
+        };
+        // The user split in two, and the call heard through the speakers.
+        let mic = mic_split(&[(0.0, 300_000), (20.0, 100_000), (115.0, 80_000)]);
+        assert_eq!(split(&mic, Some(&own), &call, 0, call_ms), None);
+        // A little of someone else.
+        let mic = mic_split(&[(0.0, 300_000), (270.0, 20_000)]);
+        assert_eq!(split(&mic, Some(&own), &call, 0, call_ms), None);
+        // Someone a bit like the user.
+        let mic = mic_split(&[(0.0, 300_000), (57.0, 100_000)]);
+        assert_eq!(split(&mic, Some(&own), &call, 0, call_ms), None);
+        // Someone else at the laptop for a good part of the call.
+        let mic = mic_split(&[(0.0, 300_000), (270.0, 100_000)]);
+        assert_eq!(
+            split(&mic, Some(&own), &call, 0, call_ms),
+            Some(vec!["me".to_string(), "s2".to_string()])
+        );
+        // Without the user's voice from dictation, never.
+        assert_eq!(split(&mic, None, &call, 0, call_ms), None);
+        // A voice heard only while the call talks is the call, even when it
+        // sounds like nobody on it (here the call starts 1 s before the mic).
+        call.turns = vec![Turn {
+            start_ms: 290_000,
+            end_ms: 410_000,
+            speaker: 0,
+        }];
+        assert_eq!(split(&mic, Some(&own), &call, 1_000, call_ms), None);
+        assert!(split(&mic, Some(&own), &call, 100_000, call_ms).is_some());
+        call.turns.clear();
+        // A quiet call: a little of someone else counts.
+        let mic = mic_split(&[(0.0, 300_000), (270.0, 20_000)]);
+        assert!(split(&mic, Some(&own), &call, 0, 30_000).is_some());
+    }
+
+    #[test]
+    fn lone_stretches_are_where_the_call_is_silent() {
+        let lines: Vec<(i64, i64)> = vec![
+            (0, 1_000),
+            (2_000, 12_000),
+            (20_000, 25_000),
+            (30_000, 34_000),
+        ];
+        let call = [Turn {
+            start_ms: 31_000,
+            end_ms: 32_000,
+            speaker: 0,
+        }];
+        assert_eq!(
+            lone_mic_windows(&lines, &call, 0),
+            vec![(4_000, 10_000), (20_000, 25_000)],
+            "too short, the middle 6 s, whole, the call talking over it"
+        );
+        let many: Vec<(i64, i64)> = (0..100).map(|i| (i * 10_000, i * 10_000 + 3_000)).collect();
+        let picked = lone_mic_windows(&many, &[], 0);
+        assert_eq!(picked.len(), 20);
+        assert_eq!((picked[0].0, picked[19].0), (0, 950_000));
+    }
+
+    #[test]
+    fn the_mic_is_only_the_user_when_the_stretches_together_sound_like_them() {
+        let own = unit(0.0);
+        let spread: Vec<Vec<f32>> = (0..6)
+            .map(|i| unit(if i % 2 == 0 { 55.0 } else { -55.0 }))
+            .collect();
+        assert!(only_user(&spread, &own), "noisy alone, the user together");
+        assert!(!only_user(&spread[..4], &own), "too few to tell");
+        let mut one_off: Vec<Vec<f32>> = (0..6)
+            .map(|i| unit(if i % 2 == 0 { 30.0 } else { -30.0 }))
+            .collect();
+        one_off.push(unit(70.0));
+        assert!(
+            !only_user(&one_off, &own),
+            "one stretch sounds like someone else"
+        );
+        assert!(
+            !only_user(&vec![unit(50.0); 6], &own),
+            "together not close enough"
+        );
+        let mut low: Vec<Vec<f32>> = (0..6)
+            .map(|i| unit(if i % 2 == 0 { 20.0 } else { -20.0 }))
+            .collect();
+        low.push(unit(60.0));
+        assert!(!only_user(&low, &own), "one stretch at 0.5 is too far");
+    }
+
+    #[test]
+    fn mic_speech_while_the_call_talks_is_measured() {
+        let lines = [(0, 10_000), (20_000, 30_000)];
+        let call = [Turn {
+            start_ms: 26_000,
+            end_ms: 40_000,
+            speaker: 0,
+        }];
+        assert_eq!(mic_during_call(&lines, &call, 0), 0.2);
+        assert_eq!(mic_during_call(&lines, &call, 6_000), 0.5);
+        assert_eq!(mic_during_call(&[], &call, 0), 0.0);
+    }
+
+    #[test]
+    fn one_mic_voice_is_the_user() {
+        let mic = mic_split(&[(0.0, 300_000)]);
+        assert!(room_voices(&mic, None, &no_call(0), 0, 0).is_none());
     }
 
     #[test]
@@ -2267,6 +2824,32 @@ mod tests {
             ("s4", "No, that is all from me for today.", 6_000),
         ]);
         assert!(names_from_guesses(&mentioned, &[], &[], &invited).is_empty());
+    }
+
+    #[test]
+    fn people_in_the_room_are_named_like_call_voices() {
+        let invited = invited(&["Mohan Rao"]);
+        let mut lines = timed(&[
+            ("me", "Mohan, aap bata do.", 3_000),
+            ("s2", "The export is done and the tests pass now.", 6_000),
+            ("me", "Okay. Mohan, your update on billing?", 3_000),
+            (
+                "s2",
+                "Billing ships on Friday, nothing else from me.",
+                6_000,
+            ),
+        ]);
+        for line in &mut lines {
+            line.source = "mic".into();
+        }
+        assert_eq!(
+            names_from_guesses(&lines, &[], &[], &invited),
+            vec![("s2".to_string(), "Mohan Rao".to_string())]
+        );
+        let guess = guess("Speaker 2", "Mohan", &[0, 2]);
+        let (named, _) = judge_guesses(&lines, &[guess], &[], &invited);
+        assert_eq!(named.len(), 1);
+        assert_eq!(named[0].key, "s2");
     }
 
     #[test]

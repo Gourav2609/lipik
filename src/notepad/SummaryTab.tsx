@@ -250,12 +250,12 @@ const SummaryBody = ({
   const t = (s: string) => <Text text={s} names={names} query="" />;
 
   const sections: { heading: string; items: ReactNode[] }[] = [
+    { heading: "Decisions", items: summary.decisions.map(t) },
     ...summary.sections.map((s) => ({
       heading: s.heading ?? "",
       items: (s.bullets ?? []).map(t),
     })),
     { heading: "Key points", items: summary.key_points.map(t) },
-    { heading: "Decisions", items: summary.decisions.map(t) },
     {
       heading: "Next steps",
       items: summary.action_items.map((a) => (

@@ -17,7 +17,10 @@
       content="What changed in each version of Lipik."
     />
     <meta property="og:url" content="https://lipik.pages.dev/releases" />
-    <meta property="og:image" content="https://lipik.pages.dev/assets/og.png" />
+    <meta
+      property="og:image"
+      content="https://lipik.pages.dev/assets/og.png?v=2"
+    />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -32,7 +35,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://lipik.pages.dev/assets/og.png"
+      content="https://lipik.pages.dev/assets/og.png?v=2"
     />
 
     <meta name="theme-color" content="#fbf9f4" />
@@ -44,8 +47,8 @@
         "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS (Apple silicon, M1 or later)",
-        "softwareVersion": "0.1.12",
-        "dateModified": "2026-10-30",
+        "softwareVersion": "0.1.13",
+        "dateModified": "2026-10-31",
         "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
         "url": "https://lipik.pages.dev/",
         "releaseNotes": "https://lipik.pages.dev/releases",
@@ -125,7 +128,7 @@
           <p class="rel-sub">
             What changed in each version of Lipik. The newest is at the top.
           </p>
-          <p class="rel-sub">Latest: 0.1.12, 30 Oct 2026.</p>
+          <p class="rel-sub">Latest: 0.1.13, 31 Oct 2026.</p>
           <p class="rel-sub">
             To install or update, paste this into Terminal and press Return. It
             keeps your settings, history and permissions:
@@ -146,6 +149,65 @@
         </div>
       </section>
       <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.13">
+          <header class="rel-head">
+            <h2>Lipik 0.1.13</h2>
+            <p class="rel-meta">
+              <time datetime="2026-10-31">31 October 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.13"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Voices told apart in room meetings, cleaner transcripts and notes,
+              Press Enter after dictation, and an easier first setup.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Meetings in a room.</strong> When everyone talks into
+                your Mac&#x27;s microphone, Lipik now tells the voices apart:
+                you, then Speaker 1, 2, 3. It knows which voice is yours from
+                your own dictation. Turn this off with
+                <strong>Know my voice</strong> in Settings → Meetings.
+              </li>
+              <li>
+                <strong>Cleaner meeting transcripts.</strong> Hinglish meetings
+                come out in Roman letters only, and numbers are never changed
+                when Hindi is written out. Words in your Vocabulary fix what the
+                speech model mishears, like &quot;Zoom Info&quot; to ZoomInfo.
+                Repeated loops and made-up phrases in silences are removed.
+                Lines show the time.
+              </li>
+              <li>
+                <strong>Better meeting notes.</strong> Notes now keep decisions,
+                proposals and open questions apart, copy numbers as they were
+                said, and never invent who does what or by when.
+              </li>
+              <li>
+                <strong>Press Enter after dictation.</strong> Turn on
+                <strong>Press Enter after dictation</strong> in Settings →
+                Dictation to send the message right after the text is typed, in
+                Slack or ChatGPT for example.
+              </li>
+              <li>
+                <strong>Easier first setup.</strong> Setup picks a speech model
+                for your Mac&#x27;s language, downloads it before the clean-up
+                model, and the pill tells you if you press fn before it&#x27;s
+                ready. The Terminal installer also updates Lipik while AI apps
+                are connected to it.
+              </li>
+              <li>
+                <strong>Smaller fixes.</strong> A capital &quot;UM&quot; is no
+                longer typed. Call audio no longer reconnects over and over when
+                nothing is playing. Setup now asks whether to send the anonymous
+                count, which also says how far setup got.
+              </li>
+            </ul>
+          </div>
+        </article>
         <article class="rel" id="v0.1.12">
           <header class="rel-head">
             <h2>Lipik 0.1.12</h2>

@@ -102,9 +102,11 @@ connects to the internet for:
   dictation only
 - every few hours, a request to GitHub for the latest version number (Settings →
   Privacy → Updates turns it off)
-- every 3 hours, an anonymous usage count to lipik.pages.dev: a random
-  install ID, the app version and the macOS version, so we know how many
-  people use Lipik (Settings → Privacy → Usage count turns it off). The
+- every 3 hours, once you leave the box on setup's first screen ticked, an
+  anonymous usage count to lipik.pages.dev: a random install ID, the app
+  version, the macOS version, the chip type and how far setup got, so we
+  know how many people use Lipik and whether setup works (Settings →
+  Privacy → Usage count turns it off). The
   server notes the country and does not keep the IP address. The code is
   [src-tauri/src/usage_ping.rs](src-tauri/src/usage_ping.rs) and
   [website/worker.js](website/worker.js).

@@ -286,6 +286,20 @@ impl ModelUnloadTimeout {
     }
 }
 
+/// How far setup got, sent with the usage ping. Variants are in order: a
+/// later one is further along.
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Type,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum SetupStep {
+    #[default]
+    Installed,
+    Permissions,
+    ModelReady,
+    FirstDictation,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SoundTheme {
@@ -426,6 +440,13 @@ pub struct AppSettings {
     /// Random ID sent with the usage ping, made on first launch.
     #[serde(default)]
     pub install_id: String,
+    /// The furthest setup step reached. Only ever moves forward.
+    #[serde(default)]
+    pub setup_step: SetupStep,
+    /// The user answered the usage-count tick box on the welcome screen. No
+    /// ping is sent before this.
+    #[serde(default)]
+    pub usage_ping_answered: bool,
     #[serde(default = "default_show_whats_new_on_update")]
     pub show_whats_new_on_update: bool,
     /// The app version whose What's New the user has already seen. Fresh installs
@@ -1066,6 +1087,8 @@ pub fn get_default_settings() -> AppSettings {
         release_check_enabled: default_release_check_enabled(),
         usage_ping_enabled: default_usage_ping_enabled(),
         install_id: String::new(),
+        setup_step: SetupStep::Installed,
+        usage_ping_answered: false,
         show_whats_new_on_update: default_show_whats_new_on_update(),
         whats_new_last_seen_version: default_whats_new_last_seen_version(),
         selected_model: "".to_string(),
@@ -1195,6 +1218,13 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
             updated = true;
         }
 
+        if backfill_setup_step(&mut settings, &settings_value, || {
+            crate::portable::app_data_dir(app)
+                .is_ok_and(|dir| crate::managers::history::has_dictation(&dir.join("history.db")))
+        }) {
+            updated = true;
+        }
+
         // Merge in any bindings added since this store was written.
         for (key, value) in get_default_settings().bindings {
             if let std::collections::hash_map::Entry::Vacant(entry) = settings.bindings.entry(key) {
@@ -1265,6 +1295,24 @@ fn salvage_settings(stored: &serde_json::Value) -> AppSettings {
     })
 }
 
+/// Stores from before `setup_step` existed: someone who finished setup got at
+/// least as far as a ready model, and further if they have dictated.
+fn backfill_setup_step(
+    settings: &mut AppSettings,
+    settings_value: &serde_json::Value,
+    has_dictation: impl FnOnce() -> bool,
+) -> bool {
+    if settings_value.get("setup_step").is_some() || !settings.setup_finished {
+        return false;
+    }
+    settings.setup_step = if has_dictation() {
+        SetupStep::FirstDictation
+    } else {
+        SetupStep::ModelReady
+    };
+    true
+}
+
 fn apply_settings_migrations(
     settings: &mut AppSettings,
     settings_value: &serde_json::Value,
@@ -1283,6 +1331,13 @@ fn apply_settings_migrations(
     // went through setup already.
     if settings_value.get("setup_finished").is_none() {
         settings.setup_finished = settings.onboarding_completed;
+        updated = true;
+    }
+
+    // Stores from before the welcome-screen tick box: people who finished
+    // setup were told about the count on the old privacy step.
+    if settings_value.get("usage_ping_answered").is_none() {
+        settings.usage_ping_answered = settings.setup_finished;
         updated = true;
     }
 
@@ -1425,6 +1480,28 @@ pub fn write_settings(app: &AppHandle, settings: AppSettings) {
     store.set("settings", serde_json::to_value(&settings).unwrap());
 }
 
+static SETTINGS_UPDATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Reads, changes and writes the settings while holding one lock, so two
+/// updates through here can't overwrite each other.
+pub fn update_settings(app: &AppHandle, change: impl FnOnce(&mut AppSettings) -> bool) {
+    update_with(|| get_settings(app), |s| write_settings(app, s), change);
+}
+
+fn update_with(
+    read: impl FnOnce() -> AppSettings,
+    write: impl FnOnce(AppSettings),
+    change: impl FnOnce(&mut AppSettings) -> bool,
+) {
+    let _guard = SETTINGS_UPDATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut settings = read();
+    if change(&mut settings) {
+        write(settings);
+    }
+}
+
 pub fn get_bindings(app: &AppHandle) -> HashMap<String, ShortcutBinding> {
     let settings = get_settings(app);
 
@@ -1452,6 +1529,99 @@ pub fn get_recording_retention_period(app: &AppHandle) -> RecordingRetentionPeri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn updates_from_two_threads_are_both_kept() {
+        use std::sync::{Arc, Barrier, Mutex};
+        use std::time::Duration;
+
+        let store = Arc::new(Mutex::new(get_default_settings()));
+        let start = Arc::new(Barrier::new(2));
+        let run = |change: fn(&mut AppSettings)| {
+            let store = Arc::clone(&store);
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                start.wait();
+                update_with(
+                    || {
+                        let read = store.lock().unwrap().clone();
+                        std::thread::sleep(Duration::from_millis(50));
+                        read
+                    },
+                    |s| *store.lock().unwrap() = s,
+                    |s| {
+                        change(s);
+                        true
+                    },
+                );
+            })
+        };
+        let a = run(|s| s.setup_step = SetupStep::FirstDictation);
+        let b = run(|s| s.usage_ping_enabled = false);
+        a.join().unwrap();
+        b.join().unwrap();
+        let settings = store.lock().unwrap();
+        assert_eq!(settings.setup_step, SetupStep::FirstDictation);
+        assert!(!settings.usage_ping_enabled);
+    }
+
+    #[test]
+    fn people_who_finished_setup_before_the_tick_box_keep_pinging() {
+        for finished in [true, false] {
+            let mut settings = get_default_settings();
+            settings.setup_finished = finished;
+            let mut stored = serde_json::to_value(&settings).unwrap();
+            stored
+                .as_object_mut()
+                .unwrap()
+                .remove("usage_ping_answered");
+            assert!(apply_settings_migrations(&mut settings, &stored));
+            assert_eq!(settings.usage_ping_answered, finished);
+        }
+        let mut settings = get_default_settings();
+        settings.setup_finished = true;
+        let stored = serde_json::to_value(get_default_settings()).unwrap();
+        apply_settings_migrations(&mut settings, &stored);
+        assert!(!settings.usage_ping_answered);
+    }
+
+    #[test]
+    fn existing_finished_setup_never_reports_installed() {
+        let mut stored = serde_json::to_value(get_default_settings()).unwrap();
+        stored.as_object_mut().unwrap().remove("setup_step");
+
+        let mut settings = get_default_settings();
+        settings.setup_finished = true;
+        assert!(backfill_setup_step(&mut settings, &stored, || true));
+        assert_eq!(settings.setup_step, SetupStep::FirstDictation);
+
+        let mut settings = get_default_settings();
+        settings.setup_finished = true;
+        assert!(backfill_setup_step(&mut settings, &stored, || false));
+        assert_eq!(settings.setup_step, SetupStep::ModelReady);
+
+        // Setup not finished: starts from the beginning, history unread.
+        let mut settings = get_default_settings();
+        assert!(!backfill_setup_step(
+            &mut settings,
+            &stored,
+            || unreachable!()
+        ));
+        assert_eq!(settings.setup_step, SetupStep::Installed);
+
+        // A stored step is kept as it is.
+        let mut stored = serde_json::to_value(get_default_settings()).unwrap();
+        stored["setup_step"] = serde_json::json!("permissions");
+        let mut settings = get_default_settings();
+        settings.setup_finished = true;
+        settings.setup_step = SetupStep::Permissions;
+        assert!(!backfill_setup_step(
+            &mut settings,
+            &stored,
+            || unreachable!()
+        ));
+        assert_eq!(settings.setup_step, SetupStep::Permissions);
+    }
 
     #[test]
     fn stored_binding_returns_the_requested_binding() {
@@ -1490,6 +1660,7 @@ mod tests {
         assert!(settings.filler_word_removal_enabled);
         assert!(settings.usage_ping_enabled);
         assert!(settings.install_id.is_empty());
+        assert_eq!(settings.setup_step, SetupStep::Installed);
         assert!(!settings.setup_finished);
         // Bindings default to empty; the load path merges the real defaults in.
         assert!(settings.bindings.is_empty());
@@ -1910,6 +2081,7 @@ mod tests {
             "settings_schema_version": CURRENT_SETTINGS_SCHEMA_VERSION,
             "onboarding_completed": false,
             "setup_finished": false,
+            "usage_ping_answered": false,
             "whats_new_last_seen_version": default_whats_new_last_seen_version(),
             "overlay_style": "live",
             "transcribe_accelerator": "gpu",
@@ -1973,6 +2145,7 @@ mod tests {
             "settings_schema_version": CURRENT_SETTINGS_SCHEMA_VERSION,
             "onboarding_completed": false,
             "setup_finished": false,
+            "usage_ping_answered": false,
             "whats_new_last_seen_version": default_whats_new_last_seen_version(),
             "overlay_style": "live",
             "chinese_script": "as_transcribed",

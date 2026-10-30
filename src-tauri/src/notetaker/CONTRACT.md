@@ -23,7 +23,7 @@ of the meeting.
 | `notetaker_rename`                  | `id, title`                                                       | `void`                                                          | Marks the title as the user's (notes will no longer replace it, even if they are being written right now). Fails on an empty title.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `notetaker_rename_speaker`          | `meeting_id, speaker_key, name`                                   | `void`                                                          | Names one speaker (`speaker_key` from a segment) on every line of the meeting, then sends `notetaker-transcript` with `replace: true`. A voice-split speaker's voice is saved under that name (see Speakers). Fails on an empty name or a key the meeting doesn't have.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `notetaker_saved_voices`            |                                                                   | `number`                                                        | How many people have a saved voice (see Speakers).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `notetaker_forget_voices`           |                                                                   | `void`                                                          | Deletes every saved voice, in all meetings.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `notetaker_forget_voices`           |                                                                   | `void`                                                          | Deletes every saved voice, in all meetings, and the user's own voice, and turns `learn_own_voice` off.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `notetaker_move_to_folder`          | `id, folder: string \| null`                                      | `void`                                                          | `null` or empty removes it from its folder. Folders exist only through their meetings.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `notetaker_folders`                 | none                                                              | `FolderInfo[]`                                                  | For the Folders tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `notetaker_regenerate`              | `id`                                                              | `void`                                                          | Writes the notes again, keeping the transcript (after the AI model became available, or thoughts changed). For a meeting with `status: "failed"` the final transcript is made again too. Fails while the meeting is being recorded or processed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -97,6 +97,7 @@ type NoteSummary = {
   key_points: string[];
   decisions: string[];
   action_items: { text: string; owner: string | null; due: string | null }[];
+  quotes?: { item: string; quote: string }[]; // transcript words behind each decision/proposal; not shown
 };
 type NotetakerFilter = {
   query: string | null;
@@ -191,6 +192,7 @@ the notes or thoughts).
 | `ollama_model: string`          | `qwen3:8b`               | Model used on that server                            |
 | `language: "auto" \| "english" \| "hinglish"` | `auto`  | Meeting language, see Hinglish meetings below        |
 | `meeting_window_names: boolean` | `false`                  | Names from Slack huddles (see Speakers)              |
+| `learn_own_voice: boolean`      | `true`                   | Learn the user's voice from dictation (see Speakers) |
 
 The backend does not show the next meeting in the menu bar.
 
@@ -246,7 +248,8 @@ the English model writes nothing for much of the Hindi it hears:
   the split in `call-turns.json` in the meeting's folder; a meeting from
   before that whose call lines were split is split again (same audio, same
   split). Longer stretches are cut into equal parts of at most 2 minutes.
-- Mic stretches ("Me") are heard only when the call was taken out of the
+- Mic stretches ("Me", or the people in the room from `mic-turns.json`)
+  are heard only when the call was taken out of the
   mic (or the mic never heard it); when that failed, mic stretches are
   skipped. A mic piece heard there is dropped only when taking the call
   out left at most 25% of its energy and the raw mic correlates with the
@@ -280,8 +283,48 @@ Speakers are numbered by first appearance (`s1` = "Speaker 1"). A voice with
 under 25 s of speech joins the voice it sounds most like if they are at least
 0.5 alike, else its lines stay "Them". If anything fails (offline on first use,
 silent call audio), the call stays one "Them" (`speaker_key` "them"); the
-meeting never fails because of it. The microphone is always "Me". Lines from
-before speaker detection keep one key per old name (`n:<name>`).
+meeting never fails because of it. Lines from before speaker detection keep
+one key per old name (`n:<name>`).
+
+The microphone is "Me" unless it holds other people in the room. When the
+call could be kept out of the mic (see the Hinglish redo), the mic may be
+split by voice too.
+
+The user's own voice is made from the newest dictation recordings
+(`<app data>/recordings/`, up to 30 s from each, 2 minutes in all, at least
+20 s of speech), kept in `own_voice` and made again once a week. When the
+recordings no longer hold enough speech, the kept one is deleted. Setting
+`learn_own_voice` off deletes it and stops learning it;
+`notetaker_forget_voices` does both too.
+
+Mic voices that are the call heard through the speakers are left out of
+every choice and stay "Me": 0.6 or more like a call voice, or heard half
+their time or more while the call talks (measured: the echo left in the mic
+105%, the user 21%).
+
+- During a call (a minute or more of call speech, and at least a tenth of
+  the mic's): first up to 20 stretches where the user talks alone (mic
+  lines of 2 s or more, middle 6 s, the call silent) are compared with the
+  user's own voice. When there are 5 or more, their average voice is 0.65
+  or more like it, none is under 0.55 (one short stretch is noisy: with
+  only the user on the mic they measured 0.47-0.73), and at most 20% of the
+  mic's speech is heard while the call talks (someone talking only then is
+  never in the stretches), the mic is not split. Otherwise it is split, and stays "Me" unless one
+  mic voice is 0.6 or more like the user's own voice and another is under
+  0.5 like it with a tenth of the mic's speech. With no own voice the mic is
+  never split during a call.
+- With no call: the mic is always split. "Me" is the mic voice 0.6 or more
+  like the user's own voice (on a meeting of four at one laptop the user
+  measured 0.71-0.75, the others 0.29-0.52). With no own voice, it is the
+  voice with the most speech if that has 40% of the mic's speech; otherwise
+  nobody is "Me" and every mic voice is a speaker (short unmatched stretches
+  are "Them").
+- Every other mic voice 0.6 or more like the user's own voice is the user
+  too (the model split them in two).
+
+Other mic voices become speakers numbered after the call's voices (`s<n>`,
+their lines keep `source: "mic"`). The split is kept in `mic-turns.json`
+for the Hinglish redo. The naming rules below apply to these speakers too.
 
 Names, in order, only for speakers still on their default label:
 
@@ -327,7 +370,7 @@ Names, in order, only for speakers still on their default label:
 ## Files
 
 `<app data>/notetaker/notetaker.db` (SQLite: meetings, segments, my_thoughts,
-summaries, chat_messages, meeting_voices, voice_profiles) and `<app data>/notetaker/<meeting_id>/mic.wav` +
+summaries, chat_messages, meeting_voices, own_voice) and `<app data>/notetaker/<meeting_id>/mic.wav` +
 `system.wav` (16 kHz mono 16-bit). Both files stay on the wall clock: a gap (device
 unplugged, output device switched) is filled with silence. Meetings left
 `recording`/`processing` by a crash are finished from these files at the next
@@ -339,8 +382,15 @@ instead (Regenerate retries it).
 - Microphone: when it fails (unplugged), it is reopened every 5 s, falling back to
   the system default microphone. It uses the clamshell microphone setting when the
   lid is closed, like dictation.
-- System audio: when its audio stops for 2 s, or the default output device changes,
-  the capture is rebuilt on the current output device.
+- System audio: when the default output device changes (checked every 2 s), the
+  capture is rebuilt on it at once. When its audio stops for 2 s, it is rebuilt
+  within 3 s while another app plays sound,
+  else after 1, 2, 5 and 15 s, then every 60 s, until audio comes back. A new
+  tap delivers nothing until something plays (measured), so before its first
+  audio it is rebuilt only while another app plays, and nothing is shown as a
+  failure. A new output device is not counted as a try or shown as a failure. After audio has flowed, the first
+  rebuild of a quiet spell logs "system audio stopped" and shows the stream as
+  reconnecting; audio coming back logs once and clears it.
 - When live transcription falls more than 2 minutes behind (slow model, long
   dictation), the oldest live audio is skipped (the utterance in progress ends
   there). The final pass still covers it.

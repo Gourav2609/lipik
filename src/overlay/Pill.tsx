@@ -186,6 +186,8 @@ const loudnessLevel = (s: ReturnType<typeof freshLoudness>, db: number) => {
 const ARM_MS = 150;
 const CLICK_WAIT = 1500;
 const POPUP_DELAY = 1050;
+/** How long a notice such as "Speech model still downloading" stays. */
+const NOTICE_MS = 3500;
 const DRAG_SLOP = 3;
 const HOT_DELAY = 250;
 const LEAVE_MS = 50;
@@ -357,6 +359,7 @@ const Pill: React.FC = () => {
   const [armed, setArmed] = useState(false);
   const [working, setWorking] = useState(false);
   const [modelLoading, setModelLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [shortcut, setShortcut] = useState("fn");
   const [clickPending, setClickPending] = useState(false);
   const [clickRec, setClickRec] = useState(false);
@@ -598,6 +601,10 @@ const Pill: React.FC = () => {
         if (e.payload.inserted || !e.payload.text) return;
         if (phaseRef.current === "idle") showPopupLater(e.payload.text);
         else pendingText.current = e.payload.text;
+      }),
+      listen<string>("pill-notice", (e) => {
+        setNotice(e.payload);
+        later("notice", NOTICE_MS, () => setNotice(null));
       }),
       listen<{ undo_ms: number }>("pill-cancelled", (e) => {
         clickAt.current = 0;
@@ -1089,6 +1096,7 @@ const Pill: React.FC = () => {
 
   const showTip = mode === "hover" && hover && !menu && !meetings && !card;
   const loadingLabel = mode === "proc" && modelLoading;
+  const noticeLabel = !showTip && !loadingLabel && mode !== "gone" && notice;
   const hot = micHover && hotReady && mode === "hover";
   const drop = drag && covers ? slots() : null;
   const showTab =
@@ -1274,7 +1282,7 @@ const Pill: React.FC = () => {
       </div>
 
       <div
-        className={`pill-label ${showTip ? "tip" : ""} ${showTip || loadingLabel ? "in" : ""}`}
+        className={`pill-label ${showTip ? "tip" : ""} ${showTip || loadingLabel || noticeLabel ? "in" : ""}`}
         style={{
           ...label(GEO.hover.edge + MIC_W + (bottom ? TIP_ABOVE : LABEL_GAP)),
           transform: labelMove(tipAway ? TIP_DROP : 0, tipAway ? TAB_AWAY : 0),
@@ -1282,6 +1290,8 @@ const Pill: React.FC = () => {
       >
         {loadingLabel ? (
           tr("overlay.loadingModel")
+        ) : noticeLabel ? (
+          noticeLabel
         ) : tabHover ? (
           tr("pill.upcomingMeetings", "Upcoming meetings")
         ) : recHover ? (

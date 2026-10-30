@@ -81,6 +81,13 @@ static MIGRATIONS: &[M] = &[
         PRIMARY KEY (meeting_id, speaker_key)
     );",
     ),
+    M::up(
+        "CREATE TABLE own_voice (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        embedding BLOB NOT NULL,
+        updated_ms INTEGER NOT NULL
+    );",
+    ),
 ];
 
 /// Segments read by a store that skipped the migrations (the AI tools server
@@ -457,9 +464,37 @@ impl Store {
             .collect())
     }
 
-    /// Forgets every saved voice, in all meetings.
+    /// Forgets every saved voice, in all meetings, and the user's own.
     pub fn forget_voices(&self) -> Result<()> {
-        self.conn().execute("DELETE FROM meeting_voices", [])?;
+        let conn = self.conn();
+        conn.execute("DELETE FROM meeting_voices", [])?;
+        conn.execute("DELETE FROM own_voice", [])?;
+        Ok(())
+    }
+
+    /// The user's voice from dictation and when it was made.
+    pub fn own_voice(&self) -> Result<Option<(Vec<f32>, i64)>> {
+        let row: Option<(Vec<u8>, i64)> = self
+            .conn()
+            .query_row(
+                "SELECT embedding, updated_ms FROM own_voice WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        Ok(row.map(|(blob, at)| (voice_from_blob(&blob), at)))
+    }
+
+    pub fn forget_own_voice(&self) -> Result<()> {
+        self.conn().execute("DELETE FROM own_voice", [])?;
+        Ok(())
+    }
+
+    pub fn save_own_voice(&self, voice: &[f32], updated_ms: i64) -> Result<()> {
+        self.conn().execute(
+            "INSERT OR REPLACE INTO own_voice (id, embedding, updated_ms) VALUES (1, ?1, ?2)",
+            params![voice_to_blob(voice), updated_ms],
+        )?;
         Ok(())
     }
 
@@ -894,8 +929,14 @@ mod tests {
         store.delete("m2").unwrap();
         assert_eq!(store.voice_profiles(None).unwrap().len(), 1);
         assert_eq!(store.meeting_voice("m2", "s1").unwrap(), None);
+        store.save_own_voice(&[0.5, 0.5], 7).unwrap();
+        assert_eq!(store.own_voice().unwrap(), Some((vec![0.5, 0.5], 7)));
+        store.forget_own_voice().unwrap();
+        assert_eq!(store.own_voice().unwrap(), None);
+        store.save_own_voice(&[0.5, 0.5], 7).unwrap();
         store.forget_voices().unwrap();
         assert!(store.voice_profiles(None).unwrap().is_empty());
+        assert_eq!(store.own_voice().unwrap(), None);
         assert_eq!(store.meeting_voice("m1", "s2").unwrap(), None);
     }
 

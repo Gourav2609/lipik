@@ -1,15 +1,18 @@
 //! Every few hours, tells lipik.pages.dev that this copy of Lipik is in use, so
-//! we know how many people use it. The ping carries exactly four things: a
+//! we know how many people use it. The ping carries exactly five things: a
 //! random ID made on first launch (`install_id`), the app version, the macOS
-//! version and the chip type ("arm64" or "x86_64"). Never audio, text, names
-//! or file paths. It can be turned off in Settings (`usage_ping_enabled`).
+//! version, the chip type ("arm64" or "x86_64") and how far setup got
+//! (`setup_step`). Never audio, text, names or file paths. It can be turned
+//! off in Settings (`usage_ping_enabled`).
 //!
-//! Nothing is sent before setup is finished, and debug builds never ping.
+//! Nothing is sent until the user answers the tick box on the welcome
+//! screen. With it ticked, pings start then, before the rest of setup, so we
+//! can see where setup stops. Debug builds never ping.
 //!
 //! Setup can also send an email address, on its own, when the user asks to
 //! hear about new versions.
 
-use crate::settings::{get_settings, write_settings};
+use crate::settings::{get_settings, update_settings, AppSettings, SetupStep};
 use log::debug;
 use serde_json::{json, Value};
 use std::time::{Duration, SystemTime};
@@ -55,13 +58,32 @@ fn arch() -> &'static str {
     }
 }
 
-fn ping_body(install_id: &str) -> Value {
+fn ping_body(install_id: &str, step: SetupStep) -> Value {
     json!({
         "id": install_id,
         "version": env!("CARGO_PKG_VERSION"),
         "os": os_version(),
         "arch": arch(),
+        "step": step,
     })
+}
+
+fn may_ping(settings: &AppSettings) -> bool {
+    settings.usage_ping_answered && settings.usage_ping_enabled
+}
+
+/// Records that setup got as far as `step`. An earlier step never replaces a
+/// later one.
+pub fn reach_step(app: &AppHandle, step: SetupStep) {
+    update_settings(app, |settings| {
+        moves_forward(settings.setup_step, step)
+            .map(|step| settings.setup_step = step)
+            .is_some()
+    });
+}
+
+fn moves_forward(current: SetupStep, reached: SetupStep) -> Option<SetupStep> {
+    (reached > current).then_some(reached)
 }
 
 /// Sends the ping a minute after start-up, then whenever three hours have
@@ -79,8 +101,9 @@ pub fn start(app: &AppHandle) {
         loop {
             let due = last_sent.is_none_or(|t| t.elapsed().map_or(true, |e| e >= SEND_EVERY));
             let settings = get_settings(&app);
-            if due && settings.usage_ping_enabled && settings.setup_finished {
-                match tauri::async_runtime::block_on(post(PING, ping_body(&settings.install_id))) {
+            if due && may_ping(&settings) {
+                let body = ping_body(&settings.install_id, settings.setup_step);
+                match tauri::async_runtime::block_on(post(PING, body)) {
                     Ok(_) => last_sent = Some(SystemTime::now()),
                     Err(e) => debug!("Usage ping failed: {e}"),
                 }
@@ -127,10 +150,28 @@ pub async fn submit_update_email(email: String, updates: bool) -> Result<(), Str
 
 #[tauri::command]
 #[specta::specta]
+pub fn reach_setup_step(app: AppHandle, step: SetupStep) {
+    reach_step(&app, step);
+}
+
+/// The welcome screen's tick box, sent when the user presses Continue.
+#[tauri::command]
+#[specta::specta]
+pub fn answer_usage_ping(app: AppHandle, enabled: bool) {
+    update_settings(&app, |settings| {
+        settings.usage_ping_answered = true;
+        settings.usage_ping_enabled = enabled;
+        true
+    });
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_usage_ping_setting(app: AppHandle, enabled: bool) {
-    let mut settings = get_settings(&app);
-    settings.usage_ping_enabled = enabled;
-    write_settings(&app, settings);
+    update_settings(&app, |settings| {
+        settings.usage_ping_enabled = enabled;
+        true
+    });
 }
 
 #[cfg(test)]
@@ -159,16 +200,74 @@ mod tests {
     }
 
     #[test]
-    fn ping_sends_only_id_version_os_and_arch() {
-        let body = ping_body("id-1");
+    fn ping_sends_only_id_version_os_arch_and_step() {
+        let body = ping_body("id-1", SetupStep::ModelReady);
         let keys: Vec<&str> = body
             .as_object()
             .unwrap()
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys, ["id", "version", "os", "arch"]);
+        assert_eq!(keys, ["id", "version", "os", "arch", "step"]);
         assert_eq!(body["id"], "id-1");
+        assert_eq!(body["step"], "model_ready");
         assert!(["arm64", "x86_64"].contains(&body["arch"].as_str().unwrap()));
+    }
+
+    #[test]
+    fn setup_steps_are_in_order_and_named_as_the_server_expects() {
+        let steps = [
+            SetupStep::Installed,
+            SetupStep::Permissions,
+            SetupStep::ModelReady,
+            SetupStep::FirstDictation,
+        ];
+        assert!(steps.windows(2).all(|w| w[0] < w[1]));
+        let names: Vec<Value> = steps.iter().map(|s| json!(s)).collect();
+        assert_eq!(
+            names,
+            ["installed", "permissions", "model_ready", "first_dictation"]
+        );
+        assert_eq!(SetupStep::default(), SetupStep::Installed);
+    }
+
+    #[test]
+    fn no_ping_until_the_welcome_tick_box_is_answered_yes() {
+        let mut settings = crate::settings::get_default_settings();
+        assert!(settings.usage_ping_enabled);
+        assert!(!may_ping(&settings));
+        settings.usage_ping_answered = true;
+        assert!(may_ping(&settings));
+        settings.usage_ping_enabled = false;
+        assert!(!may_ping(&settings));
+    }
+
+    #[test]
+    fn setup_step_never_goes_back() {
+        let mut step = SetupStep::Installed;
+        for reached in [
+            SetupStep::ModelReady,
+            SetupStep::Permissions,
+            SetupStep::Installed,
+            SetupStep::FirstDictation,
+            SetupStep::ModelReady,
+        ] {
+            if let Some(next) = moves_forward(step, reached) {
+                step = next;
+            }
+        }
+        assert_eq!(step, SetupStep::FirstDictation);
+        assert_eq!(
+            moves_forward(SetupStep::ModelReady, SetupStep::Permissions),
+            None
+        );
+        assert_eq!(
+            moves_forward(SetupStep::ModelReady, SetupStep::ModelReady),
+            None
+        );
+        assert_eq!(
+            moves_forward(SetupStep::Permissions, SetupStep::ModelReady),
+            Some(SetupStep::ModelReady)
+        );
     }
 }

@@ -456,16 +456,27 @@ fn is_acronym(token: &str) -> bool {
     letters.len() >= 2 && letters.iter().all(|c| c.is_uppercase())
 }
 
+/// Most words of two or more letters are in capitals, so a capital "UM" there
+/// is likely a name rather than a filler.
+fn mostly_capitals(text: &str) -> bool {
+    let words: Vec<&str> = text
+        .split_whitespace()
+        .filter(|w| w.chars().filter(|c| c.is_alphabetic()).count() >= 2)
+        .collect();
+    let capitals = words.iter().filter(|w| is_acronym(w)).count();
+    capitals * 2 > words.len()
+}
+
 /// Deletes every match of one filler pattern. A capitalized filler that opened
 /// a sentence hands its capital to the word that takes its place, so
 /// "Um, so I think" becomes "So I think" rather than "so I think".
-fn remove_filler_matches(text: &str, pattern: &Regex, keep_acronyms: bool) -> String {
+fn remove_filler_matches(text: &str, pattern: &Regex, keep: impl Fn(&str) -> bool) -> String {
     let mut kept = String::with_capacity(text.len());
     let mut resume = 0;
     let mut capital_owed = false;
 
     for filler in pattern.find_iter(text) {
-        if keep_acronyms && is_acronym(filler.as_str()) {
+        if keep(filler.as_str()) {
             continue;
         }
         push_restoring_capital(&mut kept, &text[resume..filler.start()], &mut capital_owed);
@@ -507,13 +518,26 @@ pub fn remove_filler_words(
     custom_filler_words: &Option<Vec<String>>,
     enabled: bool,
 ) -> String {
+    remove_filler_words_keeping(text, language, custom_filler_words, enabled, &[])
+}
+
+/// [`remove_filler_words`], keeping a capital "UM" or "ERM" that is in
+/// `dictionary` exactly as written.
+pub fn remove_filler_words_keeping(
+    text: &str,
+    language: &OutputLanguageEvidence,
+    custom_filler_words: &Option<Vec<String>>,
+    enabled: bool,
+    dictionary: &[String],
+) -> String {
     if !enabled {
         return text.to_string();
     }
 
     let pattern = |word: &str| Regex::new(&format!(r"(?i)\b{}\b[,.]?", regex::escape(word)));
-    // Build filler patterns from custom list or the built-in tiers. Gated words
-    // are real words elsewhere, so in capitals ("UM", "ERM") they are kept.
+    // Build filler patterns from custom list or the built-in tiers. Speech
+    // models write a spoken "um" as "UM" too, so a gated word in capitals is
+    // kept only when the dictionary has it or the text is mostly capitals.
     let patterns: Vec<(Regex, bool)> = match custom_filler_words {
         Some(words) => words
             .iter()
@@ -534,9 +558,18 @@ pub fn remove_filler_words(
     };
 
     // Remove filler words
+    let shouting = mostly_capitals(text);
+    let keep_capitals = |filler: &str| {
+        let word = filler.trim_end_matches([',', '.']);
+        is_acronym(word) && (shouting || dictionary.iter().any(|d| d == word))
+    };
     let mut filtered = text.to_string();
-    for (pattern, keep_acronyms) in &patterns {
-        filtered = remove_filler_matches(&filtered, pattern, *keep_acronyms);
+    for (pattern, gated) in &patterns {
+        filtered = if *gated {
+            remove_filler_matches(&filtered, pattern, keep_capitals)
+        } else {
+            remove_filler_matches(&filtered, pattern, |_| false)
+        };
     }
 
     filtered
@@ -735,10 +768,7 @@ mod tests {
             ("Red, um, blue or green.", "Red, blue or green."),
             ("He said, um, not today.", "He said, not today."),
             ("Can we, move the call?", "Can we, move the call?"),
-            (
-                "Hey can we, UM, move the call",
-                "Hey can we, UM, move the call",
-            ),
+            ("Hey can we, UM, move the call", "Hey can we move the call"),
             (
                 "Thank you, um, I will call you later.",
                 "Thank you, I will call you later.",
@@ -937,14 +967,35 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_keeps_all_caps_tokens() {
-        for text in [
-            "Go to the UM campus",
-            "The ERM team met",
-            "We took him to the ER last night",
-        ] {
-            assert_eq!(filter_transcription_output(text, "en", &None), text);
+    fn test_filter_removes_all_caps_um_said_as_a_filler() {
+        assert_eq!(
+            filter_transcription_output("UM so I was thinking we could start", "en", &None),
+            "So I was thinking we could start"
+        );
+        assert_eq!(
+            filter_transcription_output("The ERM, team met", "en", &None),
+            "The team met"
+        );
+        let text = "We took him to the ER last night";
+        assert_eq!(filter_transcription_output(text, "en", &None), text);
+    }
+
+    #[test]
+    fn test_filter_keeps_all_caps_um_from_the_dictionary_or_in_capitals() {
+        let english = OutputLanguageEvidence::UserSelected("en".to_string());
+        let dictionary = vec!["UM".to_string(), "ERM".to_string()];
+        for text in ["Go to the UM campus", "The ERM team met"] {
+            assert_eq!(
+                remove_filler_words_keeping(text, &english, &None, true, &dictionary),
+                text
+            );
         }
+        assert_eq!(
+            remove_filler_words_keeping("go to the um campus", &english, &None, true, &dictionary),
+            "go to the  campus"
+        );
+        let shouted = "PLEASE CALL THE UM OFFICE NOW";
+        assert_eq!(remove_filler_words(shouted, &english, &None, true), shouted);
     }
 
     #[test]

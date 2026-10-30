@@ -135,6 +135,38 @@ pub fn get_windows_microphone_permission_status() -> WindowsMicrophonePermission
     }
 }
 
+/// macOS microphone access by its AVAuthorizationStatus number.
+fn microphone_access_label(status: isize) -> &'static str {
+    match status {
+        0 => "not_determined",
+        3 => "granted",
+        _ => "denied",
+    }
+}
+
+/// macOS microphone access: "granted", "denied" (also when restricted) or
+/// "not_determined", when macOS would still show its prompt.
+#[tauri::command]
+#[specta::specta]
+pub fn microphone_permission_status() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2::runtime::AnyClass;
+        use objc2_foundation::NSString;
+        let Some(device) = AnyClass::get(c"AVCaptureDevice") else {
+            return "not_determined".to_string();
+        };
+        let audio = NSString::from_str("soun");
+        let status: isize =
+            unsafe { objc2::msg_send![device, authorizationStatusForMediaType: &*audio] };
+        microphone_access_label(status).to_string()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        microphone_access_label(3).to_string()
+    }
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn open_microphone_privacy_settings() -> Result<(), String> {
@@ -376,4 +408,21 @@ pub async fn set_selected_channel(app: AppHandle, channel: Option<u16>) -> Resul
     settings.selected_channel = channel;
     write_settings(&app, settings);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn microphone_access_labels() {
+        assert_eq!(microphone_access_label(0), "not_determined");
+        assert_eq!(microphone_access_label(1), "denied");
+        assert_eq!(microphone_access_label(2), "denied");
+        assert_eq!(microphone_access_label(3), "granted");
+        assert_eq!(
+            microphone_permission_status(),
+            microphone_permission_status()
+        );
+    }
 }

@@ -8,7 +8,11 @@ import {
   recognitionLanguage,
   supportsLanguageCode,
 } from "@/lib/constants/languages";
-import type { PasteMethod, ShortcutActivation } from "@/bindings";
+import type {
+  AutoSubmitKey,
+  PasteMethod,
+  ShortcutActivation,
+} from "@/bindings";
 import { Toggle } from "../ui";
 import { SettingsPage } from "./SettingsPage";
 import { Section, Select, SettingRow, SettingsCard } from "./parts";
@@ -101,6 +105,13 @@ export default function General() {
         ]
       : []),
     { value: "none", label: "Don't paste" },
+  ];
+  const pasteMethod = getSetting("paste_method") || "ctrl_v";
+  const autoSubmit = getSetting("auto_submit") ?? false;
+  const sendKeyOptions = [
+    { value: "enter", label: "Enter" },
+    ...(osType === "macos" ? [{ value: "cmd_enter", label: "Cmd+Enter" }] : []),
+    { value: "ctrl_enter", label: "Ctrl+Enter" },
   ];
 
   const selectedMic = getSetting("selected_microphone");
@@ -220,7 +231,7 @@ export default function General() {
             control={
               <Select
                 label="Paste method"
-                value={getSetting("paste_method") || "ctrl_v"}
+                value={pasteMethod}
                 options={pasteOptions}
                 disabled={isUpdating("paste_method")}
                 onChange={(v) =>
@@ -240,6 +251,39 @@ export default function General() {
               />
             }
           />
+          <SettingRow
+            title="Press Enter after dictation"
+            description={
+              pasteMethod === "none"
+                ? "Needs a paste method other than Don't paste."
+                : "Sends the message right after the text is typed, e.g. in Slack or ChatGPT."
+            }
+            control={
+              <Toggle
+                label="Press Enter after dictation"
+                checked={autoSubmit}
+                disabled={isUpdating("auto_submit") || pasteMethod === "none"}
+                onChange={(v) => updateSetting("auto_submit", v)}
+              />
+            }
+          />
+          {autoSubmit && pasteMethod !== "none" && (
+            <SettingRow
+              title="Send key"
+              description="Most chat apps send with Enter."
+              control={
+                <Select
+                  label="Send key"
+                  value={getSetting("auto_submit_key") || "enter"}
+                  options={sendKeyOptions}
+                  disabled={isUpdating("auto_submit_key")}
+                  onChange={(v) =>
+                    updateSetting("auto_submit_key", v as AutoSubmitKey)
+                  }
+                />
+              }
+            />
+          )}
         </SettingsCard>
       </Section>
     </SettingsPage>

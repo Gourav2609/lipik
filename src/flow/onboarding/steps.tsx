@@ -35,7 +35,15 @@ import {
 } from "../cleanupModel";
 import { AiAppRows, useAiApps } from "../aiApps";
 import { Button, Card, Kbd, TextInput } from "../ui";
-import { retryDefaultModelSetup, useModelSetup } from "./defaultModel";
+import {
+  chooseSpeechModel,
+  DEFAULT_MODEL_ID,
+  retryDefaultModelSetup,
+  runAfterSpeechModel,
+  useModelSetup,
+  useQueuedAfterSpeech,
+  useSpeechChoice,
+} from "./defaultModel";
 import { StepLayout, type StepProps } from "./StepLayout";
 import { useMicLevel } from "./useMicLevel";
 import { usePermissions, type PermissionKind } from "./usePermissions";
@@ -137,6 +145,10 @@ const readUseCases = (): UseCase[] => {
 
 const Welcome = ({ next, back }: StepProps) => {
   const { key } = useHotkey();
+  const { settings } = useSettings();
+  const [counted, setCounted] = useState(
+    () => settings?.usage_ping_enabled ?? true,
+  );
   const [picked, setPicked] = useState<UseCase[]>(() =>
     isFlowPreview ? ["email", "chat"] : readUseCases(),
   );
@@ -147,6 +159,13 @@ const Welcome = ({ next, back }: StepProps) => {
       localStorage.setItem(USE_KEY, JSON.stringify(picked));
     } catch {
       /* the practice step falls back to email */
+    }
+    if (!isFlowPreview) {
+      commands
+        .answerUsagePing(counted)
+        .catch((e) =>
+          console.warn("Failed to save the usage count choice:", e),
+        );
     }
     next();
   };
@@ -186,6 +205,25 @@ const Welcome = ({ next, back }: StepProps) => {
           );
         })}
       </div>
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={counted}
+        onClick={() => setCounted(!counted)}
+        className="mt-[20px] flex items-start gap-[12px] text-left text-[15px] leading-[22px]"
+      >
+        <span
+          className={`mt-[2px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] ${counted ? "bg-[var(--fk-accent)] text-[var(--fk-accent-text)]" : "shadow-[inset_0_0_0_1px_var(--fk-border-strong)]"}`}
+        >
+          {counted && <Check size={12} strokeWidth={2.5} />}
+        </span>
+        <span>
+          Send an anonymous count so I can see if setup works — a random ID, app
+          and macOS version, chip, country (worked out from the connection, the
+          address itself isn't kept) and how far setup got. Turn it off any time
+          in Settings → Privacy.
+        </span>
+      </button>
     </StepLayout>
   );
 };
@@ -234,8 +272,14 @@ const PermissionRow = ({
 );
 
 const Permissions = ({ next, back }: StepProps) => {
-  const { microphone, accessibility, request, timedOut, needsAccessibility } =
-    usePermissions();
+  const {
+    microphone,
+    accessibility,
+    request,
+    timedOut,
+    openedPane,
+    needsAccessibility,
+  } = usePermissions();
   const allGranted = !!microphone && (!needsAccessibility || !!accessibility);
   const ask = (kind: PermissionKind) => request(kind);
   return (
@@ -275,15 +319,27 @@ const Permissions = ({ next, back }: StepProps) => {
         </Card>
       }
     >
-      {timedOut && (
+      {openedPane === "microphone" && !microphone ? (
         <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
           <CircleAlert
             size={16}
             strokeWidth={1.75}
             className="shrink-0 text-[var(--fk-live)]"
           />
-          macOS didn't answer. Try again, or restart {APP_NAME}.
+          macOS asks only once. In System Settings, Privacy & Security,
+          Microphone, turn on {APP_NAME}.
         </p>
+      ) : (
+        timedOut && (
+          <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+            <CircleAlert
+              size={16}
+              strokeWidth={1.75}
+              className="shrink-0 text-[var(--fk-live)]"
+            />
+            macOS didn't answer. Try again, or restart {APP_NAME}.
+          </p>
+        )
       )}
     </StepLayout>
   );
@@ -313,7 +369,7 @@ const MicTest = ({ next, back }: StepProps) => {
       title={`Let ${APP_NAME} hear you`}
       body={
         level === null
-          ? "Say a few words. You can check your microphone again in the next step."
+          ? "Say a few words. You can pick another microphone below, or later in Settings."
           : "Say a few words. The lines grow when you speak and settle when you stop."
       }
       back={back}
@@ -354,7 +410,7 @@ const Shortcut = ({ next, back }: StepProps) => {
           Hold <Keys label={key} size="lg" /> to write
         </>
       }
-      body={`Hold it, speak, then let go. ${APP_NAME} types where your cursor is. Tap it twice to keep going hands-free.`}
+      body={`Hold it, speak, then let go. ${APP_NAME} types where your cursor is. Tap it once to keep going hands-free, and tap again to stop.`}
       back={back}
       actions={
         <>
@@ -382,11 +438,23 @@ const CLEANUP_SKIP_NOTE = `${APP_NAME} still types what you say and fixes “um�
 const Cleanup = ({ next, back }: StepProps) => {
   const { view, engine, model, size, progress, error, download, cancel } =
     useCleanupModel();
+  const speech = useModelSetup();
+  const queued = useQueuedAfterSpeech() && view === "no_model";
   const ready = view === "ready";
   // The download runs in the app, not on this screen, and clean-up turns on
   // by itself when it lands, so setup doesn't have to wait for 5 GB.
-  const underway = view === "downloading" || view === "verifying";
+  const underway = view === "downloading" || view === "verifying" || queued;
   const builtin = engine === "builtin";
+  const speechPending =
+    speech.status === "waiting" ||
+    speech.status === "downloading" ||
+    speech.status === "verifying";
+  const start = () => {
+    if (!speechPending) return download();
+    runAfterSpeechModel(() => {
+      commands.pullCleanupModel().catch(() => {});
+    });
+  };
   return (
     <StepLayout
       eyebrow="Clean-up"
@@ -429,17 +497,24 @@ const Cleanup = ({ next, back }: StepProps) => {
           </Button>
         </div>
       )}
-      {view === "no_model" && (
+      {view === "no_model" && !queued && (
         <div className="flex items-center gap-[16px]">
           <p className="flex-1 text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
             {builtin
               ? "Clean-up needs a model that runs on this Mac. It downloads once."
               : "Ollama is running. Now get the model it uses for clean-up."}
           </p>
-          <Button onClick={download} className="shrink-0">
+          <Button onClick={start} className="shrink-0">
             {downloadLabel(model, size)}
           </Button>
         </div>
+      )}
+      {queued && (
+        <p className="flex items-center gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
+          <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+          The clean-up model downloads as soon as the speech model is in, so
+          your first dictation isn't slowed down.
+        </p>
       )}
       {view === "slow_model" && (
         <p className="flex items-start gap-[8px] text-[14px] leading-[20px] text-[var(--fk-text-muted)]">
@@ -528,7 +603,7 @@ const ModelLine = () => {
   if (setup.status === "ready") return null;
   const text =
     setup.status === "failed"
-      ? "The speech model didn't download."
+      ? `The speech model didn't download. ${setup.reason ?? ""}`.trim()
       : setup.status === "downloading"
         ? `Downloading the speech model… ${setup.percent}%`
         : setup.status === "verifying"
@@ -551,6 +626,48 @@ const ModelLine = () => {
       {setup.status === "failed" && (
         <Button variant="accent" size="sm" onClick={retryDefaultModelSetup}>
           Try again
+        </Button>
+      )}
+    </div>
+  );
+};
+
+const LANGUAGE_NAMES = new Intl.DisplayNames(["en"], { type: "language" });
+
+const languageName = (code: string) => {
+  try {
+    return LANGUAGE_NAMES.of(code) ?? code;
+  } catch {
+    return code;
+  }
+};
+
+/** Which speech model setup picked from the Mac's language, and a switch. */
+const SpeechChoiceLine = () => {
+  const choice = useSpeechChoice();
+  const setup = useModelSetup();
+  if (!choice) return null;
+  const canSwitch =
+    choice.other &&
+    (setup.status === "waiting" ||
+      setup.status === "downloading" ||
+      setup.status === "failed");
+  return (
+    <div className="mt-[8px] flex items-center gap-[8px] text-[13px] leading-[18px] text-[var(--fk-text-faint)]">
+      <span className="min-w-0 flex-1" title="Picked from your Mac’s language">
+        Using {choice.name} for {languageName(choice.language)}.
+        {!canSwitch && " Change it in Settings, Speech to text."}
+      </span>
+      {canSwitch && choice.other && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0 !text-[var(--fk-text-muted)]"
+          onClick={() => chooseSpeechModel(choice.other!.id)}
+        >
+          {choice.other.id === DEFAULT_MODEL_ID
+            ? "Use English only"
+            : "Use more languages"}
         </Button>
       )}
     </div>
@@ -660,6 +777,7 @@ const Practice = ({ next, back }: StepProps) => {
       }
     >
       <ModelLine />
+      <SpeechChoiceLine />
     </StepLayout>
   );
 };
@@ -727,7 +845,7 @@ const Privacy = ({ next, back }: StepProps) => (
           "Speech is turned into text on this Mac. Your audio is never uploaded.",
           `Recordings and their text stay in ${APP_NAME}'s data folder so it can learn your voice. You can change this in Settings.`,
           "Clean-up and meeting notes run on a model on this Mac, not in the cloud.",
-          `Every few hours ${APP_NAME} sends an anonymous count: a random ID and the app and macOS versions, so we know how many people use it. Turn it off in Settings, under Privacy.`,
+          `If you left the box on the first screen ticked, every few hours ${APP_NAME} sends an anonymous count: a random ID, the app version, the macOS version, the chip type, the country (worked out from the connection; the address itself isn't kept) and how far setup got, so we know how many people use it and whether setup works. Turn it off in Settings, under Privacy.`,
         ].map((line) => (
           <div
             key={line}
@@ -837,8 +955,8 @@ const Done = ({ next, back }: StepProps) => {
       title="You’re set"
       body={
         <>
-          Hold <Keys label={key} /> in any app, or tap it twice to keep going
-          hands-free.
+          Hold <Keys label={key} /> in any app. Tap it once for hands-free, and
+          again to stop.
         </>
       }
       back={back}

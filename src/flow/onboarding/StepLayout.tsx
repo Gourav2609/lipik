@@ -43,7 +43,7 @@ export const StepLayout = ({
       </div>
       {visual && <div className="fk-ob-enter-late mt-[24px]">{visual}</div>}
       {children && <div className="fk-ob-enter-late mt-[20px]">{children}</div>}
-      <div className="mt-[32px] flex items-center gap-[8px]">
+      <div className="sticky bottom-0 -mb-[24px] mt-[8px] flex items-center gap-[8px] bg-[var(--fk-bg)] pb-[24px] pt-[24px]">
         {back && (
           <Button
             variant="secondary"

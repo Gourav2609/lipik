@@ -30,6 +30,7 @@ pub use pipeline::{
     DictationMeta, Target,
 };
 
+pub(crate) use rules::sound_key;
 use store::{DictionaryWord, TextFlow};
 use tauri::{AppHandle, Manager};
 
@@ -51,6 +52,21 @@ pub fn dictionary_emails(app: &AppHandle) -> Vec<String> {
                     .map(|r| r.to.trim().to_string()),
             )
             .filter(|w| w.contains('@') && !w.contains(char::is_whitespace))
+            .collect()
+    })
+}
+
+/// Dictionary words that are not email addresses.
+pub fn dictionary_words(app: &AppHandle) -> Vec<String> {
+    let Some(tf) = app.try_state::<TextFlow>() else {
+        return Vec::new();
+    };
+    tf.read(|d| {
+        d.dictionary
+            .words
+            .iter()
+            .map(|w| w.word.trim().to_string())
+            .filter(|w| !w.is_empty() && !w.contains('@'))
             .collect()
     })
 }

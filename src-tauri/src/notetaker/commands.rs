@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager as _, State};
 
 use super::calendar::{self, CalendarAccess, CalendarEvent, CalendarSource};
 use super::{
@@ -256,6 +256,11 @@ pub fn notetaker_set_settings(app: AppHandle, settings: NotetakerSettings) -> Re
         return Err("The meeting reminder can be at most 60 minutes ahead".to_string());
     }
     crate::textflow::cleanup_model::cancel_pull_unless(&settings.ollama_model);
+    if let Some(manager) = app.try_state::<Arc<NotetakerManager>>() {
+        manager
+            .settings_changed(&settings)
+            .map_err(|e| e.to_string())?;
+    }
     let mut all = crate::settings::get_settings(&app);
     all.notetaker = settings;
     crate::settings::write_settings(&app, all);

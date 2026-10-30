@@ -38,6 +38,7 @@ const DEFAULTS: Settings = {
   ollama_model: "qwen3:8b",
   language: "auto",
   meeting_window_names: false,
+  learn_own_voice: true,
 };
 
 const NOTIFY_OPTIONS = [
@@ -394,6 +395,18 @@ export default function NotetakerSettings() {
                 checked={s.meeting_window_names}
                 disabled={loading}
                 onChange={(on) => update({ meeting_window_names: on })}
+              />
+            }
+          />
+          <SettingRow
+            title="Know my voice"
+            description="Learns your voice from your dictations, kept on this Mac, so people talking at your laptop get their own names."
+            control={
+              <Toggle
+                label="Know my voice"
+                checked={s.learn_own_voice}
+                disabled={loading}
+                onChange={(on) => update({ learn_own_voice: on })}
               />
             }
           />

@@ -445,6 +445,7 @@ pub fn meeting_markdown(d: &MeetingDetail, part: Option<usize>) -> String {
             out.extend(items.into_iter().map(|b| format!("- {b}")));
             out.push(String::new());
         };
+        list("Decisions", s.decisions.clone());
         for section in &s.sections {
             let heading = if section.heading.is_empty() {
                 "Notes"
@@ -454,7 +455,6 @@ pub fn meeting_markdown(d: &MeetingDetail, part: Option<usize>) -> String {
             list(heading, section.bullets.clone());
         }
         list("Key points", s.key_points.clone());
-        list("Decisions", s.decisions.clone());
         list(
             "Next steps",
             s.action_items

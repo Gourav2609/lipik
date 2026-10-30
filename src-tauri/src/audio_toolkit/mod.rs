@@ -13,7 +13,7 @@ pub use audio::{
 pub use lang_id::detect_output_language;
 pub use text::{
     apply_custom_words, builtin_filler_words, normalize_transcription_output, remove_filler_words,
-    OutputLanguageEvidence,
+    remove_filler_words_keeping, OutputLanguageEvidence,
 };
 pub use utils::get_cpal_host;
 pub use vad::{EarshotVad, SileroVad, SpeechScorer, VoiceActivityDetector};

@@ -518,12 +518,14 @@ pub fn chat_body<M: Serialize>(messages: &[M], max_tokens: Option<u32>) -> Value
     body
 }
 
+pub const CUT_OFF: &str = "The clean-up engine's reply stopped at the length cap";
+
 /// The reply in a chat completion. With a length cap, a reply that stopped
 /// at the cap is cut off and is an error.
 pub fn reply_text(value: &Value, capped: bool) -> Result<String, String> {
     let choice = &value["choices"][0];
     if capped && choice["finish_reason"] == "length" {
-        return Err("The clean-up engine's reply stopped at the length cap".to_string());
+        return Err(CUT_OFF.to_string());
     }
     choice["message"]["content"]
         .as_str()

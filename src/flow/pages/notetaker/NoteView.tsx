@@ -119,6 +119,19 @@ const groupBySpeaker = (segments: Segment[]) => {
   return groups;
 };
 
+const LINE_TIME_GAP_MS = 30_000;
+
+/** A speaker's lines, with a time on each line that starts at least 30 s
+ * after the last time shown. The first line's time is beside the speaker. */
+const timedLines = (items: Segment[]) => {
+  let shown = items[0]?.start_ms ?? 0;
+  return items.map((line, i) => {
+    const due = i > 0 && line.start_ms - shown >= LINE_TIME_GAP_MS;
+    if (due) shown = line.start_ms;
+    return { line, time: due ? line.start_ms : null };
+  });
+};
+
 /** Click a speaker's label to name them; the name goes on all their lines. */
 const SpeakerLabel = ({
   meetingId,
@@ -246,12 +259,17 @@ const Transcript = ({
                 </div>
               </div>
               <div className="flex flex-col gap-[4px]">
-                {g.items.map((s) => (
+                {timedLines(g.items).map(({ line: s, time }) => (
                   <p
                     key={s.start_ms}
                     data-start={s.start_ms}
                     className={`-mx-[8px] rounded-[8px] px-[8px] text-[15px] leading-[24px] ${flash === s.start_ms ? "nt-flash" : ""}`}
                   >
+                    {time != null && (
+                      <span className="fk-num mr-[8px] select-none text-[12px] text-[var(--fk-text-faint)]">
+                        {clockDuration(time)}
+                      </span>
+                    )}
                     {s.text}
                   </p>
                 ))}
@@ -283,6 +301,9 @@ const summaryText = (title: string, s: NoteSummary) =>
     `# ${title}`,
     "",
     s.overview,
+    ...(s.decisions.length
+      ? ["", "## Decisions", ...s.decisions.map((b) => `- ${b}`)]
+      : []),
     ...s.sections.flatMap((x) => [
       "",
       `## ${x.heading ?? ""}`,
@@ -290,9 +311,6 @@ const summaryText = (title: string, s: NoteSummary) =>
     ]),
     ...(s.key_points.length
       ? ["", "## Key points", ...s.key_points.map((b) => `- ${b}`)]
-      : []),
-    ...(s.decisions.length
-      ? ["", "## Decisions", ...s.decisions.map((b) => `- ${b}`)]
       : []),
     ...(s.action_items.length
       ? [
@@ -432,6 +450,9 @@ const Summary = ({
       <p className="mt-[20px] text-[15px] leading-[26px]">
         {mention(summary.overview)}
       </p>
+      {summary.decisions.length > 0 && (
+        <Bullets heading="Decisions" items={summary.decisions.map(mention)} />
+      )}
       {summary.sections.map((s, i) => (
         <Bullets
           key={i}
@@ -441,9 +462,6 @@ const Summary = ({
       ))}
       {summary.key_points.length > 0 && (
         <Bullets heading="Key points" items={summary.key_points.map(mention)} />
-      )}
-      {summary.decisions.length > 0 && (
-        <Bullets heading="Decisions" items={summary.decisions.map(mention)} />
       )}
       {summary.action_items.length > 0 && (
         <Bullets

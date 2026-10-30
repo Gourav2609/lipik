@@ -43,6 +43,20 @@ static MIGRATIONS: &[M] = &[
     M::up("ALTER TABLE transcription_history ADD COLUMN corrected_text TEXT;"),
 ];
 
+/// Whether the history database at `db_path` holds at least one dictation
+/// with text. A missing or unreadable database counts as none.
+pub fn has_dictation(db_path: &std::path::Path) -> bool {
+    Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .and_then(|conn| {
+            conn.query_row(
+                "SELECT EXISTS (SELECT 1 FROM transcription_history WHERE transcription_text != '')",
+                [],
+                |row| row.get(0),
+            )
+        })
+        .unwrap_or(false)
+}
+
 /// One dictation's numbers for Insights.
 pub struct DictationStatRow {
     pub timestamp: i64,
@@ -795,6 +809,34 @@ impl HistoryManager {
 mod tests {
     use super::*;
     use rusqlite::{params, Connection};
+
+    #[test]
+    fn has_dictation_needs_a_row_with_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.db");
+        assert!(!has_dictation(&path));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE transcription_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transcription_text TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        assert!(!has_dictation(&path));
+        conn.execute(
+            "INSERT INTO transcription_history (transcription_text) VALUES ('')",
+            [],
+        )
+        .unwrap();
+        assert!(!has_dictation(&path));
+        conn.execute(
+            "INSERT INTO transcription_history (transcription_text) VALUES ('hello')",
+            [],
+        )
+        .unwrap();
+        assert!(has_dictation(&path));
+    }
 
     fn setup_conn() -> Connection {
         let conn = Connection::open_in_memory().expect("open in-memory db");

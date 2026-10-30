@@ -193,6 +193,11 @@ pub fn keep_cancelled(app: &AppHandle, binding_id: String, samples: Vec<f32>) {
     });
 }
 
+/// A short line next to the pill, e.g. why pressing the key did nothing.
+pub fn emit_notice(app: &AppHandle, text: &str) {
+    let _ = app.emit_to("recording_overlay", "pill-notice", text);
+}
+
 pub fn emit_result(app: &AppHandle, text: &str, inserted: bool) {
     let _ = app.emit_to(
         "recording_overlay",

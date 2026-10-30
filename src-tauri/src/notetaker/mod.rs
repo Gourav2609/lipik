@@ -17,6 +17,7 @@ mod hinglish;
 mod live;
 pub mod mcp;
 mod store;
+mod tidy;
 mod transcribe;
 mod window;
 
@@ -53,6 +54,9 @@ pub struct NotetakerSettings {
     pub language: MeetingLanguage,
     /// Read who Slack shows as talking in a huddle to name speakers.
     pub meeting_window_names: bool,
+    /// Learn the user's voice from their dictation recordings, to tell them
+    /// apart from other people at the same Mac.
+    pub learn_own_voice: bool,
 }
 
 /// `Auto` decides per meeting by listening for Hindi; see `hinglish`.
@@ -76,6 +80,7 @@ impl Default for NotetakerSettings {
             ollama_model: "qwen3:8b".to_string(),
             language: MeetingLanguage::default(),
             meeting_window_names: false,
+            learn_own_voice: true,
         }
     }
 }
@@ -232,6 +237,17 @@ pub struct NoteSummary {
     pub key_points: Vec<String>,
     pub decisions: Vec<String>,
     pub action_items: Vec<ActionItem>,
+    /// The transcript words behind each decision and proposal, kept for
+    /// checking, not shown.
+    #[serde(default)]
+    pub quotes: Vec<Quote>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Type)]
+pub struct Quote {
+    /// The decision, or the proposal line as shown.
+    pub item: String,
+    pub quote: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
@@ -1159,6 +1175,9 @@ impl NotetakerManager {
         let language = settings(&self.app).language;
         let improving = self.improving.lock().unwrap().iter().any(|m| m == id);
         let mut wants_hinglish = false;
+        let mut names = diarize::invitees(&meeting.attendees);
+        names.extend(own_names_in(&meeting));
+        let dictionary = crate::textflow::dictionary_words(&self.app);
 
         if transcribe && improving {
             let language = if dir.join(HINGLISH_ASKED).exists() {
@@ -1174,10 +1193,11 @@ impl NotetakerManager {
             let live = self.store.segments(id)?;
             let heard_call = live.iter().any(|s| s.source == "system");
             let hinglish = if language != MeetingLanguage::English {
-                hinglish::engine(&self.app)
+                hinglish::engine(&self.app, hinglish::hotwords(&dictionary, &names))
             } else {
                 None
             };
+            self.emit_stage(id, ProcessingStage::Speakers, 0.0);
             let speakers = (system_wav.exists() && heard_call)
                 .then(|| self.find_speakers(id, &system_wav))
                 .flatten();
@@ -1185,6 +1205,11 @@ impl NotetakerManager {
             let cleaned_mic = dir.join(CLEANED_MIC);
             let _ = std::fs::remove_file(&cleaned_mic);
             let mic = mic_for_transcript(&dir, &meeting, &cleaned_mic);
+            let room = self.find_room_voices(id, &meeting, &mic, speakers.as_ref(), &live);
+            save_turns(
+                &dir.join(MIC_TURNS),
+                room.as_ref().map(|s| s.turns.as_slice()),
+            );
             let sources = [
                 ("mic", mic.path.clone(), meeting.mic_offset_ms.unwrap_or(0)),
                 (
@@ -1225,7 +1250,11 @@ impl NotetakerManager {
                         scale * (n as f32 + fraction) / parts,
                     )
                 };
-                let split = speakers.as_ref().filter(|_| *source == "system");
+                let split = if *source == "system" {
+                    speakers.as_ref()
+                } else {
+                    room.as_ref()
+                };
                 match transcribe::transcribe_file(
                     &self.app,
                     path,
@@ -1262,8 +1291,6 @@ impl NotetakerManager {
                         }
                     }
                     let mut merged = transcribe::merge_streams(mic, system);
-                    let mut names = diarize::invitees(&meeting.attendees);
-                    names.extend(own_names_in(&meeting));
                     if used_hinglish {
                         self.romanize(id, &meeting, &mut merged, &names);
                     } else if language != MeetingLanguage::English
@@ -1273,8 +1300,15 @@ impl NotetakerManager {
                             || (!self.dir.join(HINGLISH_MODEL_DELETED).exists()
                                 && hinglish::hindi_likely(&merged, &names, &speech));
                     }
-                    if let Some(speakers) = &speakers {
-                        self.name_known_speakers(id, &meeting, speakers, &mut merged);
+                    tidy::tidy(&mut merged, &tidy::Vocabulary::new(&dictionary, &names));
+                    if speakers.is_some() || room.is_some() {
+                        self.name_known_speakers(
+                            id,
+                            &meeting,
+                            speakers.as_ref(),
+                            room.as_ref(),
+                            &mut merged,
+                        );
                     }
                     if merged.is_empty() && !self.store.segments(id)?.is_empty() {
                         log::warn!(
@@ -1319,7 +1353,10 @@ impl NotetakerManager {
         dir: &std::path::Path,
         language: MeetingLanguage,
     ) -> Result<bool> {
-        let side = hinglish::engine(&self.app)
+        let mut names = diarize::invitees(&meeting.attendees);
+        names.extend(own_names_in(meeting));
+        let dictionary = crate::textflow::dictionary_words(&self.app);
+        let side = hinglish::engine(&self.app, hinglish::hotwords(&dictionary, &names))
             .ok_or_else(|| anyhow!("The Hinglish speech model did not load"))?;
         let lines = self.store.segments(id)?;
         let cleaned_mic = dir.join(CLEANED_MIC);
@@ -1375,11 +1412,21 @@ impl NotetakerManager {
                 ..t
             })
             .collect();
-        let todo = transcribe::with_unheard_spans(&lines, &spans, &call_turns);
+        let mic_turns: Vec<diarize::Turn> = load_turns(&dir.join(MIC_TURNS))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|t| diarize::Turn {
+                start_ms: t.start_ms + mic_offset,
+                end_ms: t.end_ms + mic_offset,
+                ..t
+            })
+            .collect();
+        let todo = transcribe::with_unheard_spans(&lines, &spans, &call_turns, &mic_turns);
         let redone = transcribe::redo_lines(
             &todo,
             &streams,
             hinglish::RULES,
+            &side.run.vocabulary,
             || transcribe::new_scorer(&self.app),
             |audio| transcribe::transcribe_side(&self.app, &side, audio),
             |piece| {
@@ -1405,9 +1452,8 @@ impl NotetakerManager {
         }
         let mut redone = redone;
         redone.sort_by_key(|s| (s.start_ms, s.end_ms));
-        let mut names = diarize::invitees(&meeting.attendees);
-        names.extend(own_names_in(meeting));
         self.romanize(id, meeting, &mut redone, &names);
+        tidy::tidy(&mut redone, &tidy::Vocabulary::new(&dictionary, &names));
         {
             let _renames_wait = self.improving.lock().unwrap();
             if self.cancelled(id) {
@@ -1485,6 +1531,7 @@ impl NotetakerManager {
         if !split {
             return Vec::new();
         }
+        self.emit_stage(id, ProcessingStage::Speakers, 0.0);
         let turns = self
             .find_speakers(id, &dir.join("system.wav"))
             .map(|s| s.turns)
@@ -1719,7 +1766,6 @@ impl NotetakerManager {
     /// Splits the call audio by voice. Any failure (no models, offline on
     /// first use, a crash in the model) keeps one "Them" for the call.
     fn find_speakers(&self, id: &str, wav: &std::path::Path) -> Option<diarize::Speakers> {
-        self.emit_stage(id, ProcessingStage::Speakers, 0.0);
         let started = Instant::now();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             diarize::detect(&self.app, wav)
@@ -1728,28 +1774,145 @@ impl NotetakerManager {
         match result {
             Ok(speakers) => {
                 log::info!(
-                    "Notetaker found {} speakers in {id} in {:.1}s",
+                    "Notetaker found {} speakers in {id} ({}) in {:.1}s",
                     speakers.count(),
+                    wav.file_name().unwrap_or_default().to_string_lossy(),
                     started.elapsed().as_secs_f32()
                 );
                 Some(speakers)
             }
             Err(e) => {
-                log::warn!("Notetaker kept one speaker for the call audio of {id}: {e}");
+                log::warn!(
+                    "Notetaker kept one speaker for {} of {id}: {e}",
+                    wav.file_name().unwrap_or_default().to_string_lossy()
+                );
                 None
             }
         }
     }
 
+    /// The voice split of the microphone when it holds people in the room
+    /// besides the user (`diarize::room_voices`), numbered after the call's
+    /// voices. Only for a mic the call is kept out of.
+    fn find_room_voices(
+        &self,
+        id: &str,
+        meeting: &Meeting,
+        mic: &MicAudio,
+        call: Option<&diarize::Speakers>,
+        live: &[Segment],
+    ) -> Option<diarize::Speakers> {
+        if !mic.clean || !mic.path.exists() {
+            return None;
+        }
+        let own = self.own_voice();
+        let call_speech = call_speech_ms(call, live);
+        let no_call = diarize::Speakers::default();
+        let call = call.unwrap_or(&no_call);
+        let offset = meeting.mic_offset_ms.unwrap_or(0);
+        let lines: Vec<(i64, i64)> = live
+            .iter()
+            .filter(|s| s.source == "mic")
+            .map(|s| (s.start_ms - offset, s.end_ms - offset))
+            .collect();
+        let mic_speech: i64 = lines.iter().map(|(s, e)| e - s).sum();
+        if !diarize::quiet_call(call_speech, mic_speech) {
+            let Some(own) = own.as_deref() else {
+                log::info!("Notetaker kept the mic of {id} as the user: a call, and no voice from dictation");
+                return None;
+            };
+            let shift = mic_to_call_ms(meeting);
+            let during = diarize::mic_during_call(&lines, &call.turns, shift);
+            let windows = diarize::lone_mic_windows(&lines, &call.turns, shift);
+            let checked = (during <= diarize::CHECK_MAX_DURING_CALL)
+                .then(|| diarize::detect_window_voices(&self.app, &mic.path, &windows));
+            match checked {
+                Some(Ok(voices)) if diarize::only_user(&voices, own) => {
+                    log::info!(
+                        "Notetaker kept the mic of {id} as the user: {} checked stretches sound like them",
+                        voices.len()
+                    );
+                    return None;
+                }
+                Some(Err(e)) => log::warn!("Notetaker could not check the mic of {id}: {e}"),
+                _ => {}
+            }
+        }
+        let split = self.find_speakers(id, &mic.path)?;
+        let room = diarize::room_voices(
+            &split,
+            own.as_deref(),
+            call,
+            mic_to_call_ms(meeting),
+            call_speech,
+        );
+        log::info!(
+            "Notetaker heard {} people besides the user in the mic of {id} (own voice: {})",
+            room.as_ref().map_or(0, |r| r.count() - call.count()),
+            own.is_some()
+        );
+        room
+    }
+
+    /// The user's voice, made from their newest dictation recordings and
+    /// made again once it is a week old. None while learning it is off, and
+    /// when there is too little dictation left (the saved one is then
+    /// dropped). When the speaker models fail, the saved one is used.
+    fn own_voice(&self) -> Option<Vec<f32>> {
+        if !settings(&self.app).learn_own_voice {
+            return None;
+        }
+        let saved = self.store.own_voice().ok().flatten();
+        if let Some((voice, at)) = &saved {
+            if now_ms() - at < OWN_VOICE_MAX_AGE_MS {
+                return Some(voice.clone());
+            }
+        }
+        let clips = crate::portable::app_data_dir(&self.app)
+            .map(|d| dictation_clips(&d.join("recordings")))
+            .unwrap_or_default();
+        let made = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            diarize::detect_own_voice(&self.app, &clips)
+        }))
+        .unwrap_or_else(|_| Err(anyhow!("speaker detection panicked")));
+        match made {
+            Ok(Some(voice)) => {
+                if let Err(e) = self.store.save_own_voice(&voice, now_ms()) {
+                    log::warn!("Notetaker could not keep the user's voice: {e}");
+                }
+                Some(voice)
+            }
+            Ok(None) => {
+                if let Err(e) = self.store.forget_own_voice() {
+                    log::warn!("Notetaker could not forget the user's voice: {e}");
+                }
+                None
+            }
+            Err(e) => {
+                log::warn!("Notetaker could not learn the user's voice from dictation: {e}");
+                saved.map(|(voice, _)| voice)
+            }
+        }
+    }
+
     /// Keeps the meeting's voices (for naming them later) and names the
-    /// speakers a saved voice or the calendar already identifies.
+    /// speakers a saved voice or the calendar already identifies: the call's
+    /// voices (`call`) and the people in the room (`room`).
     fn name_known_speakers(
         &self,
         id: &str,
         meeting: &Meeting,
-        speakers: &diarize::Speakers,
+        call: Option<&diarize::Speakers>,
+        room: Option<&diarize::Speakers>,
         segments: &mut [Segment],
     ) {
+        let mut speakers = call.cloned().unwrap_or_default();
+        if let Some(room) = room {
+            for n in speakers.count()..room.count() {
+                speakers.voices.push(room.voices[n].clone());
+                speakers.speech_ms.push(room.speech_ms[n]);
+            }
+        }
         let voices: Vec<(String, Vec<f32>, i64)> = speakers
             .voices
             .iter()
@@ -1760,11 +1923,12 @@ impl NotetakerManager {
             log::warn!("Notetaker could not save the voices of {id}: {e}");
         }
         let profiles = self.store.voice_profiles(Some(id)).unwrap_or_default();
-        let mut names = diarize::known_names(speakers, &profiles, &meeting.attendees);
+        let mut names = diarize::known_names(&speakers, &profiles, &meeting.attendees);
         let window = window_namings(
             &self.meeting_dir(id),
             meeting,
-            &speakers.turns,
+            call.map_or(&[][..], |c| c.turns.as_slice()),
+            room.map_or(&[][..], |r| r.turns.as_slice()),
             segments,
             &own_names_in(meeting),
         );
@@ -2028,8 +2192,22 @@ impl NotetakerManager {
         Ok(self.store.voice_profiles(None)?.len() as u32)
     }
 
+    /// Forgets every saved voice and the user's own, and stops learning the
+    /// user's voice until `learn_own_voice` is turned on again.
     pub fn forget_voices(&self) -> Result<()> {
-        self.store.forget_voices()
+        self.store.forget_voices()?;
+        let mut all = crate::settings::get_settings(&self.app);
+        all.notetaker.learn_own_voice = false;
+        crate::settings::write_settings(&self.app, all);
+        Ok(())
+    }
+
+    /// Drops the user's voice when learning it is turned off.
+    pub fn settings_changed(&self, settings: &NotetakerSettings) -> Result<()> {
+        if !settings.learn_own_voice {
+            self.store.forget_own_voice()?;
+        }
+        Ok(())
     }
 
     pub fn move_to_folder(&self, id: &str, folder: Option<&str>) -> Result<()> {
@@ -2276,15 +2454,22 @@ fn redo_kind(dir: &std::path::Path, improving: bool) -> Option<HinglishRedo> {
 
 /// The voice split of the call, kept for a later Hinglish redo.
 const CALL_TURNS: &str = "call-turns.json";
+/// The voice split of the microphone, when it held people in the room.
+const MIC_TURNS: &str = "mic-turns.json";
+/// The user's voice from dictation is made again when older than this.
+const OWN_VOICE_MAX_AGE_MS: i64 = 7 * 24 * 3600 * 1000;
 
 fn save_call_turns(dir: &std::path::Path, turns: Option<&[diarize::Turn]>) {
-    let path = dir.join(CALL_TURNS);
+    save_turns(&dir.join(CALL_TURNS), turns);
+}
+
+fn save_turns(path: &std::path::Path, turns: Option<&[diarize::Turn]>) {
     let saved = match turns {
         Some(turns) => serde_json::to_vec(turns)
             .map_err(anyhow::Error::from)
-            .and_then(|json| Ok(std::fs::write(&path, json)?)),
+            .and_then(|json| Ok(std::fs::write(path, json)?)),
         None => {
-            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(path);
             Ok(())
         }
     };
@@ -2294,7 +2479,42 @@ fn save_call_turns(dir: &std::path::Path, turns: Option<&[diarize::Turn]>) {
 }
 
 fn load_call_turns(dir: &std::path::Path) -> Option<Vec<diarize::Turn>> {
-    serde_json::from_slice(&std::fs::read(dir.join(CALL_TURNS)).ok()?).ok()
+    load_turns(&dir.join(CALL_TURNS))
+}
+
+fn load_turns(path: &std::path::Path) -> Option<Vec<diarize::Turn>> {
+    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+}
+
+/// From a moment in mic.wav to the same moment in system.wav.
+fn mic_to_call_ms(meeting: &Meeting) -> i64 {
+    meeting.mic_offset_ms.unwrap_or(0) - meeting.system_offset_ms.unwrap_or(0)
+}
+
+/// Speech on the call: the voice split's, else that of the live lines.
+fn call_speech_ms(call: Option<&diarize::Speakers>, live: &[Segment]) -> i64 {
+    match call {
+        Some(c) => c.speech_ms.iter().sum(),
+        None => live
+            .iter()
+            .filter(|s| s.source == "system")
+            .map(|s| (s.end_ms - s.start_ms).max(0))
+            .sum(),
+    }
+}
+
+/// Dictation recordings in `dir`, newest first.
+fn dictation_clips(dir: &std::path::Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut clips: Vec<(std::time::SystemTime, PathBuf)> = entries
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|x| x == "wav"))
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .collect();
+    clips.sort_by(|a, b| b.0.cmp(&a.0));
+    clips.into_iter().map(|(_, p)| p).collect()
 }
 
 /// The mic audio to transcribe and how it relates to the call.
@@ -2423,11 +2643,13 @@ fn background_priority() {
     }
 }
 
-/// Names the huddle window gives the call's voices (`turns` in WAV time).
+/// Names the huddle window gives the voices of the call (`turns`) and of the
+/// room (`room`), both in their WAV's time.
 fn window_namings(
     dir: &std::path::Path,
     meeting: &Meeting,
     turns: &[diarize::Turn],
+    room: &[diarize::Turn],
     segments: &[Segment],
     own: &[String],
 ) -> Vec<diarize::Naming> {
@@ -2435,21 +2657,24 @@ fn window_namings(
     if samples.is_empty() {
         return Vec::new();
     }
-    let offset = meeting.system_offset_ms.unwrap_or(0);
-    let turns: Vec<(i64, i64, String)> = turns
-        .iter()
-        .filter(|t| t.speaker != diarize::UNKNOWN)
-        .map(|t| {
-            (
-                t.start_ms + offset,
-                t.end_ms + offset,
-                diarize::speaker_key(t.speaker),
-            )
-        })
-        .collect();
+    let in_meeting = |turns: &[diarize::Turn], offset: i64| -> Vec<(i64, i64, String)> {
+        turns
+            .iter()
+            .filter(|t| t.speaker != diarize::UNKNOWN && t.speaker != diarize::ME)
+            .map(|t| {
+                (
+                    t.start_ms + offset,
+                    t.end_ms + offset,
+                    diarize::speaker_key(t.speaker),
+                )
+            })
+            .collect()
+    };
+    let mut turns = in_meeting(turns, meeting.system_offset_ms.unwrap_or(0));
+    turns.extend(in_meeting(room, meeting.mic_offset_ms.unwrap_or(0)));
     let mic: Vec<(i64, i64)> = segments
         .iter()
-        .filter(|s| s.source == "mic")
+        .filter(|s| s.source == "mic" && s.speaker_key == diarize::ME_KEY)
         .map(|s| (s.start_ms, s.end_ms))
         .collect();
     diarize::window_names(&samples, &turns, &mic, own)
@@ -2507,9 +2732,105 @@ fn start_system_audio(dir: &std::path::Path, feed: SharedFeed) -> Result<Box<dyn
     }))
 }
 
-/// Moves system audio from the tap to the WAV. Builds the tap again when its
-/// audio stops (output device gone) or the default output device changes;
-/// the writer fills the gap with silence.
+/// Waits before building the system audio tap again while it delivers
+/// nothing on the same output device.
+#[cfg(any(target_os = "macos", test))]
+const TAP_RETRY_WAITS: [Duration; 5] = [
+    Duration::from_secs(1),
+    Duration::from_secs(2),
+    Duration::from_secs(5),
+    Duration::from_secs(15),
+    Duration::from_secs(60),
+];
+
+/// While another app plays sound, a quiet tap is built again at least this
+/// often.
+#[cfg(any(target_os = "macos", test))]
+const TAP_RETRY_RUNNING: Duration = Duration::from_secs(3);
+
+/// When to build the system audio tap again. Audio that stops for 2 s is
+/// retried after `TAP_RETRY_WAITS`, or within `TAP_RETRY_RUNNING` while
+/// another app plays sound (so the tap should hear it). A new tap delivers
+/// nothing until something plays, so before its first audio it is rebuilt
+/// only while another app plays. A new default output device is built at
+/// once, which is not a try.
+#[cfg(any(target_os = "macos", test))]
+struct TapRetry {
+    last_audio: Instant,
+    quiet: bool,
+    tries: usize,
+    since: Instant,
+    now_please: bool,
+    heard_once: bool,
+}
+
+#[cfg(any(target_os = "macos", test))]
+impl TapRetry {
+    const STALL: Duration = Duration::from_secs(2);
+
+    fn new(now: Instant) -> Self {
+        Self {
+            last_audio: now,
+            quiet: false,
+            tries: 0,
+            since: now,
+            now_please: false,
+            heard_once: false,
+        }
+    }
+
+    /// Audio arrived; true when it ends a quiet spell.
+    fn heard(&mut self, now: Instant) -> bool {
+        self.last_audio = now;
+        self.tries = 0;
+        self.heard_once = true;
+        std::mem::replace(&mut self.quiet, false)
+    }
+
+    /// True once, when the audio has just stopped.
+    fn went_quiet(&mut self, now: Instant) -> bool {
+        if self.quiet || now.duration_since(self.last_audio) < Self::STALL {
+            return false;
+        }
+        self.quiet = true;
+        self.tries = 0;
+        self.since = now;
+        true
+    }
+
+    fn device_changed(&mut self, now: Instant) {
+        self.last_audio = now;
+        self.quiet = false;
+        self.tries = 0;
+        self.now_please = true;
+    }
+
+    /// Whether to build the tap now: 0 for a new output device, else which
+    /// try of this quiet spell (1 = the first). `playing`: another app plays
+    /// sound.
+    fn due(&mut self, now: Instant, playing: bool) -> Option<usize> {
+        if std::mem::take(&mut self.now_please) {
+            self.since = now;
+            return Some(0);
+        }
+        if !self.quiet || (!self.heard_once && !playing) {
+            return None;
+        }
+        let mut wait = TAP_RETRY_WAITS[self.tries.min(TAP_RETRY_WAITS.len() - 1)];
+        if playing {
+            wait = wait.min(TAP_RETRY_RUNNING);
+        }
+        if now < self.since + wait {
+            return None;
+        }
+        self.tries += 1;
+        self.since = now;
+        Some(self.tries)
+    }
+}
+
+/// Moves system audio from the tap to the WAV, building the tap again as
+/// `TapRetry` says; the writer fills gaps with silence.
 #[cfg(target_os = "macos")]
 fn system_worker(
     first: (coreaudio::SystemTap, std::sync::mpsc::Receiver<Vec<f32>>),
@@ -2517,55 +2838,63 @@ fn system_worker(
     stop: &AtomicBool,
 ) {
     use std::sync::mpsc::RecvTimeoutError;
-    const STALL: Duration = Duration::from_secs(2);
+    const DEVICE_CHECK: Duration = Duration::from_secs(2);
+    const POLL: Duration = Duration::from_millis(250);
 
     let mut resampler = audio::Resampler::new(first.0.sample_rate);
+    let mut device = Some(first.0.output_device);
     let mut current = Some(first);
     let mut out = Vec::new();
-    let mut last_audio = Instant::now();
+    let mut retry = TapRetry::new(Instant::now());
     let mut last_device_check = Instant::now();
+    let mut heard_any = false;
 
     while !stop.load(Ordering::Relaxed) {
-        let Some((tap, rx)) = current.as_ref() else {
-            std::thread::sleep(Duration::from_secs(1));
-            match coreaudio::SystemTap::start(&tap_name()) {
-                Ok(next) => {
-                    log::info!("Notetaker system audio reconnected");
-                    resampler = audio::Resampler::new(next.0.sample_rate);
+        match current.as_ref().map(|(_, rx)| rx.recv_timeout(POLL)) {
+            Some(Ok(block)) => {
+                if retry.heard(Instant::now()) && heard_any {
+                    log::info!("Notetaker system audio is back");
                     writer.set_failed(None);
-                    last_audio = Instant::now();
-                    last_device_check = Instant::now();
-                    current = Some(next);
                 }
-                Err(e) => log::debug!("Notetaker system audio not back yet: {e}"),
-            }
-            continue;
-        };
-        match rx.recv_timeout(Duration::from_millis(250)) {
-            Ok(block) => {
-                last_audio = Instant::now();
+                heard_any = true;
                 out.clear();
                 resampler.process(&block, &mut out);
                 writer.write(&out);
             }
-            Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => {}
+            Some(Err(RecvTimeoutError::Timeout)) => {}
+            Some(Err(RecvTimeoutError::Disconnected)) | None => std::thread::sleep(POLL),
         }
-        let device_changed = last_device_check.elapsed() >= STALL && {
+        if last_device_check.elapsed() >= DEVICE_CHECK {
             last_device_check = Instant::now();
-            coreaudio::default_output_device() != Some(tap.output_device)
-        };
-        let stalled = last_audio.elapsed() >= STALL;
-        if stalled || device_changed {
-            if stalled {
-                log::warn!("Notetaker system audio stopped; reconnecting");
-                writer.set_failed(Some(
-                    "System audio stopped (output device changed or gone). Reconnecting…"
-                        .to_string(),
-                ));
-            } else {
+            let now_device = coreaudio::default_output_device();
+            if now_device != device {
+                device = now_device;
                 log::info!("Notetaker: output device changed, rebuilding the system audio tap");
+                retry.device_changed(Instant::now());
             }
-            current = None;
+        }
+        let now = Instant::now();
+        retry.went_quiet(now);
+        let playing = retry.quiet && coreaudio::others_playing();
+        let Some(attempt) = retry.due(now, playing) else {
+            continue;
+        };
+        match attempt {
+            0 => {}
+            1 if heard_any => {
+                log::warn!("Notetaker system audio stopped; rebuilding the tap");
+                writer.set_failed(Some("System audio stopped. Reconnecting…".to_string()));
+            }
+            n => log::debug!("Notetaker rebuilding the quiet system audio tap (try {n})"),
+        }
+        current = None;
+        match coreaudio::SystemTap::start(&tap_name()) {
+            Ok(next) => {
+                resampler = audio::Resampler::new(next.0.sample_rate);
+                device = Some(next.0.output_device);
+                current = Some(next);
+            }
+            Err(e) => log::debug!("Notetaker system audio not back yet: {e}"),
         }
     }
     drop(current);
@@ -2861,6 +3190,7 @@ mod tests {
                     &lines,
                     &streams,
                     hinglish::RULES,
+                    &[],
                     || None,
                     |audio| {
                         engine
@@ -2939,7 +3269,7 @@ mod tests {
                 Ok(dir) => {
                     let dir = PathBuf::from(dir);
                     let turns = load_call_turns(&dir).expect("no call-turns.json");
-                    window_namings(&dir, &meeting, &turns, &segments, &own)
+                    window_namings(&dir, &meeting, &turns, &[], &segments, &own)
                 }
                 Err(_) => Vec::new(),
             };
@@ -3066,5 +3396,398 @@ mod tests {
             verdicts.len(),
             verdicts.iter().filter(|v| v.rejected.is_some()).count(),
         );
+    }
+    #[test]
+    fn a_quiet_tap_is_rebuilt_after_growing_waits() {
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut retry = TapRetry::new(t0);
+        retry.heard(t0);
+        assert!(!retry.went_quiet(at(1_900)));
+        assert_eq!(retry.due(at(1_900), false), None);
+        assert!(retry.went_quiet(at(2_000)));
+        assert!(!retry.went_quiet(at(2_500)), "said once");
+        let mut rebuilt = Vec::new();
+        for ms in (2_000..200_000).step_by(250) {
+            if let Some(n) = retry.due(at(ms), false) {
+                rebuilt.push((n, ms));
+            }
+        }
+        assert_eq!(
+            rebuilt,
+            vec![
+                (1, 3_000),
+                (2, 5_000),
+                (3, 10_000),
+                (4, 25_000),
+                (5, 85_000),
+                (6, 145_000)
+            ]
+        );
+
+        assert!(retry.heard(at(200_000)), "back after a quiet spell");
+        assert!(!retry.heard(at(200_100)));
+        assert_eq!(
+            retry.due(at(300_000), false),
+            None,
+            "no rebuilds while audio flows"
+        );
+    }
+
+    #[test]
+    fn a_quiet_tap_while_something_plays_is_rebuilt_every_few_seconds() {
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut retry = TapRetry::new(t0);
+        retry.heard(t0);
+        assert!(retry.went_quiet(at(2_000)));
+        let mut rebuilt = Vec::new();
+        for ms in (2_000..20_000).step_by(250) {
+            if retry.due(at(ms), true).is_some() {
+                rebuilt.push(ms);
+            }
+        }
+        assert_eq!(rebuilt, vec![3_000, 5_000, 8_000, 11_000, 14_000, 17_000]);
+    }
+
+    #[test]
+    fn before_any_audio_the_tap_is_rebuilt_only_while_something_plays() {
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut retry = TapRetry::new(t0);
+        assert!(retry.went_quiet(at(2_000)));
+        assert_eq!(retry.due(at(3_000), false), None);
+        assert_eq!(
+            retry.due(at(100_000), false),
+            None,
+            "nothing plays: nothing to hear"
+        );
+        assert_eq!(retry.due(at(100_000), true), Some(1));
+        assert_eq!(retry.due(at(101_000), true), None);
+        assert_eq!(retry.due(at(102_000), true), Some(2));
+    }
+
+    #[test]
+    fn a_new_output_device_rebuilds_the_tap_at_once_without_counting_a_try() {
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut retry = TapRetry::new(t0);
+        retry.heard(t0);
+        assert!(retry.went_quiet(at(2_000)));
+        assert_eq!(retry.due(at(3_000), false), Some(1));
+        retry.device_changed(at(4_000));
+        assert_eq!(retry.due(at(4_000), false), Some(0), "not a try");
+        assert_eq!(
+            retry.due(at(5_000), false),
+            None,
+            "one rebuild for one change"
+        );
+        assert!(retry.went_quiet(at(6_000)), "silent on the new device too");
+        assert_eq!(retry.due(at(7_000), false), Some(1), "tries start again");
+    }
+
+    /// Records system audio for 40 s the way a meeting does while macOS plays
+    /// its "Glass" sound three times, and checks that the sounds are in the
+    /// WAV, that silence between them does not rebuild the tap over and over,
+    /// and that the private aggregate device is gone afterwards. Audible.
+    /// cargo test --lib system_audio_live_check -- --ignored --nocapture
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn system_audio_live_check() {
+        static LINES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        struct Keep;
+        impl log::Log for Keep {
+            fn enabled(&self, m: &log::Metadata) -> bool {
+                m.target().contains("notetaker")
+            }
+            fn log(&self, r: &log::Record) {
+                if self.enabled(r.metadata()) {
+                    LINES.lock().unwrap().push(r.args().to_string());
+                }
+            }
+            fn flush(&self) {}
+        }
+        let _ = log::set_logger(&Keep);
+        log::set_max_level(log::LevelFilter::Debug);
+        let ours = || {
+            coreaudio::device_uids()
+                .iter()
+                .filter(|u| u.starts_with(&tap_name()))
+                .count()
+        };
+        assert_eq!(ours(), 0, "a tap device was there before the test");
+
+        let dir = tempfile::tempdir().unwrap();
+        let feed: SharedFeed = Default::default();
+        let stop = start_system_audio(dir.path(), feed.clone()).unwrap();
+        let during = ours();
+        let dings = [6u64, 19, 32];
+        let started = Instant::now();
+        let mut per_second: Vec<(u64, u64)> = Vec::new();
+        let mut running: Vec<u8> = Vec::new();
+        let mut others: Vec<u8> = Vec::new();
+        let mut next_ding = 0;
+        for second in 0..40u64 {
+            if dings.get(next_ding) == Some(&second) {
+                next_ding += 1;
+                std::process::Command::new("afplay")
+                    .arg("/System/Library/Sounds/Glass.aiff")
+                    .spawn()
+                    .unwrap();
+            }
+            let until = started + Duration::from_secs(second + 1);
+            std::thread::sleep(until.saturating_duration_since(Instant::now()));
+            let samples = feed.lock().unwrap().samples;
+            per_second.push((second, samples));
+            running.push(
+                coreaudio::default_output_device().is_some_and(coreaudio::device_running_somewhere)
+                    as u8,
+            );
+            others.push(coreaudio::others_playing() as u8);
+        }
+        stop();
+        let mut running_after: Vec<u8> = Vec::new();
+        for _ in 0..6 {
+            std::thread::sleep(Duration::from_millis(500));
+            running_after.push(
+                coreaudio::default_output_device().is_some_and(coreaudio::device_running_somewhere)
+                    as u8,
+            );
+        }
+        let stopped = Instant::now();
+        let mut after = ours();
+        while after > 0 && stopped.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(100));
+            after = ours();
+        }
+        println!(
+            "LIVE aggregate device listed for {} ms after stop",
+            stopped.elapsed().as_millis()
+        );
+        let first_at = feed
+            .lock()
+            .unwrap()
+            .first_at
+            .map_or(0, |at| at.duration_since(started).as_secs());
+
+        let audio: Vec<f32> = hound::WavReader::open(dir.path().join("system.wav"))
+            .unwrap()
+            .samples::<i16>()
+            .map(|s| s.unwrap() as f32 / i16::MAX as f32)
+            .collect();
+        let loud: Vec<usize> = audio
+            .chunks(audio::RATE)
+            .enumerate()
+            .filter(|(_, c)| c.iter().any(|x| x.abs() > 0.01))
+            .map(|(n, _)| n)
+            .collect();
+        let delivered: Vec<u64> = per_second
+            .windows(2)
+            .map(|w| (w[1].1 - w[0].1) / (audio::RATE as u64 / 10))
+            .collect();
+        let lines = LINES.lock().unwrap().clone();
+        let count = |text: &str| lines.iter().filter(|l| l.contains(text)).count();
+        println!(
+            "LIVE tap devices before 0, during {during}, after {after}; WAV {:.1} s; seconds with sound {loud:?}",
+            audio.len() as f32 / audio::RATE as f32
+        );
+        println!("LIVE tenths of a second delivered per second: {delivered:?}");
+        println!("LIVE output device running, per second: {running:?}");
+        println!("LIVE another process playing, per second: {others:?}");
+        println!("LIVE output device running after our tap is gone, per 0.5 s: {running_after:?}");
+        println!(
+            "LIVE log: stopped {}, back {}, rebuilds {}, not back {}, device changed {}",
+            count("stopped"),
+            count("is back"),
+            count("rebuilding"),
+            count("not back yet"),
+            count("output device changed")
+        );
+        assert_eq!(during, 1, "one private aggregate device while recording");
+        assert_eq!(after, 0, "the aggregate device is removed");
+        for d in dings {
+            assert!(
+                loud.iter().any(|&s| (first_at + s as u64).abs_diff(d) <= 3),
+                "no sound after the ding at {d} s"
+            );
+        }
+        assert!(
+            count("rebuilding") <= 5,
+            "rebuilt {} times",
+            count("rebuilding")
+        );
+    }
+
+    /// Runs the voice split of the microphone on one stored meeting, by hand,
+    /// and prints only counts and minutes per voice. Nothing is written.
+    /// LIPIK_TEST_DB=<copy of notetaker.db> LIPIK_TEST_MEETING=<id>
+    /// LIPIK_TEST_AUDIO=<folder with copies of mic.wav and system.wav>
+    /// LIPIK_TEST_MODELS=<speaker models folder>
+    /// LIPIK_TEST_RECORDINGS=<dictation recordings folder> cargo test --lib
+    /// room_split_check -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn room_split_check() {
+        let var = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k} is not set"));
+        let id = var("LIPIK_TEST_MEETING");
+        let store = Store::open_read_only(std::path::Path::new(&var("LIPIK_TEST_DB"))).unwrap();
+        let meeting = store.meeting(&id).unwrap().expect("no such meeting");
+        let models = PathBuf::from(var("LIPIK_TEST_MODELS"));
+        let dir = PathBuf::from(var("LIPIK_TEST_AUDIO"));
+        let minutes = |ms: i64| ms as f64 / 60_000.0;
+
+        let started = Instant::now();
+        let clips = dictation_clips(std::path::Path::new(&var("LIPIK_TEST_RECORDINGS")));
+        let own = diarize::own_voice(&models, &clips).unwrap();
+        println!(
+            "ROOM own voice from {} clips: {} in {:.1}s",
+            clips.len(),
+            if own.is_some() { "built" } else { "none" },
+            started.elapsed().as_secs_f32()
+        );
+
+        let lines = store.segments(&id).unwrap();
+        let call = dir.join("system.wav");
+        let call_speakers = lines
+            .iter()
+            .any(|s| s.source == "system")
+            .then(|| diarize::run(&models, &call).ok())
+            .flatten();
+        let call_speech = call_speech_ms(call_speakers.as_ref(), &lines);
+        println!(
+            "ROOM call voices {} speech {:.1} min",
+            call_speakers.as_ref().map_or(0, |s| s.count()),
+            minutes(call_speech)
+        );
+
+        let cleaned = dir.join(CLEANED_MIC);
+        let _ = std::fs::remove_file(&cleaned);
+        let mic = mic_for_transcript(&dir, &meeting, &cleaned);
+        let offset = meeting.mic_offset_ms.unwrap_or(0);
+        let mic_lines: Vec<(i64, i64)> = lines
+            .iter()
+            .filter(|s| s.source == "mic")
+            .map(|s| (s.start_ms - offset, s.end_ms - offset))
+            .collect();
+        let mic_speech: i64 = mic_lines.iter().map(|(s, e)| e - s).sum();
+        if !diarize::quiet_call(call_speech, mic_speech) {
+            let Some(own) = own.as_deref() else {
+                println!("ROOM split skipped: a call and no own voice");
+                return;
+            };
+            let call_turns = call_speakers
+                .as_ref()
+                .map(|s| s.turns.clone())
+                .unwrap_or_default();
+            let during =
+                diarize::mic_during_call(&mic_lines, &call_turns, mic_to_call_ms(&meeting));
+            println!("ROOM mic speech during call speech {:.0}%", 100.0 * during);
+            let windows =
+                diarize::lone_mic_windows(&mic_lines, &call_turns, mic_to_call_ms(&meeting));
+            let voices = diarize::window_voices(&models, &mic.path, &windows).unwrap();
+            let sims: Vec<String> = voices
+                .iter()
+                .map(|v| format!("{:.2}", diarize::cosine(v, own)))
+                .collect();
+            println!(
+                "ROOM checked {} lone mic stretches, like own [{}]",
+                voices.len(),
+                sims.join(" ")
+            );
+            if during <= diarize::CHECK_MAX_DURING_CALL && diarize::only_user(&voices, own) {
+                let _ = std::fs::remove_file(&cleaned);
+                println!("ROOM split skipped: the stretches sound like the user");
+                return;
+            }
+        }
+        println!("ROOM split runs");
+        let started = Instant::now();
+        let split = diarize::run(&models, &mic.path).unwrap();
+        let _ = std::fs::remove_file(&cleaned);
+        println!(
+            "ROOM mic clean={} split into {} voices in {:.1}s",
+            mic.clean,
+            split.count(),
+            started.elapsed().as_secs_f32()
+        );
+        let call_voices = call_speakers
+            .as_ref()
+            .map(|s| s.voices.clone())
+            .unwrap_or_default();
+        let call_turns: Vec<diarize::Turn> = call_speakers
+            .as_ref()
+            .map(|s| s.turns.clone())
+            .unwrap_or_default();
+        let shift = mic_to_call_ms(&meeting);
+        for n in 0..split.count() {
+            let v = split.voices[n].as_deref().unwrap_or(&[]);
+            let over: i64 = split
+                .turns
+                .iter()
+                .filter(|t| t.speaker == n)
+                .map(|t| diarize::overlap_ms(t.start_ms + shift, t.end_ms + shift, &call_turns))
+                .sum();
+            println!(
+                "ROOM mic voice {} overlaps call speech {:.0}%",
+                n + 1,
+                100.0 * over as f64 / split.speech_ms[n].max(1) as f64
+            );
+            let others: Vec<String> = (0..split.count())
+                .map(|m| {
+                    format!(
+                        "{:.2}",
+                        diarize::cosine(v, split.voices[m].as_deref().unwrap_or(&[]))
+                    )
+                })
+                .collect();
+            let to_call: Vec<String> = call_voices
+                .iter()
+                .map(|c| format!("{:.2}", diarize::cosine(v, c.as_deref().unwrap_or(&[]))))
+                .collect();
+            println!(
+                "ROOM mic voice {} speech {:.1} min, like own {:.2}, like mic voices [{}], like call voices [{}]",
+                n + 1,
+                minutes(split.speech_ms[n]),
+                own.as_deref().map_or(f32::NAN, |o| diarize::cosine(v, o)),
+                others.join(" "),
+                to_call.join(" ")
+            );
+        }
+        let room = diarize::room_voices(
+            &split,
+            own.as_deref(),
+            call_speakers
+                .as_ref()
+                .unwrap_or(&diarize::Speakers::default()),
+            shift,
+            call_speech,
+        );
+        let Some(room) = room else {
+            println!("ROOM no room voices: the mic stays Me");
+            return;
+        };
+        let mut by_key: std::collections::BTreeMap<String, (usize, i64, i64)> = Default::default();
+        for t in &room.turns {
+            by_key
+                .entry(diarize::key_and_label(t.speaker).0)
+                .or_default()
+                .2 += t.end_ms - t.start_ms;
+        }
+        for s in lines.iter().filter(|s| s.source == "mic") {
+            let n = room
+                .speaker_at(s.start_ms - offset, s.end_ms - offset)
+                .unwrap_or(diarize::ME);
+            let e = by_key.entry(diarize::key_and_label(n).0).or_default();
+            e.0 += 1;
+            e.1 += s.end_ms - s.start_ms;
+        }
+        for (key, (count, line_ms, turn_ms)) in by_key {
+            println!(
+                "ROOM {key}: {count} stored mic lines ({:.1} min), split turns {:.1} min",
+                minutes(line_ms),
+                minutes(turn_ms)
+            );
+        }
     }
 }

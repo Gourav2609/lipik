@@ -148,6 +148,7 @@ pub fn redo_lines(
     lines: &[Segment],
     streams: &[(&str, &Path, i64)],
     rules: super::audio::CutRules,
+    hints: &[String],
     scorer: impl Fn() -> Option<Box<dyn SpeechScorer>>,
     mut hear: impl FnMut(Vec<f32>) -> Result<String>,
     mut is_echo: impl FnMut(&Segment) -> bool,
@@ -207,6 +208,9 @@ pub fn redo_lines(
             if stretch && is_echo(&segment) {
                 continue;
             }
+            if super::tidy::heard_nothing(&segment.text, &piece, track.has_detector(), hints) {
+                continue;
+            }
             heard.push(segment);
         }
         if heard.is_empty() {
@@ -229,12 +233,14 @@ const UNHEARD_MIN_MS: i64 = 2_000;
 /// hears speech the first pass wrote nothing for. In time order. Call
 /// stretches are cut where `call_turns` (the voice split, on the meeting's
 /// clock) change speaker and take that speaker; parts no turn covers, and
-/// stretches nobody split, are "Them". Mic stretches are "Me". Longer ones
-/// are cut into equal parts of at most two minutes.
+/// stretches nobody split, are "Them". Mic stretches are cut the same way
+/// by `mic_turns` (the people in the room) and are otherwise "Me". Longer
+/// ones are cut into equal parts of at most two minutes.
 pub fn with_unheard_spans(
     lines: &[Segment],
     streams: &[(&str, i64, i64)],
     call_turns: &[diarize::Turn],
+    mic_turns: &[diarize::Turn],
 ) -> Vec<Segment> {
     let mut out = lines.to_vec();
     for &(source, stream_start, stream_end) in streams {
@@ -249,7 +255,11 @@ pub fn with_unheard_spans(
             from = from.max(s.end_ms);
         }
         gaps.push((from, stream_end));
-        let turns = if source == "system" { call_turns } else { &[] };
+        let turns = if source == "system" {
+            call_turns
+        } else {
+            mic_turns
+        };
         for (start, end) in gaps {
             if end - start < UNHEARD_MIN_MS {
                 continue;
@@ -468,6 +478,7 @@ pub fn transcribe_file(
         track.set_cuts(s.change_samples());
     }
     let mut out = Vec::new();
+    let hints = hinglish.map_or(&[][..], |side| side.run.vocabulary.as_slice());
     let mut speech = 0u64;
     let mut block = Vec::with_capacity(8 * RATE);
     let mut read = 0usize;
@@ -490,13 +501,15 @@ pub fn transcribe_file(
                 None => transcribe_piece(app, piece.audio.clone(), None)?,
             };
             if !text.trim().is_empty() {
-                out.push(piece_segment(
-                    &piece,
-                    offset_ms,
-                    source,
-                    text.trim().to_string(),
-                    speakers,
-                ));
+                if !super::tidy::heard_nothing(&text, &piece, track.has_detector(), hints) {
+                    out.push(piece_segment(
+                        &piece,
+                        offset_ms,
+                        source,
+                        text.trim().to_string(),
+                        speakers,
+                    ));
+                }
             }
             progress(read as f32 / total);
         }
@@ -636,6 +649,7 @@ mod tests {
             start_sample: 28 * RATE as u64,
             audio: vec![0.0; 10 * RATE],
             speech_samples: 0,
+            peak: 0.0,
         };
         let s = piece_segment(&piece, 1_500, "system", "hi".into(), Some(&speakers));
         assert_eq!(
@@ -682,6 +696,7 @@ mod tests {
             &lines,
             &[("system", path.as_path(), 0)],
             crate::notetaker::hinglish::RULES,
+            &[],
             || None,
             |_| {
                 heard += 1;
@@ -746,6 +761,7 @@ mod tests {
             &lines,
             &[],
             crate::notetaker::hinglish::RULES,
+            &[],
             || None,
             |_| Ok("new".into()),
             |_| false,
@@ -794,7 +810,7 @@ mod tests {
             turn(24_000, 60_000, 1),
             turn(60_000, 190_000, 2),
         ];
-        let all = with_unheard_spans(&lines, &[("system", 5_000, 200_000)], &turns);
+        let all = with_unheard_spans(&lines, &[("system", 5_000, 200_000)], &turns, &[]);
         assert_eq!(
             spans(&all),
             vec![
@@ -823,7 +839,7 @@ mod tests {
             turn(20_000, 21_000, 1),
             turn(21_000, 29_600, 0),
         ];
-        let all = with_unheard_spans(&lines, &[("system", 0, 40_000)], &turns);
+        let all = with_unheard_spans(&lines, &[("system", 0, 40_000)], &turns, &[]);
         assert_eq!(
             spans(&all),
             vec![
@@ -841,6 +857,7 @@ mod tests {
             &lines,
             &[("mic", 1_500, 12_000), ("system", 2_000, 8_000)],
             &[],
+            &[],
         );
         assert_eq!(
             spans(&all),
@@ -851,6 +868,22 @@ mod tests {
         );
         let starts: Vec<i64> = all.iter().map(|s| s.start_ms).collect();
         assert!(starts.windows(2).all(|w| w[0] <= w[1]), "{starts:?}");
+    }
+
+    #[test]
+    fn mic_stretches_take_the_people_in_the_room() {
+        let lines = vec![seg("mic", 0, 4_000, "pehle")];
+        // The user talks until 10 s, then someone in the room (speaker 2,
+        // after one call voice) until 20 s.
+        let room = [turn(4_000, 10_000, diarize::ME), turn(10_000, 20_000, 1)];
+        let all = with_unheard_spans(&lines, &[("mic", 0, 20_000)], &[], &room);
+        assert_eq!(
+            spans(&all),
+            vec![
+                ("mic", 4_000, 10_000, "me", ME),
+                ("mic", 10_000, 20_000, "s2", "Speaker 2"),
+            ]
+        );
     }
 
     fn tone_wav(dir: &Path, name: &str, seconds: usize) -> std::path::PathBuf {
@@ -882,6 +915,7 @@ mod tests {
             &lines,
             &[("mic", mic.as_path(), 0)],
             crate::notetaker::hinglish::RULES,
+            &[],
             || None,
             |_| Ok("suna".into()),
             |piece| {
@@ -910,6 +944,7 @@ mod tests {
             &lines,
             &[],
             crate::notetaker::hinglish::RULES,
+            &[],
             || None,
             |_| Ok("new".into()),
             |_| false,

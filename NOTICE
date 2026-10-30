@@ -19,5 +19,15 @@ https://huggingface.co/avencera/speakrs-models: the segmentation model
 speaker embedding and PLDA parameters (pyannote community-1, Creative
 Commons Attribution 4.0, https://creativecommons.org/licenses/by/4.0/).
 
+Meeting transcripts check misheard words against a list of romanised Hindi
+words (src-tauri/src/notetaker/hindi_lexicon.txt) built from the Hindi part
+of Aksharantar by AI4Bharat
+(https://huggingface.co/datasets/ai4bharat/Aksharantar; CC-BY 4.0 for its
+manually collected data, CC0 for its other sources), which includes rows from
+the Google Dakshina dataset
+(https://github.com/google-research-datasets/dakshina), Creative Commons
+Attribution-ShareAlike 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).
+That word list is shared under CC BY-SA 4.0.
+
 Third-party libraries keep their own licences, listed in src-tauri/Cargo.toml
 (Rust) and package.json (JavaScript).

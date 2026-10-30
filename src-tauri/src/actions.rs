@@ -442,11 +442,10 @@ impl ShortcutAction for TranscribeAction {
         // kicked off above fails and reports why.
         if !tm.is_model_loaded() {
             let selected_model = get_settings(app).selected_model;
-            if let Err(e) = app
-                .state::<Arc<ModelManager>>()
-                .get_model_path(&selected_model)
-            {
+            let models = app.state::<Arc<ModelManager>>();
+            if let Err(e) = models.get_model_path(&selected_model) {
                 warn!("Not starting recording: no model can transcribe it ({})", e);
+                crate::pill::emit_notice(app, &models.no_model_notice(&selected_model));
                 return;
             }
         }
@@ -919,6 +918,10 @@ impl TranscribeAction {
                                                     debug!(
                                                         "Text pasted successfully in {:?}",
                                                         paste_time.elapsed()
+                                                    );
+                                                    crate::usage_ping::reach_step(
+                                                        &ah_clone,
+                                                        crate::settings::SetupStep::FirstDictation,
                                                     );
                                                     true
                                                 }

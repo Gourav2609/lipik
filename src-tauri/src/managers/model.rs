@@ -1,7 +1,7 @@
 use super::model_capabilities::{
     CapabilityProbe, CapabilityProber, Compatibility, GgufHeaderProber,
 };
-use crate::settings::{get_settings, write_settings};
+use crate::settings::{get_settings, write_settings, SetupStep};
 use anyhow::Result;
 use hf_hub::api::tokio::{ApiBuilder, CancellationToken, Progress};
 use hf_hub::{Cache, Repo, RepoType};
@@ -523,6 +523,35 @@ fn local_caps(probe: &CapabilityProbe) -> LocalCaps {
     }
 }
 
+/// Latest download percentage per model, for the pill's "still downloading"
+/// notice.
+static DOWNLOAD_PERCENT: Mutex<Option<HashMap<String, f64>>> = Mutex::new(None);
+
+/// What the pill says when the dictation key is pressed before any speech
+/// model is on disk. `downloading` is the running download's percentage, if any.
+fn no_model_notice_text(downloading: Option<Option<f64>>) -> String {
+    match downloading {
+        Some(Some(percent)) => format!(
+            "Speech model still downloading, {}%",
+            percent.clamp(0.0, 100.0).floor() as u32
+        ),
+        Some(None) => "Speech model still downloading".to_string(),
+        None => "No speech model yet. Choose one in Settings.".to_string(),
+    }
+}
+
+/// Why a download can't start for lack of disk space, or None when it fits.
+fn disk_shortfall(free: u64, size: u64) -> Option<String> {
+    let needed = size + crate::textflow::cleanup_model::SPARE_DISK;
+    (free < needed).then(|| {
+        format!(
+            "There isn't enough free disk space. The speech model needs {:.1} GB; this Mac has {:.1} GB free.",
+            needed as f64 / 1e9,
+            free as f64 / 1e9
+        )
+    })
+}
+
 /// Bridges hf-hub's async download progress to Lipik's `model-download-progress`
 /// event. hf-hub clones the reporter, so shared state lives behind an `Arc`.
 #[derive(Clone)]
@@ -567,6 +596,10 @@ impl HfDownloadProgress {
         } else {
             0.0
         };
+        if let Ok(mut map) = DOWNLOAD_PERCENT.lock() {
+            map.get_or_insert_with(HashMap::new)
+                .insert(self.model_id.clone(), percentage);
+        }
         let _ = self.app_handle.emit(
             "model-download-progress",
             &DownloadProgress {
@@ -1741,8 +1774,20 @@ impl ModelManager {
             || self.models_dir.join(&filename).exists()
         {
             self.update_download_status()?;
+            crate::usage_ping::reach_step(&self.app_handle, SetupStep::ModelReady);
             let _ = self.app_handle.emit("model-download-complete", &model_id);
             return Ok(());
+        }
+
+        let cache_dir = Cache::from_env().path().clone();
+        if let Some(free) = cache_dir
+            .ancestors()
+            .find(|dir| dir.exists())
+            .and_then(crate::textflow::cleanup_model::free_disk)
+        {
+            if let Some(reason) = disk_shortfall(free, model_info.size_mb * 1024 * 1024) {
+                return Err(anyhow::anyhow!(reason));
+            }
         }
 
         // One transfer per model. The cancel token is registered only by a
@@ -1964,6 +2009,7 @@ impl ModelManager {
         cleanup.disarmed = true;
         self.update_download_status()?;
         self.cancel_flags.lock().unwrap().remove(&model_id);
+        crate::usage_ping::reach_step(&self.app_handle, SetupStep::ModelReady);
         let _ = self.app_handle.emit("model-download-complete", &model_id);
         info!("HF model {} downloaded", model_id);
         Ok(())
@@ -2124,6 +2170,25 @@ impl ModelManager {
         // still be usable, and re-downloading this model should restore it.
         // Startup and explicit Rescan perform the broader selection cleanup.
         let _ = self.app_handle.emit("models-updated", ());
+    }
+
+    /// The pill's message for a key press while no speech model is on disk.
+    pub fn no_model_notice(&self, selected: &str) -> String {
+        let downloading = {
+            let flags = self.cancel_flags.lock().unwrap();
+            if flags.contains_key(selected) {
+                Some(selected.to_string())
+            } else {
+                flags.keys().next().cloned()
+            }
+        };
+        let percent = downloading.map(|id| {
+            DOWNLOAD_PERCENT
+                .lock()
+                .ok()
+                .and_then(|map| map.as_ref().and_then(|m| m.get(&id).copied()))
+        });
+        no_model_notice_text(percent)
     }
 
     pub fn get_model_path(&self, model_id: &str) -> Result<PathBuf> {
@@ -3070,5 +3135,30 @@ mod tests {
             !models.contains_key("someone/llama-7b/llama-q8.gguf"),
             "non-ASR gguf must be ignored"
         );
+    }
+
+    #[test]
+    fn no_model_notice_says_how_far_the_download_is() {
+        assert_eq!(
+            no_model_notice_text(Some(Some(45.7))),
+            "Speech model still downloading, 45%"
+        );
+        assert_eq!(
+            no_model_notice_text(Some(None)),
+            "Speech model still downloading"
+        );
+        assert_eq!(
+            no_model_notice_text(None),
+            "No speech model yet. Choose one in Settings."
+        );
+    }
+
+    #[test]
+    fn disk_shortfall_keeps_a_gigabyte_spare() {
+        let size = 731_357_568;
+        assert!(disk_shortfall(10_000_000_000, size).is_none());
+        let short = disk_shortfall(1_200_000_000, size).unwrap();
+        assert!(short.contains("needs 1.7 GB"), "{short}");
+        assert!(short.contains("1.2 GB free"), "{short}");
     }
 }

@@ -44,6 +44,24 @@ APPLE_SIGNING_IDENTITY=- bun run tauri build
 
 [docs/INSTALL.md](docs/INSTALL.md) has the details.
 
+### Back up the release keys
+
+Two files exist only on the release Mac. Keep a copy of each somewhere safe
+(an encrypted drive or a password manager), outside this repo:
+
+- The "Lipik Dev" certificate and its private key, from the login keychain
+  (Keychain Access → My Certificates → Lipik Dev → Export, as a .p12 with a
+  password). macOS ties Accessibility and Microphone permissions to this
+  certificate, and the installer checks it. Signed with a new one, every
+  release looks like a different app: each user has to grant permissions
+  again, and `install.sh` refuses the download until its certificate hash is
+  updated. If the certificate ever changes, update `LEAF` in
+  `website/install.sh` (from `codesign -dr - Lipik.app`) and deploy the site
+  in the same release: until both are live, every Terminal install fails.
+- `~/.tauri/lipik-updater.key`. The app checks every update against it.
+  Without it no new release can be installed with Update now, and every
+  user has to download and install Lipik by hand once.
+
 ## Checks
 
 ```bash

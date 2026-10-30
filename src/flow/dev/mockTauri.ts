@@ -133,6 +133,8 @@ const makeSettings = (theme: "dark" | "light"): AppSettings => ({
   post_process_prompts: [],
   mute_while_recording: true,
   append_trailing_space: true,
+  auto_submit: false,
+  auto_submit_key: "enter",
   app_language: "en",
   theme,
   experimental_enabled: false,

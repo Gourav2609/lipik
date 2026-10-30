@@ -219,6 +219,8 @@ pub fn delete_replacement(
 }
 
 const COMMON_WORDS: &str = include_str!("common_words.txt");
+static COMMON_WORD_SET: once_cell::sync::Lazy<std::collections::HashSet<&'static str>> =
+    once_cell::sync::Lazy::new(|| COMMON_WORDS.lines().collect());
 const MAX_LEARNED_WORDS: usize = 5;
 const MAX_PENDING_FIXES: usize = 200;
 const MAX_DIFF_CELLS: usize = 4_000_000;
@@ -226,7 +228,7 @@ const MAX_DIFF_CELLS: usize = 4_000_000;
 pub(crate) fn is_common_word(word: &str) -> bool {
     let lower = word.to_lowercase().replace('’', "'");
     let parts: Vec<&str> = lower.split(['-', '/']).filter(|p| !p.is_empty()).collect();
-    !parts.is_empty() && parts.iter().all(|p| COMMON_WORDS.lines().any(|l| l == *p))
+    !parts.is_empty() && parts.iter().all(|p| COMMON_WORD_SET.contains(p))
 }
 
 /// A word worth adding to the dictionary: a name, jargon or a non-English

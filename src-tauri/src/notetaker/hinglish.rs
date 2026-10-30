@@ -1,6 +1,8 @@
 //! Hinglish meetings. Pieces go through Qwen3-ASR, which keeps Hindi words
 //! (in Devanagari) and names that the English models turn into English
-//! look-alikes. The clean-up model then writes each line in Roman letters.
+//! look-alikes. The clean-up model then writes each line in Roman letters;
+//! a line it fails on, translates, or whose numbers it changes is written by
+//! letter rules instead ([`transliterate`]), so no Devanagari is left.
 //! Names of the people in the meeting are put back in Roman letters before
 //! and after it, because it reads names such as "तरुण" as Hindi words ("young").
 //!
@@ -131,13 +133,46 @@ pub fn downloaded_model(app: &AppHandle) -> Option<String> {
     })
 }
 
-/// Qwen3-ASR loaded beside dictation, or `None` when it isn't downloaded
-/// or doesn't load.
-pub fn engine(app: &AppHandle) -> Option<SideEngine> {
+/// Most dictionary words and names given to Qwen3-ASR to listen for.
+const MAX_DICTIONARY_HOTWORDS: usize = 45;
+const MAX_NAME_HOTWORDS: usize = 15;
+
+/// Words for Qwen3-ASR to listen for: some of the user's dictionary and
+/// the meeting's names, each once, with room kept for the names.
+pub fn hotwords(dictionary: &[String], names: &[String]) -> Vec<String> {
+    let mut words: Vec<String> = Vec::new();
+    let mut add = |list: &[String], most: usize| {
+        let mut added = 0;
+        for word in list.iter().map(|w| w.trim()) {
+            if added == most {
+                break;
+            }
+            if !word.is_empty() && !words.iter().any(|w| w.eq_ignore_ascii_case(word)) {
+                words.push(word.to_string());
+                added += 1;
+            }
+        }
+    };
+    let dictionary: Vec<String> = dictionary
+        .iter()
+        .filter(|w| !w.contains('@'))
+        .cloned()
+        .collect();
+    add(&dictionary, MAX_DICTIONARY_HOTWORDS);
+    add(&name_parts(names), MAX_NAME_HOTWORDS);
+    words
+}
+
+/// Qwen3-ASR loaded beside dictation, listening for `hotwords`, or `None`
+/// when it isn't downloaded or doesn't load.
+pub fn engine(app: &AppHandle, hotwords: Vec<String>) -> Option<SideEngine> {
     let model = downloaded_model(app)?;
     let tm = super::transcribe::transcription_manager(app).ok()?;
     match tm.side_batch_engine(&model, LANGUAGE) {
-        Ok(engine) => Some(engine),
+        Ok(mut engine) => {
+            engine.run.vocabulary = hotwords;
+            Some(engine)
+        }
         Err(e) => {
             log::warn!("Notetaker: {model} did not load: {e}");
             None
@@ -317,6 +352,22 @@ fn vowel(c: char) -> Option<&'static str> {
     })
 }
 
+/// A vowel the way Hinglish is typed: long vowels doubled inside a word
+/// ("theek", "kaam", "hoon") and single at its end ("karna", "nahi", "bhai");
+/// "ए" after a vowel takes a "y" ("gaye", "liye").
+fn typed_vowel(c: char, at_end: bool, after_vowel: bool) -> Option<String> {
+    let text = match (vowel(c)?, at_end) {
+        ("aa", true) => "a",
+        ("ii", true) => "i",
+        ("ii", false) => "ee",
+        ("uu", true) => "u",
+        ("uu", false) => "oo",
+        (v, _) => v,
+    };
+    let y = after_vowel && c == 'ए';
+    Some(format!("{}{text}", if y { "y" } else { "" }))
+}
+
 /// How a consonant ends in writing.
 #[derive(Clone, Copy, PartialEq)]
 enum Ends {
@@ -333,16 +384,43 @@ enum Ends {
 /// word, nor between a vowel and a consonant that has a vowel of its own
 /// ("करना" -> "karnaa"), except in the first syllable.
 fn roman_letters(word: &str) -> String {
+    spell(word, false)
+}
+
+/// `word` as Hinglish is typed: "ठीक" -> "theek", "करना" -> "karna",
+/// "हूँ" -> "hoon". Letters that are not Devanagari stay.
+fn typed_letters(word: &str) -> String {
+    spell(word, true)
+}
+
+fn spell(word: &str, typed: bool) -> String {
     let chars: Vec<char> = word.chars().collect();
+    let letter_at = |i: usize| chars.get(i).is_some_and(|&c| is_devanagari(c));
     let mut units: Vec<(String, Ends)> = Vec::new();
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
+        if typed && chars[i..].starts_with(&['ज', '\u{094D}', 'ञ']) {
+            units.push(("g".into(), Ends::Bare));
+            units.push(("y".into(), Ends::Inherent));
+            i += 3;
+            if let Some(&m) = chars.get(i).filter(|m| vowel(**m).is_some()) {
+                let unit = units.last_mut().unwrap();
+                unit.0
+                    .push_str(&typed_vowel(m, !letter_at(i + 1), false).unwrap_or_default());
+                unit.1 = Ends::Vowel;
+                i += 1;
+            }
+            continue;
+        }
         let nukta = chars.get(i + 1) == Some(&'\u{093C}');
         let base = match (c, nukta) {
             ('ज', true) => Some("z"),
             ('फ', true) => Some("f"),
-            ('ड', true) => Some("r"),
+            ('ड', true) => Some(if typed { "d" } else { "r" }),
+            ('ढ', true) if typed => Some("dh"),
+            ('\u{095C}', _) if typed => Some("d"),
+            ('\u{095D}', _) if typed => Some("dh"),
             _ => consonant(c),
         };
         i += 1 + usize::from(nukta && base.is_some());
@@ -354,26 +432,61 @@ fn roman_letters(word: &str) -> String {
                     Ends::Bare
                 }
                 Some(&m) if vowel(m).is_some() => {
-                    text.push_str(vowel(m).unwrap_or_default());
+                    let v = if typed {
+                        typed_vowel(m, !letter_at(i + 1), false).unwrap_or_default()
+                    } else {
+                        vowel(m).unwrap_or_default().to_string()
+                    };
+                    text.push_str(&v);
                     i += 1;
                     Ends::Vowel
                 }
                 _ => Ends::Inherent,
             };
             units.push((text, ends));
-        } else if let Some(v) = vowel(c) {
-            units.push((v.to_string(), Ends::Vowel));
+        } else if vowel(c).is_some() {
+            let v = if typed {
+                let after_vowel = units.last().is_some_and(|(_, e)| *e != Ends::Bare);
+                let at_end = !units.is_empty() && !letter_at(i);
+                typed_vowel(c, at_end, after_vowel).unwrap_or_default()
+            } else {
+                vowel(c).unwrap_or_default().to_string()
+            };
+            units.push((v, Ends::Vowel));
         } else if matches!(c, 'ं' | 'ँ' | 'ः') {
-            let sound = if c == 'ः' { 'h' } else { 'n' };
+            let sound = match c {
+                'ः' => 'h',
+                _ if typed
+                    && chars
+                        .get(i)
+                        .is_some_and(|n| matches!(n, 'प' | 'फ' | 'ब' | 'भ' | 'म')) =>
+                {
+                    'm'
+                }
+                _ => 'n',
+            };
             match units.last_mut() {
                 Some((text, Ends::Inherent)) => {
                     text.push('a');
                     text.push(sound);
                     units.last_mut().unwrap().1 = Ends::Vowel;
                 }
-                Some((text, _)) => text.push(sound),
+                Some((text, _)) => {
+                    if typed && c != 'ः' && !letter_at(i) {
+                        if text.ends_with("ee") {
+                            text.truncate(text.len() - 2);
+                            text.push('i');
+                        } else if text.ends_with('e') {
+                            text.push('i');
+                        }
+                    }
+                    text.push(sound);
+                }
                 None => {}
             }
+        } else if ('०'..='९').contains(&c) {
+            let digit = char::from_digit(c as u32 - '०' as u32, 10).unwrap_or('0');
+            units.push((digit.to_string(), Ends::Bare));
         } else if !is_devanagari(c) {
             units.push((c.to_string(), Ends::Bare));
         }
@@ -401,6 +514,102 @@ fn roman_letters(word: &str) -> String {
             }
         };
         said_vowel = voiced;
+    }
+    if typed {
+        out = out.replace("chchh", "cch").replace("chch", "cch");
+    }
+    out
+}
+
+/// English words written in Devanagari ("डेटा"), in English ("data").
+static LOANWORDS: once_cell::sync::Lazy<std::collections::HashMap<&'static str, &'static str>> =
+    once_cell::sync::Lazy::new(|| {
+        include_str!("loanwords.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_once('\t'))
+            .collect()
+    });
+
+/// Everyday words whose usual Roman spelling the letter rules miss.
+const TYPED_WORDS: &[(&str, &str)] = &[
+    ("नहीं", "nahi"),
+    ("नही", "nahi"),
+    ("में", "mein"),
+    ("मैं", "main"),
+    ("हाँ", "haan"),
+    ("हां", "haan"),
+    ("तो", "toh"),
+    ("यह", "yeh"),
+    ("वह", "woh"),
+    ("क्यों", "kyun"),
+    ("क्यूँ", "kyun"),
+    ("क्योंकि", "kyunki"),
+    ("यहाँ", "yahan"),
+    ("यहां", "yahan"),
+    ("वहाँ", "wahan"),
+    ("वहां", "wahan"),
+    ("कहाँ", "kahan"),
+    ("कहां", "kahan"),
+    ("अच्छा", "accha"),
+    ("वाला", "wala"),
+    ("वाली", "wali"),
+    ("वाले", "wale"),
+    ("गए", "gaye"),
+    ("गई", "gayi"),
+    ("गयी", "gayi"),
+    ("भाई", "bhai"),
+    ("ज़्यादा", "zyada"),
+    ("ज्यादा", "zyada"),
+    ("चाहिए", "chahiye"),
+];
+
+/// Every Devanagari word in `text` in Roman letters the way Hinglish is
+/// typed; the rest stays as it is. A line that starts in Devanagari starts
+/// with a capital.
+pub fn transliterate(text: &str) -> String {
+    if !has_devanagari(text) {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        if has_devanagari(word) {
+            let typed = LOANWORDS
+                .get(word.as_str())
+                .or_else(|| {
+                    TYPED_WORDS
+                        .iter()
+                        .find(|(w, _)| *w == word.as_str())
+                        .map(|(_, t)| t)
+                })
+                .map_or_else(|| typed_letters(word), |t| t.to_string());
+            out.push_str(&typed);
+        } else {
+            out.push_str(word);
+        }
+        word.clear();
+    };
+    for c in text.chars() {
+        if diarize::word_char(c) {
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(match c {
+                '\u{0964}' | '\u{0965}' => '.',
+                _ => c,
+            });
+        }
+    }
+    flush(&mut word, &mut out);
+    let starts_devanagari = text
+        .chars()
+        .find(|c| diarize::word_char(*c))
+        .is_some_and(is_devanagari);
+    if starts_devanagari {
+        if let Some(first) = out.chars().next().filter(|c| c.is_lowercase()) {
+            out = first.to_uppercase().chain(out.chars().skip(1)).collect();
+        }
     }
     out
 }
@@ -548,6 +757,245 @@ fn translated(line: &str, reply: &str) -> bool {
     glue >= 3 && hindi * 3 < glue
 }
 
+/// Number words in English, Roman Hindi and Devanagari, by value. Words
+/// that are more often something else ("saath", with) are left out on both
+/// sides.
+const NUMBER_WORDS: &[(&str, u64)] = &[
+    ("zero", 0),
+    ("one", 1),
+    ("two", 2),
+    ("three", 3),
+    ("four", 4),
+    ("five", 5),
+    ("six", 6),
+    ("seven", 7),
+    ("eight", 8),
+    ("nine", 9),
+    ("ten", 10),
+    ("eleven", 11),
+    ("twelve", 12),
+    ("thirteen", 13),
+    ("fourteen", 14),
+    ("fifteen", 15),
+    ("sixteen", 16),
+    ("seventeen", 17),
+    ("eighteen", 18),
+    ("nineteen", 19),
+    ("twenty", 20),
+    ("thirty", 30),
+    ("forty", 40),
+    ("fifty", 50),
+    ("sixty", 60),
+    ("seventy", 70),
+    ("eighty", 80),
+    ("ninety", 90),
+    ("hundred", 100),
+    ("thousand", 1_000),
+    ("million", 1_000_000),
+    ("billion", 1_000_000_000),
+    ("ek", 1),
+    ("do", 2),
+    ("teen", 3),
+    ("char", 4),
+    ("chaar", 4),
+    ("panch", 5),
+    ("paanch", 5),
+    ("chhe", 6),
+    ("chhah", 6),
+    ("chheh", 6),
+    ("saat", 7),
+    ("aath", 8),
+    ("nau", 9),
+    ("das", 10),
+    ("gyarah", 11),
+    ("barah", 12),
+    ("baarah", 12),
+    ("terah", 13),
+    ("chaudah", 14),
+    ("pandrah", 15),
+    ("solah", 16),
+    ("satrah", 17),
+    ("atharah", 18),
+    ("unnis", 19),
+    ("bees", 20),
+    ("tees", 30),
+    ("chalis", 40),
+    ("chaalis", 40),
+    ("chalees", 40),
+    ("pachas", 50),
+    ("pachaas", 50),
+    ("sau", 100),
+    ("hazar", 1_000),
+    ("hazaar", 1_000),
+    ("lakh", 100_000),
+    ("crore", 10_000_000),
+    ("karod", 10_000_000),
+    ("एक", 1),
+    ("दो", 2),
+    ("तीन", 3),
+    ("चार", 4),
+    ("पांच", 5),
+    ("पाँच", 5),
+    ("छह", 6),
+    ("छः", 6),
+    ("छे", 6),
+    ("सात", 7),
+    ("आठ", 8),
+    ("नौ", 9),
+    ("दस", 10),
+    ("ग्यारह", 11),
+    ("बारह", 12),
+    ("तेरह", 13),
+    ("चौदह", 14),
+    ("पंद्रह", 15),
+    ("पन्द्रह", 15),
+    ("सोलह", 16),
+    ("सत्रह", 17),
+    ("अठारह", 18),
+    ("उन्नीस", 19),
+    ("बीस", 20),
+    ("तीस", 30),
+    ("चालीस", 40),
+    ("पचास", 50),
+    ("सौ", 100),
+    ("हज़ार", 1_000),
+    ("हजार", 1_000),
+    ("लाख", 100_000),
+    ("करोड़", 10_000_000),
+    ("\u{0915}\u{0930}\u{094B}\u{0921}\u{093C}", 10_000_000),
+];
+
+/// Words that add to the number after them: "साढ़े तीन" = 3.5, "सवा दो" =
+/// 2.25, in quarters.
+const PLUS_QUARTERS: &[(&str, u64)] = &[
+    ("साढ़े", 2),
+    ("\u{0938}\u{093E}\u{0922}\u{093C}\u{0947}", 2),
+    ("saadhe", 2),
+    ("sadhe", 2),
+    ("saade", 2),
+    ("सवा", 1),
+    ("sawa", 1),
+    ("sava", 1),
+];
+
+/// Fractions said as one word, in quarters: "डेढ़" = 1.5, "ढाई" = 2.5.
+const QUARTERS: &[(&str, u64)] = &[
+    ("डेढ़", 6),
+    ("\u{0921}\u{0947}\u{0922}\u{093C}", 6),
+    ("dedh", 6),
+    ("derh", 6),
+    ("ढाई", 10),
+    ("dhai", 10),
+    ("dhaai", 10),
+];
+
+/// "एक बार" / "ek baar" is "once", not a count of one.
+const TIMES_WORDS: &[&str] = &["बार", "baar", "bar"];
+
+/// Whether `word` (lowercase) is a number word.
+pub fn number_word(word: &str) -> bool {
+    NUMBER_WORDS.iter().any(|(w, _)| *w == word) || QUARTERS.iter().any(|(w, _)| *w == word)
+}
+
+static NUMBER_TOKEN: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+    regex::Regex::new(r"[0-9०-९]+(?:[.,][0-9०-९]+)*|[\p{L}\p{M}]+").unwrap()
+});
+
+/// A number in quarters written out: 14 -> "3.5".
+fn quarters_text(q: u64) -> String {
+    match q % 4 {
+        0 => (q / 4).to_string(),
+        2 => format!("{}.5", q / 4),
+        r => format!("{}.{}", q / 4, r * 25),
+    }
+}
+
+/// The numbers said in `text`, digits and number words alike, a run of
+/// number words read as one number ("bees hazaar" = 20000, "साढ़े तीन लाख"
+/// = 350000), sorted.
+fn numbers(text: &str) -> Vec<String> {
+    let tokens: Vec<String> = NUMBER_TOKEN
+        .find_iter(text)
+        .map(|m| {
+            m.as_str()
+                .chars()
+                .map(|c| match c {
+                    '०'..='९' => char::from_digit(c as u32 - '०' as u32, 10).unwrap_or(c),
+                    _ => c.to_lowercase().next().unwrap_or(c),
+                })
+                .collect()
+        })
+        .collect();
+    let lookup =
+        |table: &[(&str, u64)], word: &str| table.iter().find(|(w, _)| *w == word).map(|(_, v)| *v);
+    #[derive(Default)]
+    struct Run {
+        total: u64,
+        part: u64,
+        plus: u64,
+        open: bool,
+    }
+    let mut found = Vec::new();
+    let mut run = Run::default();
+    let close = |run: &mut Run, found: &mut Vec<String>| {
+        if run.open {
+            found.push(quarters_text(run.total + run.part));
+        }
+        *run = Run::default();
+    };
+    for (n, token) in tokens.iter().enumerate() {
+        let once = matches!(token.as_str(), "ek" | "एक")
+            && tokens
+                .get(n + 1)
+                .is_some_and(|t| TIMES_WORDS.contains(&t.as_str()));
+        if let Some(q) = lookup(PLUS_QUARTERS, token) {
+            run.plus = q;
+            continue;
+        }
+        let quarters = if once {
+            None
+        } else if token.starts_with(|c: char| c.is_ascii_digit()) {
+            let plain = token.replace(',', "");
+            match plain.parse::<f64>() {
+                Ok(v) if (v * 4.0).fract() == 0.0 && v >= 0.0 => Some((v * 4.0) as u64),
+                _ => {
+                    close(&mut run, &mut found);
+                    found.push(plain);
+                    continue;
+                }
+            }
+        } else {
+            lookup(QUARTERS, token)
+                .or_else(|| lookup(NUMBER_WORDS, token).map(|v| v.saturating_mul(4)))
+        };
+        let word = lookup(NUMBER_WORDS, token).is_some();
+        match quarters {
+            Some(q) if q >= 4_000 && run.open && word => {
+                run.total = run
+                    .total
+                    .saturating_add(run.part.max(4).saturating_mul(q / 4));
+                run.part = 0;
+            }
+            Some(400) if run.open && word => run.part = run.part.max(4).saturating_mul(100),
+            Some(q) => {
+                run.part = run.part.saturating_add(q + run.plus);
+                run.plus = 0;
+                run.open = true;
+            }
+            None => close(&mut run, &mut found),
+        }
+    }
+    close(&mut run, &mut found);
+    found.sort();
+    found
+}
+
+/// Whether the reply says the same numbers as the line: the Roman step may
+/// change how a number is written ("पाँच" -> "paanch" or "5"), never which.
+fn same_numbers(line: &str, reply: &str) -> bool {
+    numbers(line) == numbers(reply)
+}
+
 /// One line in Roman letters, asked again once when the reply translated
 /// it. A reply that lost words or stayed translated is not used.
 fn romanize_line(model: &ai::Model, prompt: &str, line: &str) -> Result<String> {
@@ -614,10 +1062,11 @@ pub fn romanize(
     }
 }
 
-/// Every line with Devanagari through `ask`, names kept. A line `ask` fails
-/// on keeps its Devanagari with the names in Roman letters, and so do all
-/// lines left once `ask` failed `MAX_FAILS_IN_ROW` times in a row, `time`
-/// ran out, or `keep_going` (given the share of lines done) said stop.
+/// Every line with Devanagari through `ask`, names kept. A line `ask`
+/// fails on, or whose reply says other numbers, is written in Roman letters
+/// by [`transliterate`], and so are all lines left once `ask` failed
+/// `MAX_FAILS_IN_ROW` times in a row, `time` ran out, or `keep_going`
+/// (given the share of lines done) said stop. No Devanagari is left.
 pub fn romanize_with(
     segments: &mut [Segment],
     names: &[String],
@@ -627,7 +1076,7 @@ pub fn romanize_with(
 ) {
     let started = Instant::now();
     let todo = segments.iter().filter(|s| has_devanagari(&s.text)).count();
-    let (mut done, mut fails_in_row, mut failed) = (0usize, 0usize, 0usize);
+    let (mut done, mut fails_in_row, mut failed, mut renumbered) = (0usize, 0usize, 0usize, 0usize);
     let mut trying = true;
     for s in segments.iter_mut().filter(|s| has_devanagari(&s.text)) {
         let line = protect_names(&s.text, names);
@@ -635,27 +1084,34 @@ pub fn romanize_with(
             && fails_in_row < MAX_FAILS_IN_ROW
             && started.elapsed() < time
             && keep_going(done as f32 / todo.max(1) as f32);
-        s.text = if trying {
+        let roman = if trying {
             match ask(&line) {
-                Ok(roman) => {
+                Ok(roman) if same_numbers(&line, &roman) => {
                     fails_in_row = 0;
                     protect_names(&roman, names)
+                }
+                Ok(roman) => {
+                    fails_in_row = 0;
+                    renumbered += 1;
+                    log::debug!("Hinglish reply changed the numbers: {line} -> {roman}");
+                    line
                 }
                 Err(e) => {
                     fails_in_row += 1;
                     failed += 1;
-                    log::debug!("Hinglish line kept in Devanagari: {e}");
+                    log::debug!("Hinglish line written by letter rules: {e}");
                     line
                 }
             }
         } else {
             line
         };
+        s.text = transliterate(&roman);
         done += 1;
     }
-    if failed > 0 || !trying {
+    if failed > 0 || renumbered > 0 || !trying {
         log::warn!(
-            "Notetaker kept Hinglish lines in Devanagari: {failed} failed, stopped early: {}",
+            "Notetaker wrote Hinglish lines by letter rules: {failed} failed, {renumbered} changed numbers, stopped early: {}",
             !trying
         );
     }
@@ -946,7 +1402,11 @@ mod tests {
             |_| true,
         );
         assert_eq!(asked, 3);
-        assert!(lines.iter().all(|s| s.text == "ठीक है Varun"));
+        assert!(
+            lines.iter().all(|s| s.text == "Theek hai Varun"),
+            "{lines:?}"
+        );
+        lines = (0..6).map(|_| line("ठीक है वरुण")).collect();
 
         let mut asked = 0;
         romanize_with(
@@ -963,6 +1423,358 @@ mod tests {
         assert_eq!(romanize_time(30 * 60_000), Duration::from_secs(900));
         assert_eq!(romanize_time(60_000), Duration::from_secs(300));
         assert_eq!(romanize_time(4 * 3600_000), Duration::from_secs(3600));
+    }
+
+    #[test]
+    fn devanagari_is_written_the_way_hinglish_is_typed() {
+        for (hindi, roman) in [
+            ("है", "hai"),
+            ("नहीं", "nahi"),
+            ("क्या", "kya"),
+            ("ठीक", "theek"),
+            ("करना", "karna"),
+            ("मतलब", "matlab"),
+            ("समझ", "samajh"),
+            ("हूँ", "hoon"),
+            ("थोड़ा", "thoda"),
+            ("ज़्यादा", "zyada"),
+            ("लिए", "liye"),
+            ("गए", "gaye"),
+            ("ज्ञान", "gyaan"),
+            ("बच्चे", "bacche"),
+            ("पूरा", "poora"),
+            ("तीन", "teen"),
+            ("२५", "25"),
+        ] {
+            assert_eq!(
+                transliterate(hindi),
+                roman.to_string()[..1].to_uppercase() + &roman[1..],
+                "{hindi}"
+            );
+            assert_eq!(
+                transliterate(&format!("ok {hindi}")),
+                format!("ok {roman}"),
+                "{hindi}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_whole_line_keeps_its_english_and_punctuation() {
+        assert_eq!(
+            transliterate("ठीक है, status क्या होना चाहिए exactly? लेकिन नहीं।"),
+            "Theek hai, status kya hona chahiye exactly? lekin nahi."
+        );
+        assert_eq!(
+            transliterate("Matlab kि does that hotे hain"),
+            "Matlab ki does that hote hain"
+        );
+        assert_eq!(transliterate("All English."), "All English.");
+    }
+
+    #[test]
+    fn numbers_are_compared_by_value() {
+        let line = "पाँच failed हुए, बीस हज़ार rows में से 85% ठीक";
+        assert!(same_numbers(
+            line,
+            "paanch failed hue, bees hazaar rows mein se 85% theek"
+        ));
+        assert!(same_numbers(
+            line,
+            "5 failed hue, 20,000 rows mein se 85% theek"
+        ));
+        assert!(!same_numbers(
+            line,
+            "kuch failed hue, bees hazaar rows mein se 85% theek"
+        ));
+        assert!(!same_numbers(
+            line,
+            "5 failed hue, 2,000 rows mein se 85% theek"
+        ));
+        assert!(!same_numbers("दो दिन", "two-three din"));
+        assert!(same_numbers("बता दो", "bata do"));
+        assert!(same_numbers("2.5 lakh", "2.5 lakh"));
+        assert_eq!(numbers("तीन सौ पचास"), vec!["350"]);
+        assert_eq!(numbers("one and two"), vec!["1", "2"]);
+    }
+
+    #[test]
+    fn fractions_and_big_numbers_are_compared_by_value() {
+        assert_eq!(numbers("डेढ़ लाख"), vec!["150000"]);
+        assert_eq!(numbers("ढाई सौ"), vec!["250"]);
+        assert_eq!(numbers("साढ़े तीन करोड़"), vec!["35000000"]);
+        assert_eq!(numbers("सवा दो"), vec!["2.25"]);
+        assert!(same_numbers("साढ़े तीन बजे", "3.5 baje"));
+        assert!(same_numbers("डेढ़ लाख rows", "dedh lakh rows"));
+        assert!(same_numbers("डेढ़ लाख rows", "1.5 lakh rows"));
+        assert!(!same_numbers("डेढ़ लाख rows", "1 lakh rows"));
+        assert!(!same_numbers("ढाई दिन", "2 din"));
+    }
+
+    #[test]
+    fn once_is_not_a_count() {
+        assert!(numbers("एक बार देख लो").is_empty());
+        assert!(same_numbers("एक बार देख लो", "once dekh lo"));
+        assert!(same_numbers("एक बार देख लो", "ek baar dekh lo"));
+        assert_eq!(numbers("एक file"), vec!["1"]);
+    }
+
+    #[test]
+    fn english_words_in_devanagari_come_back_in_english() {
+        assert_eq!(
+            transliterate("ये डेटा कंपनी के ऑफिस में है, स्टेटस ओके"),
+            "Ye data company ke office mein hai, status ok"
+        );
+        assert_eq!(
+            transliterate("मीटिंग में क्लाइंट का आइडिया, ईमेल भेजो"),
+            "Meeting mein client ka idea, email bhejo"
+        );
+        assert_eq!(transliterate("ok पीओसी गूगल"), "ok POC Google");
+        for line in include_str!("loanwords.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+        {
+            let (hindi, english) = line.split_once('\t').expect(line);
+            assert!(has_devanagari(hindi) && !has_devanagari(english), "{line}");
+        }
+    }
+
+    #[test]
+    fn nasal_endings_are_typed_the_usual_way() {
+        assert_eq!(
+            transliterate("ok कहीं यहीं करें बातें हूँ"),
+            "ok kahin yahin karein baatein hoon"
+        );
+    }
+
+    #[test]
+    fn hotwords_keep_room_for_names() {
+        let dictionary: Vec<String> = (0..80).map(|n| format!("Zorvik{n}")).collect();
+        let words = hotwords(&dictionary, &names(&["Varun Mehta", "Ira Ostrova"]));
+        assert_eq!(words.len(), 45 + 4);
+        assert_eq!(&words[45..], ["Varun", "Mehta", "Ira", "Ostrova"]);
+    }
+
+    #[test]
+    fn a_reply_with_other_numbers_is_written_by_letter_rules() {
+        let mut lines = vec![line("पाँच failed हुए"), line("ठीक है")];
+        romanize_with(
+            &mut lines,
+            &[],
+            Duration::from_secs(60),
+            |l| {
+                Ok(if l.contains("failed") {
+                    "Kuch failed hue".into()
+                } else {
+                    "Theek hai".into()
+                })
+            },
+            |_| true,
+        );
+        assert_eq!(lines[0].text, "Paanch failed huye");
+        assert_eq!(lines[1].text, "Theek hai");
+    }
+
+    #[test]
+    fn hotwords_put_the_dictionary_first_and_skip_repeats() {
+        let words = hotwords(
+            &[
+                "Brimvale".to_string(),
+                "Kaychorn".to_string(),
+                "".to_string(),
+            ],
+            &names(&["Varun Mehta", "varun@brimvale.co", "Brimvale"]),
+        );
+        assert_eq!(words, ["Brimvale", "Kaychorn", "Varun", "Mehta"]);
+    }
+
+    /// Rebuilds hindi_lexicon.txt from the Aksharantar Hindi files:
+    /// LIPIK_AKSHARANTAR=<folder with hin_train/valid/test.json>
+    /// cargo test --lib writes_hindi_lexicon -- --ignored
+    #[test]
+    #[ignore]
+    fn writes_hindi_lexicon() {
+        use std::collections::BTreeSet;
+        let dir = std::path::PathBuf::from(std::env::var("LIPIK_AKSHARANTAR").unwrap());
+        let roman = regex::Regex::new("^[a-z]{3,15}$").unwrap();
+        let mut words = BTreeSet::new();
+        for part in ["train", "valid", "test"] {
+            let text = std::fs::read_to_string(dir.join(format!("hin_{part}.json"))).unwrap();
+            for line in text.lines() {
+                let row: serde_json::Value = serde_json::from_str(line).unwrap();
+                if !matches!(
+                    row["source"].as_str(),
+                    Some("AK-Freq" | "Dakshina" | "Existing")
+                ) {
+                    continue;
+                }
+                let native = row["native word"].as_str().unwrap_or_default();
+                let given = row["english word"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_lowercase();
+                for word in [given, typed_letters(native)] {
+                    if roman.is_match(&word) && !crate::textflow::commands::is_common_word(&word) {
+                        words.insert(word);
+                    }
+                }
+            }
+        }
+        let header = "# Romanised Hindi words: never taken for a misheard dictionary word.\n\
+# Built by `writes_hindi_lexicon` (notetaker/hinglish.rs) from the Hindi part of\n\
+# Aksharantar by AI4Bharat (https://huggingface.co/datasets/ai4bharat/Aksharantar),\n\
+# its AK-Freq, Dakshina and Existing rows: the romanisations given there and\n\
+# Lipik's own letter-rule spelling of each Hindi word. Aksharantar is released\n\
+# under CC-BY 4.0 (manually collected data) and CC0 (existing sources); its\n\
+# Dakshina rows come from the Google Dakshina dataset\n\
+# (https://github.com/google-research-datasets/dakshina), CC BY-SA 4.0. This\n\
+# file is shared under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).\n\
+# English words in the common-word list are left out.\n";
+        let body: Vec<String> = words.into_iter().collect();
+        std::fs::write(
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/src/notetaker/hindi_lexicon.txt"
+            ),
+            format!("{header}{}\n", body.join("\n")),
+        )
+        .unwrap();
+        println!("LEXICON {} words", body.len());
+    }
+
+    /// Private check on a real meeting: LIPIK_TEST_DB=<copy of
+    /// notetaker.db> LIPIK_TEST_MEETING=<id> LIPIK_TEST_AUDIO=<its folder>
+    /// LIPIK_TEST_TERMS=<dictionary, comma-separated>, and optionally
+    /// LIPIK_TEST_OLLAMA_MODEL to write the Devanagari lines with Ollama.
+    #[test]
+    #[ignore]
+    fn meeting_check() {
+        use super::super::{store::Store, tidy};
+        let var = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k} is not set"));
+        let id = var("LIPIK_TEST_MEETING");
+        let store = Store::open_read_only(std::path::Path::new(&var("LIPIK_TEST_DB"))).unwrap();
+        let meeting = store.meeting(&id).unwrap().expect("no such meeting");
+        let mut lines = store.segments(&id).unwrap();
+        let terms: Vec<String> = var("LIPIK_TEST_TERMS")
+            .split(',')
+            .map(|t| t.trim().to_string())
+            .collect();
+        let mut names = diarize::invitees(&meeting.attendees);
+        names.extend(super::super::own_names_in(&meeting));
+        let devanagari =
+            |lines: &[Segment]| lines.iter().filter(|s| has_devanagari(&s.text)).count();
+        println!(
+            "CHECK lines {} with Devanagari {}",
+            lines.len(),
+            devanagari(&lines)
+        );
+
+        let dir = std::path::PathBuf::from(var("LIPIK_TEST_AUDIO"));
+        let mut gone = Vec::new();
+        for (source, offset) in [
+            ("mic", meeting.mic_offset_ms.unwrap_or(0)),
+            ("system", meeting.system_offset_ms.unwrap_or(0)),
+        ] {
+            let Ok(reader) = hound::WavReader::open(dir.join(format!("{source}.wav"))) else {
+                continue;
+            };
+            let audio: Vec<f32> = reader
+                .into_samples::<i16>()
+                .map(|s| s.unwrap_or(0) as f32 / i16::MAX as f32)
+                .collect();
+            for (n, s) in lines.iter().enumerate().filter(|(_, s)| s.source == source) {
+                if !tidy::stock_phrase(&s.text) {
+                    continue;
+                }
+                let at = |ms: i64| (((ms - offset).max(0) * 16) as usize).min(audio.len());
+                let vad = crate::audio_toolkit::SileroVad::new(
+                    concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/resources/models/silero-vad-v6.2-F32.gguf"
+                    ),
+                    0.3,
+                )
+                .unwrap();
+                let mut track = super::super::audio::SpeechTrack::new(Some(Box::new(vad)));
+                track.push(&audio[at(s.start_ms)..at(s.end_ms)]);
+                let mut whole = super::super::audio::Piece {
+                    start_sample: 0,
+                    audio: Vec::new(),
+                    speech_samples: 0,
+                    peak: 0.0,
+                };
+                while let Some(p) = track.take(RULES, true) {
+                    whole.speech_samples += p.speech_samples;
+                    whole.peak = whole.peak.max(p.peak);
+                }
+                let drop = tidy::heard_nothing(&s.text, &whole, true, &[]);
+                println!(
+                    "CHECK stock phrase {:?}: speech {} ms, peak {:.2}, dropped {drop}",
+                    s.text,
+                    whole.speech_samples / 16,
+                    whole.peak
+                );
+                if drop {
+                    gone.push(n);
+                }
+            }
+        }
+        for n in gone.into_iter().rev() {
+            lines.remove(n);
+        }
+
+        let before: Vec<String> = lines.iter().map(|s| s.text.clone()).collect();
+        let prompt = prompt(&names);
+        let model = std::env::var("LIPIK_TEST_OLLAMA_MODEL")
+            .ok()
+            .map(|m| ai::Model::Ollama(ai::Ollama::new("http://127.0.0.1:11434", &m)));
+        romanize_with(
+            &mut lines,
+            &names,
+            Duration::from_secs(if model.is_some() { 900 } else { 0 }),
+            |line| {
+                let model = model.as_ref().ok_or_else(|| anyhow!("no model"))?;
+                let reply = romanize_line(model, &prompt, line);
+                match &reply {
+                    Ok(r) if !same_numbers(line, r) => {
+                        println!(
+                            "CHECK numbers changed: {:?} -> {:?}",
+                            numbers(line),
+                            numbers(r)
+                        )
+                    }
+                    Ok(_) => println!("CHECK model wrote a line"),
+                    Err(e) => println!("CHECK model failed: {e}"),
+                }
+                reply
+            },
+            |_| true,
+        );
+        for (b, s) in before.iter().zip(&lines) {
+            if has_devanagari(b) {
+                println!("CHECK roman: {}", s.text);
+            }
+        }
+        println!("CHECK with Devanagari after {}", devanagari(&lines));
+        let vocabulary = tidy::Vocabulary::new(&terms, &names);
+        for s in &lines {
+            let (text, runs) = tidy::collapse_repeats(&s.text);
+            if runs > 0 {
+                println!("CHECK repeat: {:?}\nCHECK    -> {:?}", s.text, text);
+            }
+        }
+        let started = Instant::now();
+        let done = tidy::tidy(&mut lines, &vocabulary);
+        println!("CHECK tidy took {:?}", started.elapsed());
+        println!("CHECK repeats collapsed {}", done.repeats);
+        let mut fixes: std::collections::BTreeMap<String, usize> = Default::default();
+        for (heard, term) in &done.fixed {
+            *fixes.entry(format!("{heard} -> {term}")).or_default() += 1;
+        }
+        println!("CHECK dictionary fixes {}", done.fixed.len());
+        for (fix, n) in fixes {
+            println!("CHECK   {fix} x{n}");
+        }
     }
 
     #[test]
