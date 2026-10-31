@@ -1,6 +1,6 @@
 # Lipik
 
-**Private voice dictation for macOS that runs on your own computer.**
+**Voice dictation that runs on your Mac, works offline and is open source (MIT). Free, with no account and no word limit.**
 
 [![Lipik turning "Send it at four, um, no, five." into "Send it at 5." in TextEdit](docs/demo/lipik-demo.gif)](docs/demo/lipik-demo.mp4)
 
@@ -8,7 +8,8 @@
 
 Hold `fn`, speak, and let go. Lipik turns what you said into clean text and
 types it into whatever app you are in: an email, a chat, a code editor, a
-document. The speech model runs locally, so your voice never leaves your Mac.
+document. The speech model runs locally, so your voice never leaves your Mac,
+and once the models are downloaded it works with no internet.
 
 _Lipik_ (लिपिक) is Hindi for a scribe: the person who writes things down for
 you.
