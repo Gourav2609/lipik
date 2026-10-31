@@ -2,6 +2,10 @@
 
 **Private voice dictation for macOS that runs on your own computer.**
 
+[![Lipik turning "Send it at four, um, no, five." into "Send it at 5." in TextEdit](docs/demo/lipik-demo.gif)](docs/demo/lipik-demo.mp4)
+
+<sub>Said: "Send it at four, um, no, five." Typed: "Send it at 5." Real recording of Lipik 0.1.13; voice: the author's own, cloned.</sub>
+
 Hold `fn`, speak, and let go. Lipik turns what you said into clean text and
 types it into whatever app you are in: an email, a chat, a code editor, a
 document. The speech model runs locally, so your voice never leaves your Mac.
