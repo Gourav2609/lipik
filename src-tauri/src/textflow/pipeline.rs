@@ -9,7 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
-/// Dictations with fewer words get the rules only, no model call.
+/// Dictations with fewer words get the rules only, no model call, unless
+/// they are a Hinglish correction (`gate::short_needs_model`).
 const MIN_MODEL_WORDS: usize = 8;
 /// The most dictionary words sent with one clean-up request.
 const MAX_VOCABULARY: usize = 40;
@@ -155,7 +156,9 @@ pub fn waits_on_llm(app: &AppHandle, transcript: &str) -> bool {
     }
     app.try_state::<TextFlow>().is_some_and(|tf| {
         tf.read(|d| {
-            (d.style.auto_cleanup && text::count_words(transcript) >= MIN_MODEL_WORDS)
+            (d.style.auto_cleanup
+                && (text::count_words(transcript) >= MIN_MODEL_WORDS
+                    || gate::short_needs_model(transcript)))
                 || (d.transforms.opt_in
                     && d.transforms.auto_apply.enabled
                     && d.transforms.auto_apply.transform_id.is_some())
@@ -392,7 +395,7 @@ pub(super) fn plan(prepared: &Prepared, setup: &Setup) -> Option<Plan> {
         return None;
     }
     let rules_text = rules::apply(&prepared.masked, &setup.vocabulary);
-    if text::count_words(&words_only) < MIN_MODEL_WORDS {
+    if text::count_words(&words_only) < MIN_MODEL_WORDS && !gate::short_needs_model(&rules_text) {
         return Some(Plan::Rules {
             text: rules_text,
             end_mark: false,
@@ -1280,6 +1283,30 @@ mod tests {
         final_plan(text).1
     }
 
+    #[test]
+    fn short_hinglish_corrections_go_to_the_model() {
+        let (rules_text, jobs, _) = final_plan("main paanch baje aaunga, nahi nahi, chhe baje");
+        assert_eq!(rules_text, "Main paanch baje aaunga, nahi nahi, chhe baje");
+        assert_eq!(jobs.len(), 1);
+        for said in [
+            "main paanch baje aaunga, nahi, nahi, chhe baje",
+            "main paanch baje aaunga, nahi, chhe baje",
+        ] {
+            assert_eq!(final_plan(said).1.len(), 1, "{said}");
+        }
+        for (said, pasted) in [
+            ("mujhe kuch nahi mila", "Mujhe kuch nahi mila"),
+            ("sorry yaar late ho gaya", "Sorry yaar late ho gaya"),
+            ("khana kha liya kya", "Khana kha liya kya?"),
+            ("call Priya, sorry, Kabir", "Call Priya, sorry, Kabir"),
+        ] {
+            match plan(&prepared(said, &[]), &slack()) {
+                Some(Plan::Rules { text, .. }) => assert_eq!(text, pasted),
+                _ => panic!("rules only: {said}"),
+            }
+        }
+    }
+
     /// The requests clean-up while speaking makes for `said`, as the live
     /// transcription commits it 5 words at a time, 5 words behind the
     /// speech at release; each is answered by `ask` in order.
@@ -1361,7 +1388,8 @@ mod tests {
             return None;
         }
         let rules_text = rules::apply(&prepared.masked, vocabulary);
-        if text::count_words(&words_only) < MIN_MODEL_WORDS {
+        if text::count_words(&words_only) < MIN_MODEL_WORDS && !gate::short_needs_model(&rules_text)
+        {
             return None;
         }
         let parts = if kind == StyleKind::Formal {

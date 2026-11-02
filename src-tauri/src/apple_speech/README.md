@@ -34,7 +34,8 @@ is pasted is the one picked here. The notetaker always uses the local model.
 
 ## The auto rule
 
-`pick::local_text_looks_english` decides. The local model's text is kept when:
+`pick::local_text_looks_english` and `pick::local_text_too_short` decide. The
+local model's text is kept when:
 
 1. it is not empty,
 2. none of its words is a common Hindi word written in Roman letters
@@ -43,7 +44,13 @@ is pasted is the one picked here. The notetaker always uses the local model.
    `se`, `wale`: "a mere formality", "per se") only count when two of them
    appear, and
 3. at least 75% of its words are common English words (`textflow/common_words.txt`,
-   the SCOWL list) or words in the user's dictionary.
+   the SCOWL list) or words in the user's dictionary, and
+4. for a recording of 2.5 s or more, it has at least 1 word per second of audio
+   (each digit counts as a word), or Apple's text does not have at least twice
+   its words and 3 more. On Hindi speech the local model often keeps only the
+   English words ("Yard staging server." for 4.5 s, Apple 12 words); English
+   with long pauses is also short for its recording, but Apple then hears
+   about as many words. In that case the text waits for Apple.
 
 All-caps acronyms of up to 5 letters (PR, API, JIRA) and words with digits are
 not counted. Otherwise Apple's text is used.

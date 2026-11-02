@@ -138,16 +138,31 @@ stay). The research behind the steps is in `training/cleanup/`
    spelling (a dictionary word made of common English words, like "Linear",
    leaves an all-lowercase match alone); fixes spacing (not inside web
    addresses, so "search?q=x" keeps no space) and capitals; keeps "...";
-   trims leading and trailing line breaks; and ends a one-sentence question
-   with "?" (not "When you have time, ..." or "What we do is ...").
-   For dictations under 8 words this is the whole clean-up.
+   trims leading and trailing line breaks; ends a one-sentence question
+   with "?" (not "When you have time, ..." or "What we do is ..."); and ends
+   each Hinglish question with "?": a sentence that starts or ends with a
+   Hindi question word (kya, kab, kaun, kahan, kyun, kaise, kitna, ...), or
+   has one anywhere when it is 7 words or fewer, or ends with "na" after a
+   verb ("ho jayega na", "hai na"; not "dena na"). Not a question: a
+   question word followed by "bhi" ("kaise bhi karke"); a question word
+   after pata, bata, batao or pucho ("pata nahi kab", "bata do kab
+   aayega"), or after "ki" following a verb like hai, bola or socha
+   ("usne bola ki kab aayega"; "kal ki meeting kab hai" stays a question);
+   a sentence that already ends with ",", ":", ";", "!" or "...".
+   For dictations under 8 words this is the whole clean-up, except a
+   Hinglish one with a correction cue after its first word ("main paanch
+   baje aaunga, nahi nahi, chhe baje"; not "Sorry yaar, late ho gaya"),
+   which goes to the model as below.
 2. **Which parts need the model** (`gate.rs`, under 1 ms), for 8 words or
    more in the formal style. The rules text is read sentence by sentence;
    a sentence ends at a line break, or at ".", "?" or "!" followed by a
    space or the end of the text (so "2.5" and "docs.google.com" don't end
    one). A sentence needs the model when it has:
    - a correction cue ("no", "nope", "sorry", "actually", "wait", "I mean",
-     "I meant", "meant", "scratch that", "nahi", "rather", "make that";
+     "I meant", "meant", "scratch that", "nahi nahi", "nahin nahin",
+     "rather", "make that", with or without commas between the words; a
+     single "nahi" is one only before a number from 2 ("paanch baje, nahi,
+     chhe baje"): otherwise it is usually "not", as in "ya nahi";
      the checks below use the same list). When the sentence starts with
      one, maybe after one lead-in word ("Actually no, Friday works
      better.", "Oh wait, ...", "Okay, scratch that, ...", "Well,
@@ -283,7 +298,24 @@ part's rules text. The rules text is pasted instead when the reply:
   text has one of the correction cues above), dropping words is expected,
   so the limit is 40% of
   the words (at least 3) instead; for a part, 40% of the words of the
-  whole dictation, as a reply for the whole text would have.
+  whole dictation, as a reply for the whole text would have. A word split
+  in two ("AajRaat" -> "Aaj raat") is neither added nor dropped;
+- leaves out a phrase or a real word with nothing in its place: the rules
+  text and the reply are lined up word by word, and a word of the rules
+  text with no reply word where it was is lost, unless it is a filler or
+  "hum", spoken punctuation or another droppable word, a single letter, a
+  word the reply has elsewhere, a number word the reply writes as digits,
+  one copy of words said twice in a row ("we should, we should"), a
+  correction cue or one of the 8 words before it, or one of the 8 words
+  after a cue that the reply has. The reply is rejected when two lost
+  words are next to each other ("Ek kaam karo" dropped) and are not both
+  short function words ("okay so" may go), or when a lost word is a common
+  English word other than a short function word ("the", "it", "to", "so",
+  "just", "okay", "instead", ...), a Hindi word, a number or a dictionary
+  word ("Zubin said the demo went well yesterday" -> "... went well."). A
+  single lost
+  word that is none of these (often a mishearing, "commer" for "comma") is
+  left to the 3-word limit above.
 
 Words are compared in any script (Devanagari words with their vowel signs
 count as whole words). An accepted reply is pasted as written when it ends

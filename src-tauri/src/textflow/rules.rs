@@ -8,7 +8,7 @@
 //! the reply may be pasted. Fillers ("um", "uh") are not handled here: the
 //! transcriber's filler step removes them, following the user's switch.
 
-use super::{commands::is_common_word, hindi};
+use super::{commands::is_common_word, gate, hindi};
 use crate::audio_toolkit::builtin_filler_words;
 use once_cell::sync::Lazy;
 use regex::{Match, Regex, RegexBuilder};
@@ -16,6 +16,15 @@ use std::collections::HashSet;
 
 /// One stray word is tolerated ("a", a fixed mishearing); 2 or more rejects.
 const MAX_ADDED_WORDS: usize = 1;
+/// The words before a correction cue that a reply may leave out: the wrong
+/// part being taken back ("Add Ishita to the preview list. Scratch that.").
+const CUE_REACH_WORDS: usize = 8;
+/// The most cells of the word alignment in the lost-words check; longer
+/// texts skip that check.
+const MAX_ALIGN_CELLS: usize = 2_000_000;
+/// The longest stretch said twice in a row that a reply may say once (a
+/// speech model sometimes writes a whole passage twice).
+const MAX_REPEAT_WORDS: usize = 80;
 /// 3 or more dropped words without a correction cue rejects.
 const MAX_DROPPED_WORDS: usize = 2;
 /// A correction ("no", "actually") drops words on purpose, but never more
@@ -409,6 +418,15 @@ fn added_words(transcript: &str, reply: &str, vocab: &[String]) -> Vec<String> {
             allowed.insert(window.concat());
         }
     }
+    // A transcript word the reply split ("AajRaat" -> "Aaj raat").
+    let r_words = words(reply);
+    for n in 2..=3 {
+        for window in r_words.windows(n) {
+            if t_words.contains(&window.concat()) {
+                allowed.extend(window.iter().cloned());
+            }
+        }
+    }
     let said = spoken_numbers(&t_words);
     // "8:15", "2.4.1", "9876-543210": when the digits written together are a
     // number that was said ("815"), every piece is fine.
@@ -429,15 +447,19 @@ fn added_words(transcript: &str, reply: &str, vocab: &[String]) -> Vec<String> {
 }
 
 /// Different transcript words missing from the reply, ignoring fillers,
-/// droppable words, number words and words that were joined ("A P I" ->
-/// "API").
+/// droppable words, number words, words that were joined ("A P I" ->
+/// "API") and words that were split ("AajRaat" -> "Aaj raat").
 fn dropped_words(transcript: &str, reply: &str) -> Vec<String> {
     let reply_words = words(reply);
     let joined = reply_words.concat();
+    let split: HashSet<String> = (2..=3)
+        .flat_map(|n| reply_words.windows(n).map(|w| w.concat()))
+        .collect();
     let reply_words: HashSet<String> = reply_words.into_iter().collect();
     let mut missing: Vec<String> = Vec::new();
     for w in words(transcript) {
         if reply_words.contains(&w)
+            || split.contains(&w)
             || DROPPABLE.contains(&w.as_str())
             || is_filler(&w)
             || number_word(&w).is_some()
@@ -473,6 +495,169 @@ fn hinglish_lost(transcript: &str, reply: &str) -> bool {
     before.len() >= 2 && kept * 2 < before.len()
 }
 
+/// Index pairs (transcript, reply) of a longest run of words the two share
+/// in order, taking the earliest match. Mirrored in guards.py.
+fn aligned(a: &[String], b: &[String]) -> Vec<(usize, usize)> {
+    let (n, m) = (a.len(), b.len());
+    let mut l = vec![vec![0u32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            l[i][j] = if a[i] == b[j] {
+                l[i + 1][j + 1] + 1
+            } else {
+                l[i + 1][j].max(l[i][j + 1])
+            };
+        }
+    }
+    let (mut i, mut j, mut out) = (0, 0, Vec::new());
+    while i < n && j < m {
+        if a[i] == b[j] {
+            out.push((i, j));
+            i += 1;
+            j += 1;
+        } else if l[i + 1][j] >= l[i][j + 1] {
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+    out
+}
+
+static FILLER_SOUND: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(hum|hmm+|uh+|um+|erm)$").unwrap());
+
+/// Short words whose loss rarely changes what was said ("send it to the
+/// team" -> "send the deck to the team", "So the thing is" -> "The thing
+/// is", "sorry, ask Kabir instead" -> "ask Kabir"), alone or two in a row.
+const FUNCTION_WORDS: &[&str] = &[
+    "a", "an", "the", "it", "its", "this", "that", "to", "of", "in", "on", "at", "for", "with",
+    "by", "from", "and", "or", "but", "is", "are", "was", "were", "be", "i", "me", "my", "we",
+    "us", "our", "you", "your", "he", "him", "his", "she", "her", "they", "them", "their", "one",
+    "am", "so", "just", "okay", "ok", "well", "then", "also", "really", "very", "now", "instead",
+];
+
+/// The words with every stretch said twice in a row kept once ("we should,
+/// we should probably" -> "we should probably"), longest stretch first. A
+/// cue said twice ("nahi nahi") stays.
+fn said_once(t: Vec<String>) -> Vec<String> {
+    let cues: HashSet<&str> = CORRECTION_CUE_WORDS.split('|').collect();
+    let mut out = Vec::with_capacity(t.len());
+    let mut i = 0;
+    while i < t.len() {
+        let longest = MAX_REPEAT_WORDS.min((t.len() - i) / 2);
+        let twice = |n: usize| {
+            t[i..i + n] == t[i + n..i + 2 * n] && !cues.contains(t[i..i + 2 * n].join(" ").as_str())
+        };
+        match (1..=longest).rev().find(|&n| twice(n)) {
+            Some(n) => i += n,
+            None => {
+                out.push(t[i].clone());
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Indexes of transcript words around a correction: (taken back: each cue
+/// and the `CUE_REACH_WORDS` words before it, said again: the
+/// `CUE_REACH_WORDS` words after it, which a reply merges into what it
+/// corrects).
+fn corrected(t: &[String]) -> (HashSet<usize>, HashSet<usize>) {
+    let cues: Vec<Vec<&str>> = CORRECTION_CUE_WORDS
+        .split('|')
+        .map(|c| c.split_whitespace().collect())
+        .collect();
+    let (mut before, mut after) = (HashSet::new(), HashSet::new());
+    for k in 0..t.len() {
+        let single_nahi = nahi_before_number(t, k).then_some(1);
+        let lens = cues
+            .iter()
+            .filter(|cue| t.len() >= k + cue.len() && cue.iter().zip(&t[k..]).all(|(c, w)| c == w))
+            .map(Vec::len);
+        for len in lens.chain(single_nahi) {
+            before.extend(k.saturating_sub(CUE_REACH_WORDS)..k + len);
+            after.extend(k + len..k + len + CUE_REACH_WORDS);
+        }
+    }
+    (before, after)
+}
+
+/// Words of the rules text the reply left out with nothing in their place:
+/// (index, word). Not counted: fillers, spoken
+/// punctuation and other droppable words, single letters, words a
+/// correction takes back, words said again after a correction that the
+/// reply has, number words the reply writes as digits, and words the reply
+/// moved elsewhere. A stretch said twice in a row counts once.
+fn lost_words(rules_text: &str, reply: &str) -> Vec<(usize, String)> {
+    let (t, r) = (words(rules_text), words(reply));
+    if t.len().saturating_mul(r.len()) > MAX_ALIGN_CELLS {
+        return Vec::new();
+    }
+    let t = said_once(t);
+    let pairs = aligned(&t, &r);
+    let matched: HashSet<usize> = pairs.iter().map(|p| p.1).collect();
+    let moved: HashSet<&str> = (0..r.len())
+        .filter(|j| !matched.contains(j))
+        .map(|j| r[j].as_str())
+        .collect();
+    let (taken_back, said_again) = corrected(&t);
+    let in_reply: HashSet<&str> = r.iter().map(String::as_str).collect();
+    let excused = |k: usize| {
+        let w = t[k].as_str();
+        w.chars().count() == 1
+            || DROPPABLE.contains(&w)
+            || is_filler(w)
+            || FILLER_SOUND.is_match(w)
+            || taken_back.contains(&k)
+            || (said_again.contains(&k) && in_reply.contains(w))
+            || number_word(w).is_some_and(|n| in_reply.contains(n.to_string().as_str()))
+            || moved.contains(w)
+    };
+    let mut lost = Vec::new();
+    let (mut from_t, mut from_r) = (0, 0);
+    for &(i, j) in pairs.iter().chain(std::iter::once(&(t.len(), r.len()))) {
+        if j == from_r {
+            lost.extend(
+                (from_t..i)
+                    .filter(|&k| !excused(k))
+                    .map(|k| (k, t[k].clone())),
+            );
+        }
+        (from_t, from_r) = (i + 1, j + 1);
+    }
+    lost
+}
+
+/// A word whose loss changes what was said: a common English word (not a
+/// function word), a Hindi word, a number or a dictionary word. Other words
+/// are often mishearings ("commer" for "comma") that a good reply leaves out.
+fn known_word(w: &str, vocab: &[String]) -> bool {
+    if FUNCTION_WORDS.contains(&w) {
+        return false;
+    }
+    is_digits(w)
+        || is_common_word(w)
+        || hindi::WORDS.contains(&w)
+        || HINDI_QUESTION_WORDS.contains(&w)
+        || w == "na"
+        || number_word(w).is_some()
+        || vocab.iter().any(|e| words(e).iter().any(|v| v == w))
+}
+
+/// The number of words left out when the reply dropped a phrase or a real
+/// word: a known word, or two neighbouring words that are not both function
+/// words ("okay so"), left out with nothing in their place (`lost_words`).
+fn phrase_lost(rules_text: &str, reply: &str, vocab: &[String]) -> Option<usize> {
+    let lost = lost_words(rules_text, reply);
+    let function = |w: &str| FUNCTION_WORDS.contains(&w);
+    let known = lost.iter().any(|(_, w)| known_word(w, vocab));
+    let phrase = lost
+        .windows(2)
+        .any(|p| p[1].0 == p[0].0 + 1 && !(function(&p[0].1) && function(&p[1].1)));
+    (known || phrase).then_some(lost.len())
+}
+
 static SCRIPT_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     SCRIPTS
         .iter()
@@ -493,11 +678,38 @@ fn too_long(reply: &str, transcript: &str) -> bool {
         > transcript.chars().count() as f64 * TOO_LONG_TIMES + TOO_LONG_EXTRA as f64
 }
 
-/// Words a speaker uses to take something back. Shared with the gate.
-pub(super) const CORRECTION_CUE_WORDS: &str =
-    "no|nope|sorry|actually|wait|i mean|i meant|meant|scratch that|nahi|rather|make that";
+/// Words a speaker uses to take something back. Shared with the gate. Hindi
+/// "nahi" counts said twice, or before a number (`cue_pattern`): alone it is
+/// usually "not" ("ya nahi", "kuch nahi mila").
+const CORRECTION_CUE_WORDS: &str =
+    "no|nope|sorry|actually|wait|i mean|i meant|meant|scratch that|nahi nahi|nahin nahin|rather|make that";
 static CORRECTION_CUES: Lazy<Regex> =
-    Lazy::new(|| Regex::new(&format!(r"(?i)\b({CORRECTION_CUE_WORDS})\b")).unwrap());
+    Lazy::new(|| Regex::new(&format!(r"(?i)\b({})\b", cue_pattern())).unwrap());
+
+/// Number words after which a single "nahi" takes back what came before
+/// ("paanch baje, nahi, chhe baje"). "ek" and "do" are left out: "nahi, ek
+/// kaam karo", "nahi do".
+const NAHI_NUMBERS: &[&str] = &[
+    "teen", "chaar", "char", "paanch", "panch", "chhe", "che", "saat", "aath", "nau", "das", "two",
+    "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+];
+
+/// `CORRECTION_CUE_WORDS` as a regex: the words of a cue may have a comma
+/// between them ("nahi, nahi"), and a single "nahi" counts before a number.
+pub(super) fn cue_pattern() -> String {
+    format!(
+        r"{}|nahin?\W+(\d+|{})",
+        CORRECTION_CUE_WORDS.replace(' ', r"\W+"),
+        NAHI_NUMBERS.join("|")
+    )
+}
+
+/// Whether `t[k]` is a single "nahi" before a number.
+fn nahi_before_number(t: &[String], k: usize) -> bool {
+    matches!(t[k].as_str(), "nahi" | "nahin")
+        && t.get(k + 1)
+            .is_some_and(|w| is_digits(w) || NAHI_NUMBERS.contains(&w.as_str()))
+}
 
 /// Why a model reply was rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -512,6 +724,9 @@ pub enum Why {
     Added(usize),
     /// The model dropped this many of the speaker's words.
     Dropped(usize),
+    /// The model left out a phrase or a real word with nothing in its place;
+    /// this many words were left out.
+    Lost(usize),
 }
 
 /// Whether the model's reply may be pasted. It is compared with the
@@ -547,6 +762,11 @@ pub fn check_part(transcript: &str, reply: &str, vocab: &[String], whole: &str) 
     };
     if dropped as f64 > limit {
         return Err(Why::Dropped(dropped));
+    }
+    // Against the rules text, so spoken commas, addresses and "four, no,
+    // five" are already written the way the reply writes them.
+    if let Some(lost) = phrase_lost(&apply(transcript, vocab), reply, vocab) {
+        return Err(Why::Lost(lost));
     }
     Ok(())
 }
@@ -1050,6 +1270,70 @@ pub fn question_end(text: &str) -> String {
     format!("{kept}?")
 }
 
+/// Hindi question words, in the spellings people type.
+const HINDI_QUESTION_WORDS: &[&str] = &[
+    "kya", "kab", "kaun", "kahan", "kahaan", "kyun", "kyon", "kyu", "kaise", "kitna", "kitne",
+    "kitni", "kidhar",
+];
+/// Words that make a later question word part of a statement or a request
+/// ("pata nahi kab", "bata do kab aayega", "pucho ki kya hua").
+const HINDI_INDIRECT: &[&str] = &["pata", "bata", "batao", "pucho", "poocho", "puchho"];
+/// Words after which "ki" starts a reported question ("usne bola ki kab
+/// aayega"); after a noun it is "of" ("kal ki meeting kab hai").
+const KI_AFTER: &[&str] = &[
+    "hai", "tha", "thi", "bola", "boli", "bole", "kaha", "socha", "suna", "lagta", "lagti",
+    "maloom", "dekho",
+];
+/// A sentence this short is a question with a question word anywhere ("build
+/// fail kyun ho raha hai"); a longer one only with it first or last.
+const SHORT_QUESTION_WORDS: usize = 7;
+/// The word before a closing "na" that makes it a tag question ("ho jayega
+/// na", "hai na"); after other words "na" asks for something ("dena na").
+static TAG_BEFORE_NA: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(hai|hain|ho|tha|thi|the|hoga|hogi|hoge|[a-z]+(ga|gi|ge))$").unwrap()
+});
+
+/// Whether a sentence is a Hinglish question: a Hindi question word first or
+/// last (anywhere in a short sentence), or a closing "na" after a verb.
+fn hinglish_question(sentence: &str) -> bool {
+    let ws = words(sentence);
+    let n = ws.len();
+    if n < 2 {
+        return false;
+    }
+    let indirect = |i: usize| {
+        HINDI_INDIRECT.contains(&ws[i].as_str())
+            || (ws[i] == "ki" && i > 0 && KI_AFTER.contains(&ws[i - 1].as_str()))
+    };
+    // "kaise bhi karke", "kuch bhi": not questions.
+    let is_q = |i: usize| {
+        HINDI_QUESTION_WORDS.contains(&ws[i].as_str()) && ws.get(i + 1).is_none_or(|w| w != "bhi")
+    };
+    if let Some(q) = (0..n).find(|&i| is_q(i)) {
+        if (0..q).any(indirect) {
+            return false;
+        }
+        return q == 0 || is_q(n - 1) || n <= SHORT_QUESTION_WORDS;
+    }
+    ws[n - 1] == "na" && TAG_BEFORE_NA.is_match(&ws[n - 2]) && !(0..n).any(indirect)
+}
+
+/// Each Hinglish question ("Khana kha liya kya", "Matlab deploy aaj shaam
+/// tak ho jayega na") ends with "?" instead of "." or nothing.
+fn hinglish_questions(text: &str) -> String {
+    let mut out = text.to_string();
+    for (a, b) in gate::sentence_spans(text).into_iter().rev() {
+        let s = &text[a..b];
+        if s.ends_with(['?', '!', ',', ':', ';', '…']) || s.ends_with("..") || !hinglish_question(s)
+        {
+            continue;
+        }
+        let kept = s.strip_suffix('.').unwrap_or(s);
+        out.replace_range(a..b, &format!("{kept}?"));
+    }
+    out
+}
+
 static SPACE_BEFORE_MARK: Lazy<Regex> = Lazy::new(|| Regex::new(r"[ \t]+([,.?!:])").unwrap());
 static MARK_BEFORE_LETTER: Lazy<Regex> = Lazy::new(|| Regex::new(r"[,?!][A-Za-z]").unwrap());
 static COMMA_BEFORE_END: Lazy<Regex> = Lazy::new(|| Regex::new(r",([.?!])").unwrap());
@@ -1132,7 +1416,7 @@ fn lowercase_leading_address(text: &str) -> String {
 
 /// The deterministic clean-up: spoken punctuation, "four, no, five", spoken
 /// emails and web addresses, times, vocabulary casing, spacing, capitals and
-/// a question mark on one-sentence questions.
+/// a question mark on one-sentence questions and on Hinglish questions.
 pub fn apply(text: &str, vocab: &[String]) -> String {
     let t = spoken_punctuation(text.trim());
     let t = number_corrections(&t);
@@ -1148,7 +1432,7 @@ pub fn apply(text: &str, vocab: &[String]) -> String {
     let t = SPACES_AROUND_BREAK.replace_all(&t, "\n");
     let t = DOUBLE_SPACE.replace_all(&t, " ");
     let t = t.trim_matches(|c: char| c.is_whitespace() || c == ',');
-    lowercase_leading_address(&question_end(&capitalize_sentences(t)))
+    lowercase_leading_address(&hinglish_questions(&question_end(&capitalize_sentences(t))))
 }
 
 #[cfg(test)]
@@ -1224,6 +1508,7 @@ pub(super) mod tests {
                 Err(Why::HinglishLost) => "HinglishLost",
                 Err(Why::Added(_)) => "Added",
                 Err(Why::Dropped(_)) => "Dropped",
+                Err(Why::Lost(_)) => "Lost",
             };
             assert_eq!(got, text(&e[2]), "{:?} -> {:?}", e[0], e[1]);
         }
@@ -1236,6 +1521,7 @@ pub(super) mod tests {
             let got = match got {
                 Ok(()) => "ok",
                 Err(Why::Dropped(_)) => "Dropped",
+                Err(Why::Lost(_)) => "Lost",
                 Err(why) => panic!("{why:?}"),
             };
             assert_eq!(got, text(&e[3]), "{:?} -> {:?}", e[0], e[1]);

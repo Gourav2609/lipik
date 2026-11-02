@@ -135,7 +135,8 @@ def tokens(text):
 
 def all_cases():
     cs = {c["id"]: c for c in json.loads((HERE / "cases.json").read_text())}
-    for c in json.loads((HERE / "holdout.json").read_text()) + json.loads((HERE / "long.json").read_text()):
+    extra = [dict(c, category="hinglish") for c in json.loads((HERE / "hinglish40.json").read_text())]
+    for c in json.loads((HERE / "holdout.json").read_text()) + json.loads((HERE / "long.json").read_text()) + extra:
         cs[c["id"]] = c
         CHECKS[c["id"]] = ([("missing " + p, "has", p) for p in c["has"]] +
                            [("left in " + p, "not", p) for p in c["not"]])

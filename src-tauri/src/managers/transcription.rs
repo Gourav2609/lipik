@@ -1111,20 +1111,28 @@ impl TranscriptionManager {
     }
 
     /// Auto mode: the local model's text when it reads as English, else
-    /// Apple's. Apple also stands in when the local model failed.
+    /// Apple's. When the English text is far too short for the `audio_secs`
+    /// recorded, Apple's is used only if it has many more words. Apple also
+    /// stands in when the local model failed.
     fn pick_engine(
         &self,
         local: Result<RunOutcome>,
         job: Option<AppleJob>,
         settings: &AppSettings,
+        audio_secs: f64,
     ) -> Result<RunOutcome> {
         let Some(job) = job else { return local };
+        let mut only_if_longer = false;
         let local = match local {
             Ok(outcome)
                 if pick::local_text_looks_english(&outcome.text, &settings.custom_words) =>
             {
-                debug!("Auto engine: kept the local model's text");
-                return Ok(outcome);
+                if !pick::local_text_too_short(&outcome.text, audio_secs) {
+                    debug!("Auto engine: kept the local model's text");
+                    return Ok(outcome);
+                }
+                only_if_longer = true;
+                Ok(outcome)
             }
             Ok(outcome) => Ok(outcome),
             Err(e)
@@ -1138,7 +1146,13 @@ impl TranscriptionManager {
             Err(e) => Err(e),
         };
         match self.wait_apple(job)? {
-            Some(text) if !text.trim().is_empty() => {
+            Some(text)
+                if !text.trim().is_empty()
+                    && !(only_if_longer
+                        && local
+                            .as_ref()
+                            .is_ok_and(|o| !pick::apple_text_much_longer(&o.text, &text))) =>
+            {
                 debug!("Auto engine: used Apple's text");
                 Ok(match local {
                     Ok(outcome) => RunOutcome {
@@ -1299,7 +1313,7 @@ impl TranscriptionManager {
             None => self.decode_batch(audio),
         };
         let settings = get_settings(&self.app_handle);
-        let outcome = self.pick_engine(local, apple, &settings)?;
+        let outcome = self.pick_engine(local, apple, &settings, audio_len as f64 / 16_000.0)?;
         let final_result = finish_text(outcome, &settings);
 
         let translation_note = if settings.translate_to_english {

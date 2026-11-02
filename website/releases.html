@@ -47,8 +47,8 @@
         "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS (Apple silicon, M1 or later)",
-        "softwareVersion": "0.1.13",
-        "dateModified": "2026-10-31",
+        "softwareVersion": "0.1.14",
+        "dateModified": "2026-11-02",
         "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
         "url": "https://lipik.pages.dev/",
         "releaseNotes": "https://lipik.pages.dev/releases",
@@ -128,7 +128,7 @@
           <p class="rel-sub">
             What changed in each version of Lipik. The newest is at the top.
           </p>
-          <p class="rel-sub">Latest: 0.1.13, 31 Oct 2026.</p>
+          <p class="rel-sub">Latest: 0.1.14, 2 Nov 2026.</p>
           <p class="rel-sub">
             To install or update, paste this into Terminal and press Return. It
             keeps your settings, history and permissions:
@@ -149,6 +149,50 @@
         </div>
       </section>
       <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.14">
+          <header class="rel-head">
+            <h2>Lipik 0.1.14</h2>
+            <p class="rel-meta">
+              <time datetime="2026-11-02">2 November 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.14"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Better Hinglish dictation: fewer lines cut short, question marks,
+              corrections, and a safer clean-up.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Hinglish lines no longer cut short.</strong> On macOS
+                26, when the English speech model kept only the English words of
+                a Hindi sentence (&quot;Yard staging server.&quot; for
+                &quot;Yaar, staging server phir se down hai, koi dekh sakta hai
+                kya&quot;), Lipik now uses Apple&#x27;s transcript, which heard
+                the whole line.
+              </li>
+              <li>
+                <strong>Question marks on Hinglish questions.</strong> Questions
+                like &quot;Khana kha liya kya?&quot; and &quot;Deploy aaj ho
+                jayega na?&quot; now end with a question mark.
+              </li>
+              <li>
+                <strong>Hinglish corrections.</strong> &quot;Main paanch baje
+                aaunga, nahi nahi, chhe baje&quot; is now corrected even in a
+                short dictation. A single &quot;nahi&quot;, as in &quot;ya
+                nahi&quot;, is no longer treated as a correction.
+              </li>
+              <li>
+                <strong>Safer clean-up.</strong> If the clean-up model leaves
+                out a phrase you said, Lipik types your words instead of its
+                reply.
+              </li>
+            </ul>
+          </div>
+        </article>
         <article class="rel" id="v0.1.13">
           <header class="rel-head">
             <h2>Lipik 0.1.13</h2>

@@ -60,6 +60,15 @@ COLON_NOUNS = set(_strings(RULES_RS, "COLON_NOUNS"))
 SUBJECT_PRONOUNS = set(_strings(RULES_RS, "SUBJECT_PRONOUNS"))
 SCRIPTS = [s.upper() for s in _strings(RULES_RS, "SCRIPTS")]
 MAX_ADDED_WORDS = int(_number(RULES_RS, "MAX_ADDED_WORDS"))
+CUE_REACH_WORDS = int(_number(RULES_RS, "CUE_REACH_WORDS"))
+MAX_ALIGN_CELLS = int(_number(RULES_RS, "MAX_ALIGN_CELLS"))
+MAX_REPEAT_WORDS = int(_number(RULES_RS, "MAX_REPEAT_WORDS"))
+HINDI_QUESTION_WORDS = set(_strings(RULES_RS, "HINDI_QUESTION_WORDS"))
+FUNCTION_WORDS = set(_strings(RULES_RS, "FUNCTION_WORDS"))
+HINDI_INDIRECT = set(_strings(RULES_RS, "HINDI_INDIRECT"))
+KI_AFTER = set(_strings(RULES_RS, "KI_AFTER"))
+NAHI_NUMBERS = _strings(RULES_RS, "NAHI_NUMBERS")
+SHORT_QUESTION_WORDS = int(_number(RULES_RS, "SHORT_QUESTION_WORDS"))
 MAX_DROPPED_WORDS = int(_number(RULES_RS, "MAX_DROPPED_WORDS"))
 CUE_MAX_DROPPED_SHARE = _number(RULES_RS, "CUE_MAX_DROPPED_SHARE")
 CUE_MIN_DROPPED = int(_number(RULES_RS, "CUE_MIN_DROPPED"))
@@ -69,7 +78,8 @@ MAX_JOINED_NUMBERS = int(_number(RULES_RS, "MAX_JOINED_NUMBERS"))
 QUESTION_AUX = re.search(r'const QUESTION_AUX: &str = "([^"]+)";', RULES_RS)[1]
 MIN_MODEL_WORDS = int(_number(PIPELINE_RS, "MIN_MODEL_WORDS"))
 MAX_VOCABULARY = int(_number(PIPELINE_RS, "MAX_VOCABULARY"))
-HINDI_WORDS = set(_strings(HINDI_RS, "WORDS")) - set(_strings(HINDI_RS, "ALSO_ENGLISH"))
+ALL_HINDI_WORDS = set(_strings(HINDI_RS, "WORDS"))
+HINDI_WORDS = ALL_HINDI_WORDS - set(_strings(HINDI_RS, "ALSO_ENGLISH"))
 UNIVERSAL_FILLERS = _strings(FILLERS_RS, "UNIVERSAL_FILLER_WORDS")
 ENGLISH_FILLERS = re.findall(r'"([^"]*)"', re.search(r'"en" => &\[(.*?)\]', FILLERS_RS)[1])
 FILLER_WORDS = set(UNIVERSAL_FILLERS) | set(ENGLISH_FILLERS)
@@ -274,6 +284,11 @@ def added_words(transcript, reply, vocab=()):
     for n in range(2, 5):
         for i in range(len(t_words) - n + 1):
             allowed.add("".join(t_words[i:i + n]))
+    r_words = words(reply)
+    for n in (2, 3):
+        for i in range(len(r_words) - n + 1):
+            if "".join(r_words[i:i + n]) in t_words:
+                allowed |= set(r_words[i:i + n])
     said = spoken_numbers(t_words)
     for m in re.finditer(r"[0-9]+(?:[:.,-][0-9]+)+", reply):
         if number_ok(re.sub(r"[^0-9]", "", m[0]), said):
@@ -289,10 +304,11 @@ def added_words(transcript, reply, vocab=()):
 def dropped_words(transcript, reply):
     reply_words = words(reply)
     joined = "".join(reply_words)
+    split = {"".join(reply_words[i:i + n]) for n in (2, 3) for i in range(len(reply_words) - n + 1)}
     reply_words = set(reply_words)
     missing = []
     for w in words(transcript):
-        if (w in reply_words or w in DROPPABLE or w in FILLER_WORDS or number_word(w) is not None
+        if (w in reply_words or w in split or w in DROPPABLE or w in FILLER_WORDS or number_word(w) is not None
                 or _is_digits(w) or w in missing):
             continue
         if len(w) <= 2 and w in joined:
@@ -322,7 +338,97 @@ def new_script(transcript, reply):
 
 
 CORRECTION_CUE_WORDS = re.search(r'const CORRECTION_CUE_WORDS: &str =\s*"([^"]+)"', RULES_RS)[1]
-CORRECTION_CUES = re.compile(rf"(?i)\b({CORRECTION_CUE_WORDS})\b")
+CUE_PATTERN = CORRECTION_CUE_WORDS.replace(" ", r"\W+") + r"|nahin?\W+(\d+|" + "|".join(NAHI_NUMBERS) + ")"
+CORRECTION_CUES = re.compile(rf"(?i)\b({CUE_PATTERN})\b")
+FILLER_SOUND = re.compile(r"^(hum|hmm+|uh+|um+|erm)$")
+
+
+def _aligned(a, b):
+    """rules.rs aligned: a longest run of shared words in order, earliest match."""
+    n, m = len(a), len(b)
+    L = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        for j in range(m - 1, -1, -1):
+            L[i][j] = L[i + 1][j + 1] + 1 if a[i] == b[j] else max(L[i + 1][j], L[i][j + 1])
+    i = j = 0
+    out = []
+    while i < n and j < m:
+        if a[i] == b[j]:
+            out.append((i, j))
+            i, j = i + 1, j + 1
+        elif L[i + 1][j] >= L[i][j + 1]:
+            i += 1
+        else:
+            j += 1
+    return out
+
+
+def _said_once(t):
+    cues = set(CORRECTION_CUE_WORDS.split("|"))
+    out, i = [], 0
+    while i < len(t):
+        n = next((n for n in range(min(MAX_REPEAT_WORDS, (len(t) - i) // 2), 0, -1)
+                  if t[i:i + n] == t[i + n:i + 2 * n] and " ".join(t[i:i + 2 * n]) not in cues), None)
+        if n:
+            i += n
+        else:
+            out.append(t[i])
+            i += 1
+    return out
+
+
+def _nahi_before_number(t, k):
+    return t[k] in ("nahi", "nahin") and k + 1 < len(t) and (_is_digits(t[k + 1]) or t[k + 1] in NAHI_NUMBERS)
+
+
+def _corrected(t):
+    cues = [c.split() for c in CORRECTION_CUE_WORDS.split("|")]
+    before, after = set(), set()
+    for k in range(len(t)):
+        lens = [len(cue) for cue in cues if t[k:k + len(cue)] == cue] + ([1] if _nahi_before_number(t, k) else [])
+        for n in lens:
+            before |= set(range(max(0, k - CUE_REACH_WORDS), k + n))
+            after |= set(range(k + n, k + n + CUE_REACH_WORDS))
+    return before, after
+
+
+def lost_words(rules_text, reply):
+    """rules.rs lost_words: [(index, word)] left out with nothing in their place."""
+    t, r = words(rules_text), words(reply)
+    if len(t) * len(r) > MAX_ALIGN_CELLS:
+        return []
+    t = _said_once(t)
+    pairs = _aligned(t, r)
+    matched = {j for _, j in pairs}
+    moved = {r[j] for j in range(len(r)) if j not in matched}
+    taken_back, said_again = _corrected(t)
+    in_reply = set(r)
+
+    def excused(k):
+        w = t[k]
+        return (len(w) == 1 or w in DROPPABLE or w in FILLER_WORDS or FILLER_SOUND.match(w)
+                or k in taken_back or (k in said_again and w in in_reply)
+                or (number_word(w) is not None and str(number_word(w)) in in_reply) or w in moved)
+    lost, from_t, from_r = [], 0, 0
+    for i, j in pairs + [(len(t), len(r))]:
+        if j == from_r:
+            lost += [(k, t[k]) for k in range(from_t, i) if not excused(k)]
+        from_t, from_r = i + 1, j + 1
+    return lost
+
+
+def known_word(w, vocab=()):
+    if w in FUNCTION_WORDS:
+        return False
+    return (_is_digits(w) or _is_common_word(w) or w in ALL_HINDI_WORDS or w in HINDI_QUESTION_WORDS
+            or w == "na" or number_word(w) is not None or any(w in words(e) for e in vocab))
+
+
+def phrase_lost(rules_text, reply, vocab=()):
+    lost = lost_words(rules_text, reply)
+    return (any(known_word(w, vocab) for _, w in lost)
+            or any(b[0] == a[0] + 1 and not (a[1] in FUNCTION_WORDS and b[1] in FUNCTION_WORDS)
+                   for a, b in zip(lost, lost[1:])))
 
 
 def check(transcript, reply, vocab=(), whole=None):
@@ -344,6 +450,9 @@ def check(transcript, reply, vocab=(), whole=None):
         limit = MAX_DROPPED_WORDS
     if len(dropped) > limit:
         return "Dropped: " + " ".join(dropped)
+    rules_text = apply(transcript, vocab)
+    if phrase_lost(rules_text, reply, vocab):
+        return "Lost: " + " ".join(w for _, w in lost_words(rules_text, reply))
     return None
 
 
@@ -553,6 +662,38 @@ def _lowercase_leading_address(text):
     return text
 
 
+TAG_BEFORE_NA = re.compile(r"^(hai|hain|ho|tha|thi|the|hoga|hogi|hoge|[a-z]+(ga|gi|ge))$")
+
+
+def _hinglish_question(sentence):
+    ws = words(sentence)
+    n = len(ws)
+    if n < 2:
+        return False
+
+    def indirect(i):
+        return ws[i] in HINDI_INDIRECT or (ws[i] == "ki" and i > 0 and ws[i - 1] in KI_AFTER)
+
+    def is_q(i):
+        return ws[i] in HINDI_QUESTION_WORDS and (i + 1 >= n or ws[i + 1] != "bhi")
+    q = next((i for i in range(n) if is_q(i)), None)
+    if q is not None:
+        if any(indirect(i) for i in range(q)):
+            return False
+        return q == 0 or is_q(n - 1) or n <= SHORT_QUESTION_WORDS
+    return ws[-1] == "na" and bool(TAG_BEFORE_NA.match(ws[-2])) and not any(indirect(i) for i in range(n))
+
+
+def hinglish_questions(text):
+    out = text
+    for a, b in reversed(sentence_spans(text)):
+        s = text[a:b]
+        if s.endswith(("?", "!", ",", ":", ";", "…", "..")) or not _hinglish_question(s):
+            continue
+        out = out[:a] + (s[:-1] if s.endswith(".") else s) + "?" + out[b:]
+    return out
+
+
 def apply(text, vocab=()):
     t = _spoken_punctuation(text.strip())
     t = _number_corrections(t)
@@ -566,7 +707,7 @@ def apply(text, vocab=()):
     t = re.sub(r"[ \t]*\n[ \t]*", "\n", t)
     t = re.sub(r"[ \t]{2,}", " ", t)
     t = t.strip(" \t\n\r,")
-    return _lowercase_leading_address(question_end(_capitalize_sentences(t)))
+    return _lowercase_leading_address(hinglish_questions(question_end(_capitalize_sentences(t))))
 
 
 # ---------- what is pasted (pipeline.rs) ----------
@@ -636,7 +777,7 @@ def clean_up(raw, reply, vocab=(), min_words=MIN_MODEL_WORDS):
     if not any(c.isalnum() for c in transcript):
         return transcript, "no words"
     rules_text = apply(transcript, vocab)
-    if len(transcript.split()) < min_words:
+    if len(transcript.split()) < min_words and not short_needs_model(rules_text):
         return rules_text, "short: rules"
     if reply is None:
         return rules_text, "no reply: rules"
@@ -651,7 +792,7 @@ def model_input(raw, vocab=()):
 # ---------- which parts need the model (gate.rs) ----------
 
 GATE_CUE = CORRECTION_CUES
-GATE_OPENING_CUE = re.compile(rf"(?i)^\W*((oh|okay|ok|well|hmm+|uh+|um+|and|but|so)\W+)?({CORRECTION_CUE_WORDS})\b")
+GATE_OPENING_CUE = re.compile(rf"(?i)^\W*((oh|okay|ok|well|hmm+|uh+|um+|and|but|so)\W+)?({CUE_PATTERN})\b")
 GATE_YOU_KNOW = re.compile(r"(?i)(\b(do|did|don't|does|would|if)\s+)?\byou know\b")
 GATE_LIKE = re.compile(r"(?i)(^|[,;]\s*|\b(is|was|were|are|be|been|it's|that's|he's|she's|they're|we're|i'm)\s+)like\b|\blike\s*,|\blike\s+(really|so|super|totally|literally|around|about|maybe|just|kind|honestly)\b")
 GATE_FILLER = re.compile(r"(?i)\b(hum|hmm+|uh+|um+|erm)\b")
@@ -694,6 +835,23 @@ def _sentences(text):
             i += 1
     out.append((start, n))
     return out
+
+
+def sentence_spans(text):
+    """gate.rs sentence_spans: the non-empty sentences, without the spaces around them."""
+    out = []
+    for a, b in _sentences(text):
+        s = text[a:b]
+        if s.strip():
+            lead = len(s) - len(s.lstrip())
+            out.append((a + lead, a + lead + len(s.strip())))
+    return out
+
+
+def short_needs_model(text):
+    """gate.rs short_needs_model: a short Hinglish dictation with a correction."""
+    return (any(re.search(r"\w", text[:m.start()]) for m in GATE_CUE.finditer(text))
+            and bool(set(words(text)) & HINDI_WORDS))
 
 
 def _tokens(text):
@@ -876,7 +1034,7 @@ def clean_up_parts(raw, vocab, call, whole_share=WHOLE_SHARE):
     if not any(c.isalnum() for c in transcript):
         return transcript, "no words", 0
     rules_text = apply(transcript, vocab)
-    if len(transcript.split()) < MIN_MODEL_WORDS:
+    if len(transcript.split()) < MIN_MODEL_WORDS and not short_needs_model(rules_text):
         return rules_text, "short: rules", 0
     parts = model_parts(rules_text, vocab)
     if not parts:

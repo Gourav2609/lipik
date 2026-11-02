@@ -23,6 +23,11 @@
   ],
   "added": [
     [
+      "AajRaat din Pe Chale Kya Main 8 free hoon",
+      "Aaj Raat din pe chale kya? Main 8 free hoon.",
+      []
+    ],
+    [
       "aaj raat dinner pe chalein kya, main aath baje free hoon",
       "Aaj raat dinner pe chalein kya? Main 8 baje free hoon.",
       []
@@ -146,6 +151,11 @@
   ],
   "dropped": [
     [
+      "AajRaat dinner pe chalein kya",
+      "Aaj raat dinner pe chalein kya?",
+      []
+    ],
+    [
       "So the thing is we need the signed copy before Friday",
       "We need the signed copy before Friday.",
       ["so", "thing", "is"]
@@ -193,6 +203,66 @@
     ]
   ],
   "check": [
+    [
+      "can you ask Priya to share the deck with the whole marketing team today, sorry, ask Kabir instead",
+      "Can you ask Kabir to share the deck with the whole marketing team today?",
+      "ok"
+    ],
+    [
+      "main paanch baje aaunga, nahi, chhe baje pahunch jaunga aur phir meeting karenge",
+      "Main chhe baje pahunch jaunga aur phir meeting karenge.",
+      "ok"
+    ],
+    [
+      "So the thing is we need more time on the migration",
+      "The thing is we need more time on the migration.",
+      "ok"
+    ],
+    [
+      "Ek Kaam karo Zubin ko call karo aur Bacho ki Baja final Haway Hai nahin",
+      "Zubin ko call karo aur Bacho ki Baja final Haway Hai nahin.",
+      "Lost"
+    ],
+    [
+      "AajRaat din Pe Chale Kya Main 8 free hoon",
+      "Aaj Raat din pe chale kya main 8 free hoon?",
+      "ok"
+    ],
+    [
+      "Bhai woh PR merge kar de please, tests pass ho gaye hain",
+      "Bhai woh PR merge kar de, tests pass ho gaye hain.",
+      "Lost"
+    ],
+    [
+      "Zubin said the Quorvia demo went really well yesterday",
+      "Zubin said the Quorvia demo went really well.",
+      "Lost"
+    ],
+    [
+      "The meeting is on Tuesday actually no Wednesday at 10",
+      "The meeting is on Tuesday at 10.",
+      "Lost"
+    ],
+    [
+      "The meeting is on Tuesday actually no Wednesday at 10",
+      "The meeting is on Wednesday at 10.",
+      "ok"
+    ],
+    [
+      "Hum okay so basically the client wants the logo bigger",
+      "Okay, so basically the client wants the logo bigger.",
+      "ok"
+    ],
+    [
+      "Thanks for the update commer I'll take a look tomorrow.",
+      "Thanks for the update, I'll take a look tomorrow.",
+      "ok"
+    ],
+    [
+      "Rivaan ko bolo, I mean Ishita ko bolo ki slides ready rakhe",
+      "Ishita ko bolo ki slides ready rakhe.",
+      "ok"
+    ],
     [
       "Send the report to Zubin sorry I meant Tavish now",
       "Send the report to Tavish now.",
@@ -276,6 +346,62 @@
     ]
   ],
   "apply": [
+    [
+      "kal ki meeting kab hai",
+      "Kal ki meeting kab hai?"
+    ],
+    [
+      "kya tum bata sakte ho",
+      "Kya tum bata sakte ho?"
+    ],
+    [
+      "pata nahi woh kab aayega",
+      "Pata nahi woh kab aayega"
+    ],
+    [
+      "usne bola ki woh kab aayega",
+      "Usne bola ki woh kab aayega"
+    ],
+    [
+      "kaise bhi karke kal tak bhej do",
+      "Kaise bhi karke kal tak bhej do"
+    ],
+    [
+      "khana kha liya kya",
+      "Khana kha liya kya?"
+    ],
+    [
+      "matlab deploy aaj shaam tak ho jayega na",
+      "Matlab deploy aaj shaam tak ho jayega na?"
+    ],
+    [
+      "build fail kyun ho raha hai",
+      "Build fail kyun ho raha hai?"
+    ],
+    [
+      "kya aapko mera pichla email mila ya nahi",
+      "Kya aapko mera pichla email mila ya nahi?"
+    ],
+    [
+      "mummy ko bol dena na",
+      "Mummy ko bol dena na"
+    ],
+    [
+      "pucho ki budget final hua ya nahi",
+      "Pucho ki budget final hua ya nahi"
+    ],
+    [
+      "mujhe nahi pata woh kab aayega",
+      "Mujhe nahi pata woh kab aayega"
+    ],
+    [
+      "kal ki meeting cancel kar do. kya tum free ho",
+      "Kal ki meeting cancel kar do. Kya tum free ho?"
+    ],
+    [
+      "aaj raat dinner pe chalein kya main aath baje free hoon",
+      "Aaj raat dinner pe chalein kya main aath baje free hoon"
+    ],
     ["Is the build green question mark?", "Is the build green?"],
     ["is the build green question mark", "Is the build green?"],
     [

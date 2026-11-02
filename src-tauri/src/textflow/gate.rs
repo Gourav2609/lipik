@@ -57,13 +57,13 @@ struct Hit {
 }
 
 static CUE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(&format!(r"(?i)\b({})\b", rules::CORRECTION_CUE_WORDS)).unwrap());
+    Lazy::new(|| Regex::new(&format!(r"(?i)\b({})\b", rules::cue_pattern())).unwrap());
 /// A correction at the start of a sentence, maybe after one short lead-in
 /// word ("Oh wait, ...", "Okay, scratch that, ...", "Well, actually, ...").
 static OPENING_CUE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&format!(
         r"(?i)^\W*((oh|okay|ok|well|hmm+|uh+|um+|and|but|so)\W+)?({})\b",
-        rules::CORRECTION_CUE_WORDS
+        rules::cue_pattern()
     ))
     .unwrap()
 });
@@ -422,6 +422,16 @@ fn trimmed(text: &str, start: usize, end: usize) -> (usize, usize) {
     let s = &text[start..end];
     let lead = s.len() - s.trim_start().len();
     (start + lead, start + lead + s.trim().len())
+}
+
+/// Whether a dictation too short for the model still needs it: Hinglish with
+/// a correction ("main paanch baje aaunga, nahi nahi, chhe baje"), which the
+/// rules can't apply. A cue that opens the dictation takes nothing back
+/// ("Sorry yaar, late ho gaya").
+pub fn short_needs_model(text: &str) -> bool {
+    CUE.find_iter(text)
+        .any(|m| text[..m.start()].chars().any(char::is_alphanumeric))
+        && !rules::hindi_words(text).is_empty()
 }
 
 /// Where the last sentence of `text` starts.
