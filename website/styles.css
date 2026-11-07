@@ -4146,6 +4146,19 @@ s.sl-g {
 .footer-more a[aria-current="page"] {
   text-decoration: none;
 }
+.compare-ba thead th:nth-child(2),
+.compare-ba tbody td:nth-child(2) {
+  color: var(--muted);
+  font-weight: inherit;
+}
+.compare-ba thead th:nth-child(3),
+.compare-ba tbody td:nth-child(3) {
+  color: var(--green);
+  font-weight: 550;
+}
+.compare-ba tbody th {
+  width: auto;
+}
 .compare-data thead th:nth-child(2) {
   color: var(--muted);
 }
