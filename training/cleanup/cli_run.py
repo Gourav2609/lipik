@@ -3,9 +3,13 @@ lipik binary (--transcribe-file --clean=<bundle> --json) and write rows that
 training/cleanup/score.py reads (runs/cleanup-<tag>.jsonl).
 
     python3 cli_run.py <portable dir> <shim log> <tag>
+
+CLIPS picks another clip list (a path; the clips sit next to it), e.g. the
+whispered copies made by whisper_audio.py.
 """
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -18,7 +22,8 @@ BUNDLE = {"Slack": "com.tinyspeck.slackmacgap", "Mail": "com.apple.mail", "Messa
           "Notes": "com.apple.Notes", "Claude Code": "com.mitchellh.ghostty"}
 
 cases = {c["id"]: c for c in json.loads((BENCH / "cases.json").read_text())}
-clips = json.loads((BENCH / "audio/clips.json").read_text())
+CLIPS = Path(os.environ.get("CLIPS", BENCH / "audio/clips.json"))
+clips = json.loads(CLIPS.read_text())
 out = BENCH / "runs" / f"cleanup-{TAG}.jsonl"
 done = {json.loads(l)["clip"] for l in out.read_text().splitlines()} if out.exists() else set()
 SHIMLOG.touch()
@@ -28,7 +33,7 @@ for c in clips:
     before = len(SHIMLOG.read_text().splitlines())
     t = time.perf_counter()
     proc = subprocess.run(["perl", "-e", "alarm shift; exec @ARGV", "180", str(P / "lipik"),
-                           "--transcribe-file", str(BENCH / "audio" / c["clip"]), "--model", PARAKEET,
+                           "--transcribe-file", str(CLIPS.parent / c["clip"]), "--model", PARAKEET,
                            f"--clean={BUNDLE[cases[c['id']]['app']]}", "--json"],
                           capture_output=True, text=True)
     wall = (time.perf_counter() - t) * 1000

@@ -157,4 +157,32 @@ mod tests {
 
         assert!(vad.score(&pcm[..frame + 1]).is_err());
     }
+
+    /// Speech share of each 16 kHz mono WAV listed (one path per line) in the
+    /// file `VAD_LIST`, at the app's threshold: how much of a whisper the
+    /// detector would keep. Run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn speech_share_of_listed_clips() {
+        let Ok(list) = std::env::var("VAD_LIST") else {
+            return;
+        };
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/resources/models/silero-vad-v6.2-F32.gguf"
+        );
+        for wav in std::fs::read_to_string(list).unwrap().lines() {
+            let mut vad = SileroVad::new(path, 0.3).unwrap();
+            let frame = vad.frame_samples();
+            let mut pcm: Vec<f32> = hound::WavReader::open(wav)
+                .unwrap()
+                .into_samples::<i16>()
+                .map(|s| s.unwrap() as f32 / i16::MAX as f32)
+                .collect();
+            pcm.truncate(pcm.len() / frame * frame);
+            let probs = vad.score(&pcm).unwrap();
+            let speech = probs.iter().filter(|&&p| p >= 0.3).count();
+            println!("VAD\t{wav}\t{}\t{speech}", probs.len());
+        }
+    }
 }

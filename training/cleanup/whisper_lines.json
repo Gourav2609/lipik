@@ -1,0 +1,22 @@
+[
+ {"id": "wr01", "lang": "en", "say": "Can you send me the deck before the call?", "expected": "Can you send me the deck before the call?"},
+ {"id": "wr02", "lang": "en", "say": "I'm stuck in a meeting, I'll reply in ten minutes.", "expected": "I'm stuck in a meeting, I'll reply in 10 minutes."},
+ {"id": "wr03", "lang": "en", "say": "Tell Zubin the build is green and we can ship today.", "expected": "Tell Zubin the build is green and we can ship today."},
+ {"id": "wr04", "lang": "en", "say": "Let's move the review to Thursday at four, no, five.", "expected": "Let's move the review to Thursday at 5."},
+ {"id": "wr05", "lang": "en", "say": "Please check the invoice for Quorvia, the total looks wrong.", "expected": "Please check the invoice for Quorvia, the total looks wrong."},
+ {"id": "wr06", "lang": "en", "say": "Thanks Meher, this looks good to me.", "expected": "Thanks Meher, this looks good to me."},
+ {"id": "wr07", "lang": "en", "say": "Can we push the launch by a week?", "expected": "Can we push the launch by a week?"},
+ {"id": "wr08", "lang": "en", "say": "I'll be late today, start the stand-up without me.", "expected": "I'll be late today, start the stand-up without me."},
+ {"id": "wr09", "lang": "en", "say": "The staging server is down again, can someone look?", "expected": "The staging server is down again, can someone look?"},
+ {"id": "wr10", "lang": "en", "say": "Add Ishita to the thread and ask her for the numbers.", "expected": "Add Ishita to the thread and ask her for the numbers."},
+ {"id": "wr11", "lang": "en", "say": "Sounds good, let's talk after lunch.", "expected": "Sounds good, let's talk after lunch."},
+ {"id": "wr12", "lang": "en", "say": "Remind me to call Tavish at six thirty.", "expected": "Remind me to call Tavish at 6:30."},
+ {"id": "wr13", "lang": "hi", "say": "Bhai, PR review kar dena, main lunch ke baad merge karunga.", "expected": "Bhai, PR review kar dena, main lunch ke baad merge karunga."},
+ {"id": "wr14", "lang": "hi", "say": "Aaj meeting thodi late hogi, das minute ruko.", "expected": "Aaj meeting thodi late hogi, 10 minute ruko."},
+ {"id": "wr15", "lang": "hi", "say": "Zubin ko bolo ki deck aaj shaam tak bhej de.", "expected": "Zubin ko bolo ki deck aaj shaam tak bhej de."},
+ {"id": "wr16", "lang": "hi", "say": "Kya kisi ne production logs check kiye?", "expected": "Kya kisi ne production logs check kiye?"},
+ {"id": "wr17", "lang": "hi", "say": "Main abhi call pe hoon, baad mein baat karte hain.", "expected": "Main abhi call pe hoon, baad mein baat karte hain."},
+ {"id": "wr18", "lang": "hi", "say": "Meher, invoice bhej diya hai, payment is hafte ho jayega.", "expected": "Meher, invoice bhej diya hai, payment is hafte ho jayega."},
+ {"id": "wr19", "lang": "hi", "say": "Kal ki demo cancel karo, Tavish chhutti pe hai.", "expected": "Kal ki demo cancel karo, Tavish chhutti pe hai."},
+ {"id": "wr20", "lang": "hi", "say": "Theek hai yaar, main kal subah dekh lunga.", "expected": "Theek hai yaar, main kal subah dekh lunga."}
+]

@@ -277,6 +277,14 @@ Apple does use hints: the dictionary fixed names ("Tabish" -> "Tavish",
 "Reva" -> "Rivaan"). The Hindi words changed 1 transcript of 120 (for the
 worse: "Rivaan" -> "Rewind") and added about 75 ms. Not worth adding.
 
+A reply on X pointed out that synthetic voices are clean, and real speech
+sits nearer the point where hints tip the result. Re-run on 46 of Gourav's
+own recordings that contain Hindi (his dictations and his side of
+meetings; private, never published): the 77 Hindi hint words changed 0 of
+46 transcripts (ignoring capitals and punctuation) and added about 75 ms
+(median 288 -> 363 ms). These clips have no checked reference text, so no
+pass counts, but with no transcript changed the hints can't help.
+
 ### Test 2: the auto choice kept cut-down English
 
 Apple alone passes 47 of 120 before clean-up, the auto path only 39. On 18
@@ -316,3 +324,43 @@ transcripts: one clean-up reply differed.)
 
 Running total on the new 120, auto path: 0.1.13 40 -> now 50. Qwen3-ASR
 1.7B + Roman step: 78.
+
+### Test 3: Qwen3-ASR 1.7B as the auto path's Hindi engine
+
+`engine_sim.py` replays the app's choice (`apple_speech/pick.rs`) on each
+clip from Parakeet's own transcript (`hw6-pk`), then takes the result from
+the chosen engine's run. Replaying with Apple gives back the measured 50.
+
+| Auto path, new 120 clips              | Clean-up off | Clean-up on |
+| ------------------------------------- | ------------ | ----------- |
+| Parakeet + Apple (0.1.14)             | 45/120       | 50/120      |
+| Parakeet + Qwen3-ASR 1.7B + Roman     | 73/120       | **76/120**  |
+| Parakeet + Qwen + hint text + Roman   | 66/120       | 74/120      |
+
+English: the app sends 1 to 3 of the 106 English clips away from Parakeet
+(email addresses); Qwen and Apple garble those about equally.
+
+Cost, measured on this Mac (M-series, 24 GB, the 8B clean-up model loaded):
+
+| | Apple | Qwen3-ASR 1.7B |
+| --- | --- | --- |
+| Download | none (part of macOS 26) | 2.2 GB |
+| Load | kept loaded by the helper | 1.4 to 1.7 s, then kept |
+| Memory | Apple's process | about 2.6 GB (2.2 GB weights) |
+| Speech, synthetic clips (4.6 s) | 242 ms | 406 ms |
+| Speech, Gourav's real clips (9 s median) | 288 ms | 865 ms (p90 1.9 s) |
+| Roman-letter step | none (Apple writes Roman) | 513 ms synthetic; 2.1 s real (p90 4.6 s) |
+
+On real 9 s dictations Qwen adds about 2.6 s before the text appears (most
+of it the clean-up model writing the Hindi in Roman letters), against
+about 0.3 s for Apple. Works on macOS older than 26, where there is no
+Apple engine.
+
+Real voice: Gourav's 46 Hindi recordings have no checked text, so
+`training/benchmark/private/apple_vs_qwen/index.html` (private, not
+published) shows Apple's and Qwen's text in random order for a blind pick.
+
+Faster Roman step? The letter rules (instant) instead of the model's
+rewrite: Qwen's transcripts pass 53/120 instead of 75/120 (clean-up off),
+so the model step earns its time. A way to cut it: one model call that
+writes Roman letters and cleans up together, instead of two in a row.

@@ -127,7 +127,7 @@ fn error(id: Value, code: i64, message: &str) -> Value {
 }
 
 fn tools() -> Value {
-    let read_only = json!({ "readOnlyHint": true, "openWorldHint": false });
+    let read_only = json!({ "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false });
     json!([
         {
             "name": "list_meetings",
