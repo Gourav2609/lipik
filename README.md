@@ -6,6 +6,8 @@
 
 <sub>Said: "Send it at four, um, no, five." Typed: "Send it at 5." Real recording of Lipik 0.1.13; voice: the author's own, cloned.</sub>
 
+**[Download for Mac](https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg)** (Apple silicon, M1 or later) · or install from Terminal: `curl -fsSL https://lipik.pages.dev/install.sh | sh` · [Website](https://lipik.pages.dev)
+
 Hold `fn`, speak, and let go. Lipik turns what you said into clean text and
 types it into whatever app you are in: an email, a chat, a code editor, a
 document. The speech model runs locally, so your voice never leaves your Mac,
