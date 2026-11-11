@@ -150,11 +150,7 @@
     ["it was a mere formality per se", "It was a formality.", false]
   ],
   "dropped": [
-    [
-      "AajRaat dinner pe chalein kya",
-      "Aaj raat dinner pe chalein kya?",
-      []
-    ],
+    ["AajRaat dinner pe chalein kya", "Aaj raat dinner pe chalein kya?", []],
     [
       "So the thing is we need the signed copy before Friday",
       "We need the signed copy before Friday.",
@@ -346,54 +342,24 @@
     ]
   ],
   "apply": [
-    [
-      "kal ki meeting kab hai",
-      "Kal ki meeting kab hai?"
-    ],
-    [
-      "kya tum bata sakte ho",
-      "Kya tum bata sakte ho?"
-    ],
-    [
-      "pata nahi woh kab aayega",
-      "Pata nahi woh kab aayega"
-    ],
-    [
-      "usne bola ki woh kab aayega",
-      "Usne bola ki woh kab aayega"
-    ],
-    [
-      "kaise bhi karke kal tak bhej do",
-      "Kaise bhi karke kal tak bhej do"
-    ],
-    [
-      "khana kha liya kya",
-      "Khana kha liya kya?"
-    ],
+    ["kal ki meeting kab hai", "Kal ki meeting kab hai?"],
+    ["kya tum bata sakte ho", "Kya tum bata sakte ho?"],
+    ["pata nahi woh kab aayega", "Pata nahi woh kab aayega"],
+    ["usne bola ki woh kab aayega", "Usne bola ki woh kab aayega"],
+    ["kaise bhi karke kal tak bhej do", "Kaise bhi karke kal tak bhej do"],
+    ["khana kha liya kya", "Khana kha liya kya?"],
     [
       "matlab deploy aaj shaam tak ho jayega na",
       "Matlab deploy aaj shaam tak ho jayega na?"
     ],
-    [
-      "build fail kyun ho raha hai",
-      "Build fail kyun ho raha hai?"
-    ],
+    ["build fail kyun ho raha hai", "Build fail kyun ho raha hai?"],
     [
       "kya aapko mera pichla email mila ya nahi",
       "Kya aapko mera pichla email mila ya nahi?"
     ],
-    [
-      "mummy ko bol dena na",
-      "Mummy ko bol dena na"
-    ],
-    [
-      "pucho ki budget final hua ya nahi",
-      "Pucho ki budget final hua ya nahi"
-    ],
-    [
-      "mujhe nahi pata woh kab aayega",
-      "Mujhe nahi pata woh kab aayega"
-    ],
+    ["mummy ko bol dena na", "Mummy ko bol dena na"],
+    ["pucho ki budget final hua ya nahi", "Pucho ki budget final hua ya nahi"],
+    ["mujhe nahi pata woh kab aayega", "Mujhe nahi pata woh kab aayega"],
     [
       "kal ki meeting cancel kar do. kya tum free ho",
       "Kal ki meeting cancel kar do. Kya tum free ho?"

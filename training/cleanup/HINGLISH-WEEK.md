@@ -229,14 +229,14 @@ examples, 215 of 216; the one miss (filler "UM") was already there before.
 Strict = "fully right" (`score.py`), clean-up on. 0.1.13 = the released
 app; new = this branch (`hw3-*` runs).
 
-| Set                                   | Path                               | 0.1.13  | New     |
-| ------------------------------------- | ---------------------------------- | ------- | ------- |
-| English, 106 clips                    | Parakeet                           | 84/106  | 84/106  |
-| Old 20 Hinglish clips                 | Auto (the app's default)           | 7/20    | 8/20    |
-| New 120 clips (40 lines x 3 voices)   | Auto                               | 40/120  | 44/120  |
-| New 120                               | Qwen3-ASR 1.7B + Roman             | 78/120  | 78/120  |
-| New 120                               | Qwen3-ASR 1.7B + context + Roman   | 78/120  | 78/120  |
-| Old 20                                | Qwen3-ASR 1.7B + context + Roman   | 11/20   | 13/20   |
+| Set                                 | Path                             | 0.1.13 | New    |
+| ----------------------------------- | -------------------------------- | ------ | ------ |
+| English, 106 clips                  | Parakeet                         | 84/106 | 84/106 |
+| Old 20 Hinglish clips               | Auto (the app's default)         | 7/20   | 8/20   |
+| New 120 clips (40 lines x 3 voices) | Auto                             | 40/120 | 44/120 |
+| New 120                             | Qwen3-ASR 1.7B + Roman           | 78/120 | 78/120 |
+| New 120                             | Qwen3-ASR 1.7B + context + Roman | 78/120 | 78/120 |
+| Old 20                              | Qwen3-ASR 1.7B + context + Roman | 11/20  | 13/20  |
 
 - English: 4 of 126 outputs differ, all model wording ("₹1,500" vs
   "₹1500", a comma). The new reply check rejected no English reply.
@@ -308,12 +308,12 @@ about 2 s of audio around each spoken phrase, so English said with pauses
 and would have switched to Apple. Hence the second condition: there Apple
 hears about as many words, so Parakeet's text stays.
 
-| Auto path, clean-up on              | Day 2 build | With the fix |
-| ----------------------------------- | ----------- | ------------ |
-| New 120 clips                       | 44/120      | **50/120**   |
-| New 120, clean-up off               | 39/120      | 45/120       |
-| Old 20 clips                        | 8/20        | 8/20         |
-| English 106 clips (on auto)         | 84/106      | 84/106       |
+| Auto path, clean-up on      | Day 2 build | With the fix |
+| --------------------------- | ----------- | ------------ |
+| New 120 clips               | 44/120      | **50/120**   |
+| New 120, clean-up off       | 39/120      | 45/120       |
+| Old 20 clips                | 8/20        | 8/20         |
+| English 106 clips (on auto) | 84/106      | 84/106       |
 
 On the English run no English clip switched because of the new check (3
 email clips use Apple's text, as they already did through the "reads as
@@ -331,25 +331,25 @@ Running total on the new 120, auto path: 0.1.13 40 -> now 50. Qwen3-ASR
 clip from Parakeet's own transcript (`hw6-pk`), then takes the result from
 the chosen engine's run. Replaying with Apple gives back the measured 50.
 
-| Auto path, new 120 clips              | Clean-up off | Clean-up on |
-| ------------------------------------- | ------------ | ----------- |
-| Parakeet + Apple (0.1.14)             | 45/120       | 50/120      |
-| Parakeet + Qwen3-ASR 1.7B + Roman     | 73/120       | **76/120**  |
-| Parakeet + Qwen + hint text + Roman   | 66/120       | 74/120      |
+| Auto path, new 120 clips            | Clean-up off | Clean-up on |
+| ----------------------------------- | ------------ | ----------- |
+| Parakeet + Apple (0.1.14)           | 45/120       | 50/120      |
+| Parakeet + Qwen3-ASR 1.7B + Roman   | 73/120       | **76/120**  |
+| Parakeet + Qwen + hint text + Roman | 66/120       | 74/120      |
 
 English: the app sends 1 to 3 of the 106 English clips away from Parakeet
 (email addresses); Qwen and Apple garble those about equally.
 
 Cost, measured on this Mac (M-series, 24 GB, the 8B clean-up model loaded):
 
-| | Apple | Qwen3-ASR 1.7B |
-| --- | --- | --- |
-| Download | none (part of macOS 26) | 2.2 GB |
-| Load | kept loaded by the helper | 1.4 to 1.7 s, then kept |
-| Memory | Apple's process | about 2.6 GB (2.2 GB weights) |
-| Speech, synthetic clips (4.6 s) | 242 ms | 406 ms |
-| Speech, Gourav's real clips (9 s median) | 288 ms | 865 ms (p90 1.9 s) |
-| Roman-letter step | none (Apple writes Roman) | 513 ms synthetic; 2.1 s real (p90 4.6 s) |
+|                                          | Apple                     | Qwen3-ASR 1.7B                           |
+| ---------------------------------------- | ------------------------- | ---------------------------------------- |
+| Download                                 | none (part of macOS 26)   | 2.2 GB                                   |
+| Load                                     | kept loaded by the helper | 1.4 to 1.7 s, then kept                  |
+| Memory                                   | Apple's process           | about 2.6 GB (2.2 GB weights)            |
+| Speech, synthetic clips (4.6 s)          | 242 ms                    | 406 ms                                   |
+| Speech, Gourav's real clips (9 s median) | 288 ms                    | 865 ms (p90 1.9 s)                       |
+| Roman-letter step                        | none (Apple writes Roman) | 513 ms synthetic; 2.1 s real (p90 4.6 s) |
 
 On real 9 s dictations Qwen adds about 2.6 s before the text appears (most
 of it the clean-up model writing the Hindi in Roman letters), against

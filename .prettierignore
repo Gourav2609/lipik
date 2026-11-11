@@ -22,3 +22,6 @@ src-tauri/src/catalog/catalog.json
 
 # Vendored crates
 crates
+
+# Search Console ownership file: Google reads it byte for byte
+website/google*.html

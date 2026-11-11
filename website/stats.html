@@ -470,7 +470,10 @@
             )
             .join("");
           const when = (d) =>
-            d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+            d.toLocaleString("en-IN", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            });
           $("updated").textContent = g.stale
             ? `GitHub didn't answer just now. These numbers are from ${when(new Date(g.fetched))}.`
             : `From GitHub, refreshed every 10 minutes. Shown ${when(new Date())}`;

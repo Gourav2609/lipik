@@ -28,19 +28,19 @@ detector: the app's Silero model at its 0.3 threshold
 
 Fully right, clean-up on (`whisper_score.py`):
 
-| Clips | Normal voice | Whispered | Quiet room | Quiet room, boosted |
-| --- | --- | --- | --- | --- |
-| English, 106 | 84 | 81 | 69 | 70 |
-| Hinglish, 120 | 50 | 10 | 0 | 1 |
-| English, macOS Whisper voice (53) | - | 36 | - | - |
+| Clips                             | Normal voice | Whispered | Quiet room | Quiet room, boosted |
+| --------------------------------- | ------------ | --------- | ---------- | ------------------- |
+| English, 106                      | 84           | 81        | 69         | 70                  |
+| Hinglish, 120                     | 50           | 10        | 0          | 1                   |
+| English, macOS Whisper voice (53) | -            | 36        | -          | -                   |
 
 Share of each clip the speech detector marks as speech (median), and clips
 where it finds under 10%:
 
-| Clips | Normal | Whispered | Quiet room | Quiet room, boosted |
-| --- | --- | --- | --- | --- |
-| English | 0.79, 0 | 0.79, 0 | 0.48, 21 of 106 | 0.79, 0 |
-| Hinglish | 0.71, 0 | 0.68, 0 | 0.01, 78 of 140 | 0.66, 11 of 140 |
+| Clips    | Normal  | Whispered | Quiet room      | Quiet room, boosted |
+| -------- | ------- | --------- | --------------- | ------------------- |
+| English  | 0.79, 0 | 0.79, 0   | 0.48, 21 of 106 | 0.79, 0             |
+| Hinglish | 0.71, 0 | 0.68, 0   | 0.01, 78 of 140 | 0.66, 11 of 140     |
 
 ## What it means
 
