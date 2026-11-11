@@ -5,7 +5,6 @@
 // /api/email  POST {email, updates}         from the setup step
 // /api/event  POST {kind, page}             website .dmg clicks and install-command copies
 // /api/stats  GET                           counts for /stats (no emails)
-// /api/github GET                           stars and release downloads, cached 10 minutes
 // /api/admin/emails  GET, Authorization: Bearer ADMIN_KEY
 // /install.sh is counted, then served from the static files.
 
@@ -309,77 +308,6 @@ async function stats(env) {
   });
 }
 
-// GitHub allows 60 unsigned requests an hour per address, and Workers share
-// their addresses with other sites, so GitHub sometimes says no. The Worker
-// asks once per 10 minutes and keeps the last good answer for those times.
-async function github(request, ctx) {
-  const cache = caches.default;
-  const key = new Request(new URL("/api/github", request.url));
-  const lastKey = new Request(new URL("/api/github-last", request.url));
-  const hit = await cache.match(key);
-  if (hit) return hit;
-  try {
-    return await githubFresh(ctx, cache, key, lastKey);
-  } catch (e) {
-    const last = await cache.match(lastKey);
-    if (!last) throw e;
-    console.error(e);
-    const body = await last.json();
-    return json({ ...body, stale: true });
-  }
-}
-
-async function githubFresh(ctx, cache, key, lastKey) {
-  const get = (path) =>
-    fetch(`https://api.github.com/repos/Gourav2609/lipik${path}`, {
-      headers: {
-        "user-agent": "lipik-site",
-        accept: "application/vnd.github+json",
-      },
-    }).then((r) => {
-      if (!r.ok) throw new Error(`GitHub ${r.status}`);
-      return r.json();
-    });
-  const [repo, releases] = await Promise.all([
-    get(""),
-    get("/releases?per_page=100"),
-  ]);
-  const count = (assets, name) =>
-    assets
-      .filter((a) => a.name === name)
-      .reduce((s, a) => s + a.download_count, 0);
-  const body = {
-    fetched: new Date().toISOString(),
-    stars: repo.stargazers_count,
-    forks: repo.forks_count,
-    issues: repo.open_issues_count,
-    releases: releases
-      .filter((r) => !r.draft)
-      .map((r) => ({
-        tag: r.tag_name,
-        published: r.published_at,
-        installs: count(r.assets, "Lipik.dmg"),
-        updates: count(r.assets, "Lipik.app.tar.gz"),
-      })),
-  };
-  const res = new Response(JSON.stringify(body), {
-    headers: {
-      "content-type": "application/json",
-      "cache-control": "public, max-age=600",
-    },
-  });
-  const last = new Response(JSON.stringify(body), {
-    headers: {
-      "content-type": "application/json",
-      "cache-control": "public, max-age=2592000",
-    },
-  });
-  ctx.waitUntil(
-    Promise.all([cache.put(key, res.clone()), cache.put(lastKey, last)]),
-  );
-  return res;
-}
-
 async function adminEmails(request, env) {
   const key = (request.headers.get("authorization") || "").replace(
     /^Bearer /,
@@ -406,8 +334,6 @@ export default {
         return await event(request, env);
       if (pathname === "/api/stats" && method === "GET")
         return await stats(env);
-      if (pathname === "/api/github" && method === "GET")
-        return await github(request, ctx);
       if (pathname === "/api/admin/emails" && method === "GET")
         return await adminEmails(request, env);
       if (pathname.startsWith("/api/")) return json({ ok: false }, 404);

@@ -445,11 +445,33 @@
         const saved = sessionStorage.getItem("lipik-admin");
         if (saved) showEmails(saved);
       } catch {}
-      fetch("/api/github")
-        .then((r) => {
-          if (!r.ok) throw new Error();
-          return r.json();
-        })
+      // Asked from the visitor's browser: GitHub allows 60 unsigned requests an
+      // hour per address, and the Worker's addresses are shared with other sites.
+      const gh = (path) =>
+        fetch(`https://api.github.com/repos/Gourav2609/lipik${path}`).then(
+          (r) => {
+            if (!r.ok) throw new Error();
+            return r.json();
+          },
+        );
+      const count = (assets, name) =>
+        assets
+          .filter((a) => a.name === name)
+          .reduce((s, a) => s + a.download_count, 0);
+      Promise.all([gh(""), gh("/releases?per_page=100")])
+        .then(([repo, releases]) => ({
+          stars: repo.stargazers_count,
+          forks: repo.forks_count,
+          issues: repo.open_issues_count,
+          releases: releases
+            .filter((r) => !r.draft)
+            .map((r) => ({
+              tag: r.tag_name,
+              published: r.published_at,
+              installs: count(r.assets, "Lipik.dmg"),
+              updates: count(r.assets, "Lipik.app.tar.gz"),
+            })),
+        }))
         .then((g) => {
           $("stars").textContent = fmt(g.stars ?? 0);
           $("forks").textContent = fmt(g.forks ?? 0);
@@ -474,9 +496,7 @@
               dateStyle: "medium",
               timeStyle: "short",
             });
-          $("updated").textContent = g.stale
-            ? `GitHub didn't answer just now. These numbers are from ${when(new Date(g.fetched))}.`
-            : `From GitHub, refreshed every 10 minutes. Shown ${when(new Date())}`;
+          $("updated").textContent = `From GitHub, ${when(new Date())}`;
         })
         .catch(() => {
           $("updated").textContent =
