@@ -309,13 +309,27 @@ async function stats(env) {
   });
 }
 
-// GitHub allows 60 unsigned requests an hour per address, which one visitor
-// can use up; the Worker asks once and shares the answer for 10 minutes.
+// GitHub allows 60 unsigned requests an hour per address, and Workers share
+// their addresses with other sites, so GitHub sometimes says no. The Worker
+// asks once per 10 minutes and keeps the last good answer for those times.
 async function github(request, ctx) {
   const cache = caches.default;
   const key = new Request(new URL("/api/github", request.url));
+  const lastKey = new Request(new URL("/api/github-last", request.url));
   const hit = await cache.match(key);
   if (hit) return hit;
+  try {
+    return await githubFresh(ctx, cache, key, lastKey);
+  } catch (e) {
+    const last = await cache.match(lastKey);
+    if (!last) throw e;
+    console.error(e);
+    const body = await last.json();
+    return json({ ...body, stale: true });
+  }
+}
+
+async function githubFresh(ctx, cache, key, lastKey) {
   const get = (path) =>
     fetch(`https://api.github.com/repos/Gourav2609/lipik${path}`, {
       headers: {
@@ -335,6 +349,7 @@ async function github(request, ctx) {
       .filter((a) => a.name === name)
       .reduce((s, a) => s + a.download_count, 0);
   const body = {
+    fetched: new Date().toISOString(),
     stars: repo.stargazers_count,
     forks: repo.forks_count,
     issues: repo.open_issues_count,
@@ -353,7 +368,15 @@ async function github(request, ctx) {
       "cache-control": "public, max-age=600",
     },
   });
-  ctx.waitUntil(cache.put(key, res.clone()));
+  const last = new Response(JSON.stringify(body), {
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "public, max-age=2592000",
+    },
+  });
+  ctx.waitUntil(
+    Promise.all([cache.put(key, res.clone()), cache.put(lastKey, last)]),
+  );
   return res;
 }
 

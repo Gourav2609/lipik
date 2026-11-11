@@ -469,8 +469,11 @@
                 `<tr><td>${r.tag}</td><td>${r.date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td><td class="n">${fmt(r.n)}</td><td class="n">${fmt(r.u)}</td><td><div class="bar" style="width:${(r.n / max) * 100}%"></div></td></tr>`,
             )
             .join("");
-          $("updated").textContent =
-            `From GitHub, refreshed every 10 minutes. Shown ${new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`;
+          const when = (d) =>
+            d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+          $("updated").textContent = g.stale
+            ? `GitHub didn't answer just now. These numbers are from ${when(new Date(g.fetched))}.`
+            : `From GitHub, refreshed every 10 minutes. Shown ${when(new Date())}`;
         })
         .catch(() => {
           $("updated").textContent =
