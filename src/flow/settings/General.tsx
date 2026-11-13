@@ -188,19 +188,26 @@ export default function General() {
                 ? `Downloading… ${Math.round(progress)}%`
                 : downloadFailed ||
                   modelError ||
-                  "Runs on this Mac. A model downloads when you pick it."
+                  (model
+                    ? "Runs on this Mac. A model downloads when you pick it."
+                    : "No speech model on this Mac. Pick one and it downloads.")
             }
             control={
               <Select
                 label="Model"
-                value={currentModel}
+                value={model ? currentModel : ""}
                 disabled={!!downloading}
-                options={models.map((m) => ({
-                  value: m.id,
-                  label: m.is_downloaded
-                    ? m.name
-                    : `${m.name} (${Math.round(m.size_mb)} MB)`,
-                }))}
+                // Without a "choose" entry the select shows the first model as
+                // if chosen, and picking it fires no change.
+                options={[
+                  ...(model ? [] : [{ value: "", label: "Choose a model" }]),
+                  ...models.map((m) => ({
+                    value: m.id,
+                    label: m.is_downloaded
+                      ? m.name
+                      : `${m.name} (${Math.round(m.size_mb)} MB)`,
+                  })),
+                ]}
                 onChange={chooseModel}
               />
             }

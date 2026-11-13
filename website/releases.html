@@ -47,8 +47,8 @@
         "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS (Apple silicon, M1 or later)",
-        "softwareVersion": "0.1.14",
-        "dateModified": "2026-11-02",
+        "softwareVersion": "0.1.15",
+        "dateModified": "2026-11-13",
         "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
         "url": "https://lipik.pages.dev/",
         "releaseNotes": "https://lipik.pages.dev/releases",
@@ -128,7 +128,7 @@
           <p class="rel-sub">
             What changed in each version of Lipik. The newest is at the top.
           </p>
-          <p class="rel-sub">Latest: 0.1.14, 2 Nov 2026.</p>
+          <p class="rel-sub">Latest: 0.1.15, 13 Nov 2026.</p>
           <p class="rel-sub">
             To install or update, paste this into Terminal and press Return. It
             keeps your settings, history and permissions:
@@ -149,6 +149,40 @@
         </div>
       </section>
       <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.15">
+          <header class="rel-head">
+            <h2>Lipik 0.1.15</h2>
+            <p class="rel-meta">
+              <time datetime="2026-11-13">13 November 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.15"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              A fix for getting a speech model back when its files are missing.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong
+                  >Download a speech model again when yours is missing.</strong
+                >
+                If your speech model's files are deleted, for example by a disk
+                clean-up, Settings → Dictation → Model now shows &quot;Choose a
+                model&quot;, and picking one downloads it. Before, the list
+                looked as if a model was already chosen, and picking it did
+                nothing.
+              </li>
+              <li>
+                <strong>Clearer meeting-notes tools for AI apps.</strong>
+                Lipik's meeting-notes tools for AI apps now tell those apps that
+                they only read your notes and never change anything.
+              </li>
+            </ul>
+          </div>
+        </article>
         <article class="rel" id="v0.1.14">
           <header class="rel-head">
             <h2>Lipik 0.1.14</h2>
