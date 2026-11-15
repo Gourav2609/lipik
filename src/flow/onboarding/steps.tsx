@@ -218,10 +218,11 @@ const Welcome = ({ next, back }: StepProps) => {
           {counted && <Check size={12} strokeWidth={2.5} />}
         </span>
         <span>
-          Send an anonymous count so I can see if setup works — a random ID, app
-          and macOS version, chip, country (worked out from the connection, the
-          address itself isn't kept) and how far setup got. Turn it off any time
-          in Settings → Privacy.
+          Send an anonymous count so I can see if setup works and how Lipik is
+          used: a random ID, app and macOS version, chip, country, how far setup
+          got, how much you dictate and record, and which speech model and
+          settings you use. Never your voice or text. Turn it off any time in
+          Settings → Privacy.
         </span>
       </button>
     </StepLayout>
@@ -845,7 +846,7 @@ const Privacy = ({ next, back }: StepProps) => (
           "Speech is turned into text on this Mac. Your audio is never uploaded.",
           `Recordings and their text stay in ${APP_NAME}'s data folder so it can learn your voice. You can change this in Settings.`,
           "Clean-up and meeting notes run on a model on this Mac, not in the cloud.",
-          `If you left the box on the first screen ticked, every few hours ${APP_NAME} sends an anonymous count: a random ID, the app version, the macOS version, the chip type, the country (worked out from the connection; the address itself isn't kept) and how far setup got, so we know how many people use it and whether setup works. Turn it off in Settings, under Privacy.`,
+          `If you left the box on the first screen ticked, every few hours ${APP_NAME} sends an anonymous count: a random ID, the app version, the macOS version, the chip type, the country (worked out from the connection; the address itself isn't kept), how far setup got, how much you use it (counts of dictations, words, meetings and meeting minutes) and five settings (speech model, speech engine, language, clean-up, and whether meeting notes are on), so we know how many people use it, how, and whether setup works. Never your voice or text. Turn it off in Settings, under Privacy.`,
         ].map((line) => (
           <div
             key={line}

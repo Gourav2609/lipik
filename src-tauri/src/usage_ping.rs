@@ -1,20 +1,29 @@
 //! Every few hours, tells lipik.pages.dev that this copy of Lipik is in use, so
-//! we know how many people use it. The ping carries exactly five things: a
-//! random ID made on first launch (`install_id`), the app version, the macOS
-//! version, the chip type ("arm64" or "x86_64") and how far setup got
-//! (`setup_step`). Never audio, text, names or file paths. It can be turned
-//! off in Settings (`usage_ping_enabled`).
+//! we know how many people use it and how. The ping carries a random ID made
+//! on first launch (`install_id`), the app version, the macOS version, the
+//! chip type ("arm64" or "x86_64") and how far setup got (`setup_step`).
+//! Since 0.1.17 also how much it is used (`Totals`: counts of dictations,
+//! words, meetings and meeting minutes) and five settings (`picks`: speech
+//! model, speech engine, language, clean-up, meeting notes on or off). Never
+//! audio, text, names or file paths. It can be turned off in Settings
+//! (`usage_ping_enabled`).
 //!
 //! Nothing is sent until the user answers the tick box on the welcome
 //! screen. With it ticked, pings start then, before the rest of setup, so we
-//! can see where setup stops. Debug builds never ping.
+//! can see where setup stops. Someone who ticked it before 0.1.17 agreed to
+//! less: the counts and settings are added only once they have seen the
+//! "What's new" note that says so (`told_about_details`). Debug builds never
+//! ping.
 //!
 //! Setup can also send an email address, on its own, when the user asks to
 //! hear about new versions.
 
 use crate::settings::{get_settings, update_settings, AppSettings, SetupStep};
 use log::debug;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 use tauri::AppHandle;
 
@@ -58,14 +67,114 @@ fn arch() -> &'static str {
     }
 }
 
-fn ping_body(install_id: &str, step: SetupStep) -> Value {
+/// The first version whose "What's new" note and welcome screen say that
+/// counts and settings are sent.
+const DETAILS_SINCE: (u32, u32, u32) = (0, 1, 17);
+const TOTALS_FILE: &str = "usage.json";
+static TOTALS: Mutex<()> = Mutex::new(());
+
+/// How much this copy has been used since 0.1.17, kept in the data folder.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Totals {
+    pub dictations: u64,
+    pub words: u64,
+    pub meetings: u64,
+    pub meeting_minutes: u64,
+}
+
+fn totals_path(app: &AppHandle) -> Option<PathBuf> {
+    crate::portable::app_data_dir(app)
+        .ok()
+        .map(|dir| dir.join(TOTALS_FILE))
+}
+
+fn read_totals(path: &std::path::Path) -> Totals {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn add_to_totals(app: &AppHandle, add: impl FnOnce(&mut Totals)) {
+    let Some(path) = totals_path(app) else {
+        return;
+    };
+    let _one_at_a_time = TOTALS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut totals = read_totals(&path);
+    add(&mut totals);
+    let written = serde_json::to_string(&totals)
+        .map_err(std::io::Error::other)
+        .and_then(|text| std::fs::write(&path, text));
+    if let Err(e) = written {
+        debug!("Could not save the usage counts: {e}");
+    }
+}
+
+/// Counts one finished dictation of `words` words.
+pub fn count_dictation(app: &AppHandle, words: i64) {
+    add_to_totals(app, |t| {
+        t.dictations += 1;
+        t.words += words.max(0) as u64;
+    });
+}
+
+/// Counts one recorded meeting that ran for `ms`.
+pub fn count_meeting(app: &AppHandle, ms: i64) {
+    add_to_totals(app, |t| {
+        t.meetings += 1;
+        t.meeting_minutes += (ms.max(0) as u64 + 30_000) / 60_000;
+    });
+}
+
+/// Whether the user has been told that counts and settings are sent: the
+/// welcome screen of a fresh install says so (and stamps the running
+/// version as seen), an update says so in its "What's new" note.
+fn told_about_details(settings: &AppSettings) -> bool {
+    let mut parts = settings
+        .whats_new_last_seen_version
+        .split(['.', '-'])
+        .map(|part| part.parse::<u32>().unwrap_or(0));
+    let seen = (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+    );
+    seen >= DETAILS_SINCE
+}
+
+/// The five settings sent with the counts: names of choices, never text. A
+/// model file the user added themselves is sent as "custom", not by name.
+fn picks(settings: &AppSettings, custom_model: bool) -> Value {
     json!({
-        "id": install_id,
+        "model": if custom_model { "custom" } else { settings.selected_model.as_str() },
+        "engine": settings.speech_engine,
+        "language": settings.selected_language,
+        "cleanup": settings.cleanup_engine,
+        "meeting_notes": settings.notetaker.detect_calls,
+    })
+}
+
+fn has_custom_model(app: &AppHandle, settings: &AppSettings) -> bool {
+    use tauri::Manager;
+    app.try_state::<std::sync::Arc<crate::managers::model::ModelManager>>()
+        .and_then(|models| models.get_model_info(&settings.selected_model))
+        .is_some_and(|model| model.is_custom)
+}
+
+fn ping_body(settings: &AppSettings, details: Option<(Totals, bool)>) -> Value {
+    let mut body = json!({
+        "id": settings.install_id,
         "version": env!("CARGO_PKG_VERSION"),
         "os": os_version(),
         "arch": arch(),
-        "step": step,
-    })
+        "step": settings.setup_step,
+    });
+    if let Some((totals, custom_model)) = details {
+        body["use"] = json!(totals);
+        body["picks"] = picks(settings, custom_model);
+    }
+    body
 }
 
 fn may_ping(settings: &AppSettings) -> bool {
@@ -102,7 +211,11 @@ pub fn start(app: &AppHandle) {
             let due = last_sent.is_none_or(|t| t.elapsed().map_or(true, |e| e >= SEND_EVERY));
             let settings = get_settings(&app);
             if due && may_ping(&settings) {
-                let body = ping_body(&settings.install_id, settings.setup_step);
+                let details = told_about_details(&settings)
+                    .then(|| totals_path(&app))
+                    .flatten()
+                    .map(|path| (read_totals(&path), has_custom_model(&app, &settings)));
+                let body = ping_body(&settings, details);
                 match tauri::async_runtime::block_on(post(PING, body)) {
                     Ok(_) => last_sent = Some(SystemTime::now()),
                     Err(e) => debug!("Usage ping failed: {e}"),
@@ -199,9 +312,17 @@ mod tests {
         assert!(!looks_like_email(&format!("a@{}.com", "b".repeat(250))));
     }
 
+    fn settings(seen: &str) -> AppSettings {
+        let mut settings = crate::settings::get_default_settings();
+        settings.install_id = "id-1".into();
+        settings.setup_step = SetupStep::ModelReady;
+        settings.whats_new_last_seen_version = seen.into();
+        settings
+    }
+
     #[test]
-    fn ping_sends_only_id_version_os_arch_and_step() {
-        let body = ping_body("id-1", SetupStep::ModelReady);
+    fn ping_sends_only_id_version_os_arch_and_step_until_told_about_more() {
+        let body = ping_body(&settings("0.1.16"), None);
         let keys: Vec<&str> = body
             .as_object()
             .unwrap()
@@ -212,6 +333,58 @@ mod tests {
         assert_eq!(body["id"], "id-1");
         assert_eq!(body["step"], "model_ready");
         assert!(["arm64", "x86_64"].contains(&body["arch"].as_str().unwrap()));
+    }
+
+    #[test]
+    fn counts_and_settings_are_names_and_numbers_only() {
+        let totals = Totals {
+            dictations: 12,
+            words: 340,
+            meetings: 2,
+            meeting_minutes: 61,
+        };
+        let body = ping_body(&settings("0.1.17"), Some((totals, false)));
+        assert_eq!(
+            body["use"],
+            json!({"dictations": 12, "words": 340, "meetings": 2, "meeting_minutes": 61})
+        );
+        let picks = body["picks"].as_object().unwrap();
+        let keys: Vec<&str> = picks.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            ["model", "engine", "language", "cleanup", "meeting_notes"]
+        );
+        assert_eq!(picks["engine"], "auto");
+        assert!(picks["meeting_notes"].is_boolean());
+        let own_file = ping_body(&settings("0.1.17"), Some((totals, true)));
+        assert_eq!(own_file["picks"]["model"], "custom");
+    }
+
+    #[test]
+    fn details_wait_for_the_note_that_announces_them() {
+        for (seen, told) in [
+            ("", false),
+            ("0.1.16", false),
+            ("0.1.17", true),
+            ("0.1.17-beta.1", true),
+            ("0.2.0", true),
+            ("1.0.0", true),
+            ("nonsense", false),
+        ] {
+            assert_eq!(told_about_details(&settings(seen)), told, "{seen:?}");
+        }
+    }
+
+    #[test]
+    fn totals_survive_a_missing_or_broken_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(TOTALS_FILE);
+        assert_eq!(read_totals(&path), Totals::default());
+        std::fs::write(&path, "{").unwrap();
+        assert_eq!(read_totals(&path), Totals::default());
+        std::fs::write(&path, r#"{"dictations":3,"later_field":1}"#).unwrap();
+        assert_eq!(read_totals(&path).dictations, 3);
+        assert_eq!(read_totals(&path).words, 0);
     }
 
     #[test]

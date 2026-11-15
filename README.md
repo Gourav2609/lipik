@@ -111,9 +111,12 @@ connects to the internet for:
   Privacy → Updates turns it off)
 - every 3 hours, once you leave the box on setup's first screen ticked, an
   anonymous usage count to lipik.pages.dev: a random install ID, the app
-  version, the macOS version, the chip type and how far setup got, so we
-  know how many people use Lipik and whether setup works (Settings →
-  Privacy → Usage count turns it off). The
+  version, the macOS version, the chip type and how far setup got; from
+  0.1.17 also how much you use it (counts of dictations, words, meetings
+  and meeting minutes) and five settings (speech model, speech engine,
+  language, clean-up, and whether meeting notes are on), so we know how
+  many people use Lipik, how, and whether setup works (Settings →
+  Privacy → Usage count turns it off). Never your voice or text. The
   server notes the country and does not keep the IP address. The code is
   [src-tauri/src/usage_ping.rs](src-tauri/src/usage_ping.rs) and
   [website/worker.js](website/worker.js).

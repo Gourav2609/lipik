@@ -949,6 +949,12 @@ impl NotetakerManager {
         self.emit_state(Some(id.clone()));
         log::info!("Notetaker stopped meeting {id}");
         if process {
+            crate::usage_ping::count_meeting(
+                &self.app,
+                session.started.elapsed().as_millis() as i64,
+            );
+        }
+        if process {
             self.process_in_background(id.clone(), true)?;
         } else {
             transcribe::release_model(&self.app);

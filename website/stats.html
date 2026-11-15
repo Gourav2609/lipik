@@ -302,6 +302,28 @@
         </thead>
         <tbody id="install-rows"></tbody>
       </table>
+      <table hidden id="use-table">
+        <thead>
+          <tr>
+            <th>Install</th>
+            <th class="n">Dictations</th>
+            <th class="n">Last 7 days</th>
+            <th class="n">Words</th>
+            <th class="n">Meetings</th>
+            <th class="n">Meeting minutes</th>
+            <th>Speech model</th>
+            <th>Engine</th>
+            <th>Language</th>
+            <th>Clean-up</th>
+            <th>Meeting notes</th>
+          </tr>
+        </thead>
+        <tbody id="use-rows"></tbody>
+      </table>
+      <p class="note" hidden id="use-note">
+        Counts start when an install updates to 0.1.17 and its user has seen the
+        note about them. A dash means nothing was sent yet.
+      </p>
       <table hidden id="email-table">
         <thead>
           <tr>
@@ -341,14 +363,15 @@
       <p class="note">
         Installs and active people come from the app's anonymous count, sent
         every 3 hours (a random ID, the version, the macOS version, the chip
-        type and how far setup got; people can turn it off in Settings →
-        Privacy), so they only include versions 0.1.5 and later. Days are India
-        time. Downloads count the .dmg from GitHub Releases, which includes
-        Terminal installs; updates count one-click updates from inside the app.
-        Website downloads count clicks on the .dmg links and copies of the
-        install command on this site (the page and the day only). Website visits
-        are in the Cloudflare dashboard under Web Analytics. This page isn't
-        linked from the site and asks search engines not to list it.
+        type and how far setup got, and from 0.1.17 counts of use and five
+        settings; people can turn it off in Settings → Privacy), so they only
+        include versions 0.1.5 and later. Days are India time. Downloads count
+        the .dmg from GitHub Releases, which includes Terminal installs; updates
+        count one-click updates from inside the app. Website downloads count
+        clicks on the .dmg links and copies of the install command on this site
+        (the page and the day only). Website visits are in the Cloudflare
+        dashboard under Web Analytics. This page isn't linked from the site and
+        asks search engines not to list it.
       </p>
     </main>
     <script>
@@ -477,6 +500,16 @@
               )
               .join("");
             $("install-table").hidden = false;
+            const num = (n) => (n == null ? "–" : fmt(n));
+            const word = (t) => esc(t ?? "–");
+            $("use-rows").innerHTML = d.installs
+              .map(
+                (i) =>
+                  `<tr><td>${esc(i.id.slice(0, 8))}</td><td class="n">${num(i.dictations)}</td><td class="n">${num(i.dictations7)}</td><td class="n">${num(i.words)}</td><td class="n">${num(i.meetings)}</td><td class="n">${num(i.meeting_minutes)}</td><td>${word(i.model?.split("/").pop())}</td><td>${word(i.engine)}</td><td>${word(i.language)}</td><td>${i.engine == null ? "–" : word(i.cleanup ?? "off")}</td><td>${i.meeting_notes == null ? "–" : i.meeting_notes ? "on" : "off"}</td></tr>`,
+              )
+              .join("");
+            $("use-table").hidden = false;
+            $("use-note").hidden = false;
           })
           .catch(() => {});
       const showPrivate = (key) => {

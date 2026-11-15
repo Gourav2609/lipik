@@ -122,7 +122,7 @@ export default function Privacy() {
           />
           <SettingRow
             title="Usage count"
-            description={`Every few hours ${APP_NAME} sends a random ID, the app version, the macOS version, the chip type, the country (worked out from the connection; the address itself isn't kept) and how far setup got, so we know how many people use it and whether setup works. Never your voice, text or name.`}
+            description={`Every few hours ${APP_NAME} sends a random ID, the app version, the macOS version, the chip type, the country (worked out from the connection; the address itself isn't kept), how far setup got, how much you use it (counts of dictations, words, meetings and meeting minutes) and five settings (speech model, speech engine, language, clean-up, and whether meeting notes are on), so we know how many people use it, how, and whether setup works. Never your voice, text or name.`}
             control={
               <Toggle
                 label="Usage count"

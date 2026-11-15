@@ -880,6 +880,7 @@ pub fn record_meta(
             replacements,
             sample_count,
         );
+        crate::usage_ping::count_dictation(&app, meta.words);
         let history = app.state::<std::sync::Arc<crate::managers::history::HistoryManager>>();
         if let Err(e) = history.set_entry_meta(id, &meta) {
             log::error!("Failed to save dictation stats: {e}");

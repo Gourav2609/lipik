@@ -1,7 +1,7 @@
 // lipik-site: the usage counts and the installer. The site itself lives on
 // lipik.pages.dev, whose /api/* and /install.sh come here through a service
 // binding. Every other request (the old lipik.refflux.dev pages) is sent there.
-// /api/ping   POST {id, version, os, arch, step}  every 3 hours from the app
+// /api/ping   POST {id, version, os, arch, step, use?, picks?}  every 3 hours from the app
 // /api/email  POST {email, updates}         from the setup step
 // /api/event  POST {kind, page}             website .dmg clicks and install-command copies
 // /api/stats  GET                           counts for /stats (no emails)
@@ -17,6 +17,15 @@ const ARCH = new Set(["arm64", "x86_64"]);
 // Setup steps in order; installs.step stores the position (0 = not sent).
 const STEPS = ["installed", "permissions", "model_ready", "first_dictation"];
 const EMAIL = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/;
+// What 0.1.17 and later add to the ping: counts and the names of settings.
+const MODEL = /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,159}$/;
+const LANGUAGE = /^[A-Za-z-]{2,12}$/;
+const ENGINES = new Set(["auto", "parakeet", "apple"]);
+const CLEANUPS = new Set(["builtin", "ollama"]);
+const count = (n) => (Number.isInteger(n) && n >= 0 && n <= 1e9 ? n : null);
+const oneOf = (set, v) => (set.has(v) ? v : null);
+const shaped = (pattern, v) =>
+  typeof v === "string" && pattern.test(v) ? v : null;
 const EVENT_KINDS = new Set(["dmg_click", "curl_copy"]);
 // The site's pages, as in sitemap.xml.
 const PAGES = new Set([
@@ -120,15 +129,55 @@ async function ping(request, env) {
     return json({ ok: true });
   }
   const country = String(request.cf?.country || "").slice(0, 2) || "??";
+  // Anything missing or misshapen is stored as "not sent" and leaves the
+  // last value in place. Clean-up has no value when it is off, so it follows
+  // whether the settings came at all (the engine is always among them).
+  const use = b.use && typeof b.use === "object" ? b.use : {};
+  const picks = b.picks && typeof b.picks === "object" ? b.picks : {};
+  const counts = [
+    count(use.dictations),
+    count(use.words),
+    count(use.meetings),
+    count(use.meeting_minutes),
+  ];
+  const notes =
+    typeof picks.meeting_notes === "boolean" ? +picks.meeting_notes : null;
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO installs (id, first_day, last_day, version, os, arch, country, last_seen, step)
-       VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-       ON CONFLICT (id) DO UPDATE SET last_day = ?2, version = ?3, os = ?4, arch = ?5, country = ?6, last_seen = ?7, step = MAX(step, ?8)`,
-    ).bind(b.id, day, b.version, b.os, b.arch, country, Date.now(), step),
+      `INSERT INTO installs (id, first_day, last_day, version, os, arch, country, last_seen, step,
+                             dictations, words, meetings, meeting_minutes,
+                             model, engine, language, cleanup, meeting_notes)
+       VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+       ON CONFLICT (id) DO UPDATE SET last_day = ?2, version = ?3, os = ?4, arch = ?5, country = ?6, last_seen = ?7, step = MAX(step, ?8),
+         dictations = COALESCE(?9, dictations), words = COALESCE(?10, words),
+         meetings = COALESCE(?11, meetings), meeting_minutes = COALESCE(?12, meeting_minutes),
+         model = COALESCE(?13, model), engine = COALESCE(?14, engine),
+         language = COALESCE(?15, language),
+         cleanup = CASE WHEN ?14 IS NULL THEN cleanup ELSE ?16 END,
+         meeting_notes = COALESCE(?17, meeting_notes)`,
+    ).bind(
+      b.id,
+      day,
+      b.version,
+      b.os,
+      b.arch,
+      country,
+      Date.now(),
+      step,
+      ...counts,
+      shaped(MODEL, picks.model),
+      oneOf(ENGINES, picks.engine),
+      shaped(LANGUAGE, picks.language),
+      oneOf(CLEANUPS, picks.cleanup),
+      notes,
+    ),
     env.DB.prepare(
-      "INSERT OR IGNORE INTO active_days (day, id, version) VALUES (?1, ?2, ?3)",
-    ).bind(day, b.id, b.version),
+      `INSERT INTO active_days (day, id, version, dictations, words, meetings, meeting_minutes)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+       ON CONFLICT (day, id) DO UPDATE SET
+         dictations = COALESCE(?4, dictations), words = COALESCE(?5, words),
+         meetings = COALESCE(?6, meetings), meeting_minutes = COALESCE(?7, meeting_minutes)`,
+    ).bind(day, b.id, b.version, ...counts),
   ]);
   return json({ ok: true });
 }
@@ -325,6 +374,12 @@ async function adminInstalls(request, env) {
   const rows = await env.DB.prepare(
     `SELECT i.id, i.first_day, i.last_day, i.last_seen, i.version, i.os, i.arch,
             i.country, i.step,
+            i.dictations, i.words, i.meetings, i.meeting_minutes,
+            i.model, i.engine, i.language, i.cleanup, i.meeting_notes,
+            i.dictations - COALESCE(
+              (SELECT a.dictations FROM active_days a
+                WHERE a.id = i.id AND a.day <= ?1 AND a.dictations IS NOT NULL
+                ORDER BY a.day DESC LIMIT 1), 0) AS dictations7,
             (SELECT COUNT(*) FROM active_days a WHERE a.id = i.id) AS days,
             (SELECT COUNT(*) FROM active_days a
               WHERE a.id = i.id AND a.day > ?1) AS days7,
