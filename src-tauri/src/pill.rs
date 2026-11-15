@@ -346,6 +346,12 @@ mod ax {
     #[link(name = "ApplicationServices", kind = "framework")]
     unsafe extern "C" {
         fn AXUIElementCreateSystemWide() -> CfTypeRef;
+        fn AXUIElementCreateApplication(pid: i32) -> CfTypeRef;
+        fn AXUIElementIsAttributeSettable(
+            element: CfTypeRef,
+            attribute: CfTypeRef,
+            settable: *mut u8,
+        ) -> AxError;
         fn AXUIElementSetAttributeValue(
             element: CfTypeRef,
             attribute: CfTypeRef,
@@ -376,12 +382,30 @@ mod ax {
         length: isize,
     }
 
+    /// The app with keyboard focus. In front of some apps (seen with Electron
+    /// ones) the system-wide element answers "cannot complete"; the front app
+    /// is then asked itself.
     fn focused_app() -> Option<Cf> {
         // SAFETY: returns a +1 reference, released by Cf.
         let system = Cf(unsafe { AXUIElementCreateSystemWide() });
         // SAFETY: system is a live AXUIElement.
         unsafe { AXUIElementSetMessagingTimeout(system.0, 0.5) };
-        copy(&system, "AXFocusedApplication").ok()
+        let error = match copy(&system, "AXFocusedApplication") {
+            Ok(app) => return Some(app),
+            Err(error) => error,
+        };
+        let pid = objc2_app_kit::NSWorkspace::sharedWorkspace()
+            .frontmostApplication()?
+            .processIdentifier();
+        log::debug!("focus check: AX error {error} for the focused app; asking the front app");
+        // SAFETY: returns a +1 reference, released by Cf.
+        let app = Cf(unsafe { AXUIElementCreateApplication(pid) });
+        if app.0.is_null() {
+            return None;
+        }
+        // SAFETY: app is a live AXUIElement.
+        unsafe { AXUIElementSetMessagingTimeout(app.0, 0.5) };
+        Some(app)
     }
 
     pub fn char_before_caret() -> Option<Option<char>> {
@@ -438,20 +462,22 @@ mod ax {
     /// Some(true) when the focused element takes text, Some(false) when focus is
     /// clearly on something else, None when Accessibility gives no clear answer.
     pub fn focused_element_is_editable() -> Option<bool> {
-        // SAFETY: returns a +1 reference, released by Cf.
-        let system = Cf(unsafe { AXUIElementCreateSystemWide() });
-        // SAFETY: system is a live AXUIElement.
-        unsafe { AXUIElementSetMessagingTimeout(system.0, 0.5) };
-        let app = copy(&system, "AXFocusedApplication").ok()?;
+        let Some(app) = focused_app() else {
+            log::debug!("focus check: no focused app -> paste");
+            return None;
+        };
+        // Chromium and Electron apps build their accessibility tree only once
+        // asked to.
+        let build_tree = || {
+            let name = cf_string("AXManualAccessibility");
+            // SAFETY: app and name are live; kCFBooleanTrue is a CF constant.
+            unsafe { AXUIElementSetAttributeValue(app.0, name.0, kCFBooleanTrue) };
+            std::thread::sleep(Duration::from_millis(100));
+        };
         let focused = match copy(&app, "AXFocusedUIElement") {
             Ok(focused) => focused,
             Err(AX_ERROR_NO_VALUE) => {
-                // Chromium and Electron apps build their accessibility tree
-                // only once asked to.
-                let name = cf_string("AXManualAccessibility");
-                // SAFETY: app and name are live; kCFBooleanTrue is a CF constant.
-                unsafe { AXUIElementSetAttributeValue(app.0, name.0, kCFBooleanTrue) };
-                std::thread::sleep(Duration::from_millis(100));
+                build_tree();
                 match copy(&app, "AXFocusedUIElement") {
                     Ok(focused) => focused,
                     Err(AX_ERROR_NO_VALUE) => {
@@ -469,20 +495,89 @@ mod ax {
                 return None;
             }
         };
-        if copy(&focused, "AXEditableAncestor").is_ok() {
-            return Some(true);
+        match takes_text(&focused) {
+            Text::Yes => Some(true),
+            Text::No => Some(false),
+            Text::Unknown => None,
+            Text::NotInWebPage => {
+                // A half-built tree reports a plain group for a real text box.
+                build_tree();
+                let again = copy(&app, "AXFocusedUIElement").map(|focused| takes_text(&focused));
+                match again {
+                    Ok(Text::Yes) => Some(true),
+                    Ok(Text::Unknown) => None,
+                    _ => Some(false),
+                }
+            }
         }
-        let role = copy(&focused, "AXRole")
-            .ok()
-            .and_then(|role| string(&role))?;
-        let editable = if EDITABLE_ROLES.contains(&role.as_str()) {
-            Some(true)
-        } else if NON_TEXT_ROLES.contains(&role.as_str()) {
-            Some(false)
-        } else {
-            None
+    }
+
+    enum Text {
+        Yes,
+        No,
+        /// A plain element of web content (a browser page, an Electron app)
+        /// that is not inside a text box and holds no text of its own.
+        NotInWebPage,
+        Unknown,
+    }
+
+    fn takes_text(focused: &Cf) -> Text {
+        // Web content knows this attribute everywhere and has a value for it
+        // only inside a text box; AppKit views do not know it.
+        let ancestor = copy(focused, "AXEditableAncestor");
+        if ancestor.is_ok() {
+            return Text::Yes;
+        }
+        let Some(role) = copy(focused, "AXRole").ok().and_then(|role| string(&role)) else {
+            log::debug!("focus check: no role -> paste");
+            return Text::Unknown;
         };
-        log::debug!("focus check: role {role} -> {editable:?}");
-        editable
+        let (text, verdict) = if EDITABLE_ROLES.contains(&role.as_str()) {
+            (Text::Yes, "paste")
+        } else if NON_TEXT_ROLES.contains(&role.as_str()) {
+            (Text::No, "popup")
+        } else if matches!(ancestor, Err(AX_ERROR_NO_VALUE)) && !holds_text(focused) {
+            (Text::NotInWebPage, "web content outside a text box")
+        } else {
+            (Text::Unknown, "paste")
+        };
+        log::debug!("focus check: role {role} -> {verdict}");
+        text
+    }
+
+    /// Whether the element's value can be set, as a text view under a plain
+    /// role (a terminal, a canvas editor) allows. A selection range says
+    /// nothing: web content reports one for every element.
+    fn holds_text(element: &Cf) -> bool {
+        let name = cf_string("AXValue");
+        let mut settable = 0u8;
+        // SAFETY: element and name are live; settable receives a Boolean.
+        let error = unsafe { AXUIElementIsAttributeSettable(element.0, name.0, &mut settable) };
+        error == 0 && settable != 0
+    }
+
+    /// Prints, by hand, what the focus check says about whatever has focus,
+    /// every half second for LIPIK_FOCUS_SECONDS (default 30): cargo test
+    /// --lib focus_check_live -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn focus_check_live() {
+        let seconds: u64 = std::env::var("LIPIK_FOCUS_SECONDS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(30);
+        let mut last = None;
+        for _ in 0..seconds * 2 {
+            let front = objc2_app_kit::NSWorkspace::sharedWorkspace()
+                .frontmostApplication()
+                .and_then(|app| app.localizedName())
+                .map(|name| name.to_string());
+            let now = Some((front, focused_element_is_editable()));
+            if now != last {
+                println!("FOCUS {now:?}");
+                last = now;
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
     }
 }

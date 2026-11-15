@@ -457,7 +457,10 @@ pub fn piece_segment(
 /// fraction of the file done. With `speakers`, pieces also end where the
 /// speaker changes and each line is labelled with its speaker. With
 /// `hinglish` (Qwen3-ASR), pieces are shorter and go to it instead of the
-/// dictation model. Also returns how much speech the pieces held, in ms.
+/// dictation model. A piece `skip` says yes to (it gets the piece's span
+/// and speaker, no text) is left out unheard. Also returns how much speech
+/// the pieces held, in ms.
+#[allow(clippy::too_many_arguments)]
 pub fn transcribe_file(
     app: &AppHandle,
     path: &Path,
@@ -465,6 +468,7 @@ pub fn transcribe_file(
     source: &str,
     speakers: Option<&Speakers>,
     hinglish: Option<&SideEngine>,
+    mut skip: impl FnMut(&Segment) -> bool,
     mut progress: impl FnMut(f32),
 ) -> Result<(Vec<Segment>, i64)> {
     let rules = match hinglish {
@@ -492,6 +496,16 @@ pub fn transcribe_file(
         read += block.len();
         track.push(&block);
         while let Some(piece) = track.take(rules, done) {
+            if skip(&piece_segment(
+                &piece,
+                offset_ms,
+                source,
+                String::new(),
+                speakers,
+            )) {
+                progress(read as f32 / total);
+                continue;
+            }
             speech += piece.speech_samples;
             let text = match hinglish {
                 Some(side) => transcribe_side(app, side, piece.audio.clone()).unwrap_or_else(|e| {

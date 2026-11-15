@@ -6,6 +6,7 @@
 // /api/event  POST {kind, page}             website .dmg clicks and install-command copies
 // /api/stats  GET                           counts for /stats (no emails)
 // /api/admin/emails  GET, Authorization: Bearer ADMIN_KEY
+// /api/admin/installs GET, same key: one row per install, for the owner only
 // /install.sh is counted, then served from the static files.
 
 const UUID =
@@ -308,13 +309,42 @@ async function stats(env) {
   });
 }
 
-async function adminEmails(request, env) {
+function isAdmin(request, env) {
   const key = (request.headers.get("authorization") || "").replace(
     /^Bearer /,
     "",
   );
-  if (!env.ADMIN_KEY || key.length < 32 || key !== env.ADMIN_KEY.trim())
-    return json({ ok: false }, 401);
+  return !!env.ADMIN_KEY && key.length >= 32 && key === env.ADMIN_KEY.trim();
+}
+
+// Each install on its own: what it runs, when it was seen and on how many
+// days, and the email typed in setup, if any.
+async function adminInstalls(request, env) {
+  if (!isAdmin(request, env)) return json({ ok: false }, 401);
+  const now = Date.now();
+  const rows = await env.DB.prepare(
+    `SELECT i.id, i.first_day, i.last_day, i.last_seen, i.version, i.os, i.arch,
+            i.country, i.step,
+            (SELECT COUNT(*) FROM active_days a WHERE a.id = i.id) AS days,
+            (SELECT COUNT(*) FROM active_days a
+              WHERE a.id = i.id AND a.day > ?1) AS days7,
+            (SELECT e.email FROM emails e
+              WHERE e.install_id = i.id LIMIT 1) AS email
+     FROM installs i ORDER BY i.last_seen DESC`,
+  )
+    .bind(dayOf(now - 7 * 86400_000))
+    .all();
+  return json({
+    today: dayOf(now),
+    installs: rows.results.map((r) => ({
+      ...r,
+      step: STEPS[r.step - 1] ?? null,
+    })),
+  });
+}
+
+async function adminEmails(request, env) {
+  if (!isAdmin(request, env)) return json({ ok: false }, 401);
   const rows = await env.DB.prepare(
     "SELECT email, updates, first_day, last_day FROM emails ORDER BY first_day DESC",
   ).all();
@@ -336,6 +366,8 @@ export default {
         return await stats(env);
       if (pathname === "/api/admin/emails" && method === "GET")
         return await adminEmails(request, env);
+      if (pathname === "/api/admin/installs" && method === "GET")
+        return await adminInstalls(request, env);
       if (pathname.startsWith("/api/")) return json({ ok: false }, 404);
     } catch (e) {
       console.error(e);

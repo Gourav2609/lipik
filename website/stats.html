@@ -272,7 +272,10 @@
         </thead>
         <tbody id="u-site"></tbody>
       </table>
-      <h2>Emails</h2>
+      <h2>Private</h2>
+      <p class="note">
+        Each install on its own and the emails. Only the admin key opens this.
+      </p>
       <div class="admin">
         <input
           id="key"
@@ -280,8 +283,25 @@
           placeholder="Admin key"
           autocomplete="off"
         />
-        <button id="show" type="button">Show emails</button>
+        <button id="show" type="button">Show</button>
       </div>
+      <table hidden id="install-table">
+        <thead>
+          <tr>
+            <th>Install</th>
+            <th>Country</th>
+            <th>Version</th>
+            <th>macOS</th>
+            <th>First seen</th>
+            <th>Last seen</th>
+            <th class="n">Days used</th>
+            <th class="n">Of the last 7</th>
+            <th>Setup reached</th>
+            <th>Email</th>
+          </tr>
+        </thead>
+        <tbody id="install-rows"></tbody>
+      </table>
       <table hidden id="email-table">
         <thead>
           <tr>
@@ -438,12 +458,37 @@
           .catch(() => {
             $("email-note").textContent = "That key didn't work.";
           });
+      const ago = (ms) => {
+        const hours = (Date.now() - ms) / 3600_000;
+        if (hours < 1) return "under an hour ago";
+        if (hours < 48) return `${Math.round(hours)} h ago`;
+        return `${Math.round(hours / 24)} days ago`;
+      };
+      const showInstalls = (key) =>
+        fetch("/api/admin/installs", {
+          headers: { authorization: `Bearer ${key}` },
+        })
+          .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+          .then((d) => {
+            $("install-rows").innerHTML = d.installs
+              .map(
+                (i) =>
+                  `<tr><td>${esc(i.id.slice(0, 8))}</td><td>${esc(i.country)}</td><td>${esc(i.version)}</td><td>${esc(i.os)} ${esc(i.arch)}</td><td>${esc(i.first_day)}</td><td>${esc(ago(i.last_seen))}</td><td class="n">${fmt(i.days)}</td><td class="n">${fmt(i.days7)}</td><td>${esc((i.step ?? "–").replace("_", " "))}</td><td>${esc(i.email ?? "–")}</td></tr>`,
+              )
+              .join("");
+            $("install-table").hidden = false;
+          })
+          .catch(() => {});
+      const showPrivate = (key) => {
+        showEmails(key);
+        showInstalls(key);
+      };
       $("show").addEventListener("click", () =>
-        showEmails($("key").value.trim()),
+        showPrivate($("key").value.trim()),
       );
       try {
         const saved = sessionStorage.getItem("lipik-admin");
-        if (saved) showEmails(saved);
+        if (saved) showPrivate(saved);
       } catch {}
       // Asked from the visitor's browser: GitHub allows 60 unsigned requests an
       // hour per address, and the Worker's addresses are shared with other sites.

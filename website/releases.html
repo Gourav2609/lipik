@@ -47,8 +47,8 @@
         "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS (Apple silicon, M1 or later)",
-        "softwareVersion": "0.1.15",
-        "dateModified": "2026-11-13",
+        "softwareVersion": "0.1.16",
+        "dateModified": "2026-11-15",
         "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
         "url": "https://lipik.pages.dev/",
         "releaseNotes": "https://lipik.pages.dev/releases",
@@ -128,7 +128,7 @@
           <p class="rel-sub">
             What changed in each version of Lipik. The newest is at the top.
           </p>
-          <p class="rel-sub">Latest: 0.1.15, 13 Nov 2026.</p>
+          <p class="rel-sub">Latest: 0.1.16, 15 Nov 2026.</p>
           <p class="rel-sub">
             To install or update, paste this into Terminal and press Return. It
             keeps your settings, history and permissions:
@@ -149,6 +149,57 @@
         </div>
       </section>
       <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.16">
+          <header class="rel-head">
+            <h2>Lipik 0.1.16</h2>
+            <p class="rel-meta">
+              <time datetime="2026-11-15">15 November 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.16"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Cleaner meeting transcripts, speaker names that carry over between
+              meetings, and the copy card is back.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Meeting transcripts without the echo.</strong> On calls
+                without headphones, your microphone also hears the call from the
+                speakers. Lipik was writing that leftover sound down as nonsense
+                lines from you. Those lines are now left out, and long meetings
+                finish processing sooner.
+              </li>
+              <li>
+                <strong>Lipik remembers who is who.</strong> When Lipik works
+                out a speaker&#x27;s name in one meeting, it keeps that voice
+                and names the same person in later meetings they are invited to.
+                Hearing someone handed the floor once is now enough when the
+                voice also matches.
+              </li>
+              <li>
+                <strong>Check the names with one click.</strong> Above a
+                transcript, each name Lipik gave on its own has a tick and a
+                cross. The tick keeps the name for every later meeting; the
+                cross puts the speaker back to a number.
+              </li>
+              <li>
+                <strong>Names even when notes fail.</strong> Speakers are now
+                named before the notes are written, so the notes use the names,
+                and a meeting whose notes fail still gets them.
+              </li>
+              <li>
+                <strong>The copy card is back.</strong> When you dictate with no
+                text box in focus, Lipik shows the text with a copy button again
+                instead of pasting it nowhere. This had stopped working in front
+                of some apps.
+              </li>
+            </ul>
+          </div>
+        </article>
         <article class="rel" id="v0.1.15">
           <header class="rel-head">
             <h2>Lipik 0.1.15</h2>

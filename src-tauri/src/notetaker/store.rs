@@ -88,6 +88,19 @@ static MIGRATIONS: &[M] = &[
         updated_ms INTEGER NOT NULL
     );",
     ),
+    // named = 2: Lipik gave the voice its name. Voices it named before it
+    // kept track are the ones off their default label that the user never
+    // named; an email is not a name.
+    M::up(
+        "UPDATE meeting_voices SET named = 2
+     WHERE named = 0 AND speaker_key LIKE 's%' AND EXISTS (
+        SELECT 1 FROM segments s
+        WHERE s.meeting_id = meeting_voices.meeting_id
+          AND s.speaker_key = meeting_voices.speaker_key
+          AND s.speaker NOT GLOB 'Speaker [0-9]*'
+          AND s.speaker NOT LIKE '%@%'
+          AND lower(s.speaker) NOT IN ('me', 'them'));",
+    ),
 ];
 
 /// Segments read by a store that skipped the migrations (the AI tools server
@@ -304,12 +317,35 @@ impl Store {
         let Some(meeting) = self.meeting(id)? else {
             return Ok(None);
         };
+        let segments = self.segments(id)?;
         Ok(Some(MeetingDetail {
-            segments: self.segments(id)?,
+            guessed_speakers: self.guessed_speakers(id, &segments).unwrap_or_default(),
+            segments,
             thoughts: self.thoughts(id)?,
             summary: self.summary(id)?,
             meeting,
         }))
+    }
+
+    /// The voices of a meeting that carry a name the user did not give.
+    fn guessed_speakers(&self, id: &str, segments: &[Segment]) -> Result<Vec<String>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT speaker_key FROM meeting_voices
+             WHERE meeting_id = ?1 AND named != 1 ORDER BY speaker_key",
+        )?;
+        let keys = stmt.query_map(params![id], |r| r.get::<_, String>(0))?;
+        let keys = keys.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(keys
+            .into_iter()
+            .filter(|key| {
+                segments
+                    .iter()
+                    .rev()
+                    .find(|s| &s.speaker_key == key)
+                    .is_some_and(|s| !is_default_label(&s.speaker) && !s.speaker.contains('@'))
+            })
+            .collect())
     }
 
     /// Final-pass segments when they exist, otherwise the live ones.
@@ -404,8 +440,18 @@ impl Store {
         Ok(blob.map(|b| voice_from_blob(&b)))
     }
 
-    /// Marks whether the user named this meeting voice (only those make
-    /// voice profiles).
+    /// Marks a meeting voice Lipik named from what was said in its meeting,
+    /// unless the user named it.
+    pub fn mark_voice_named_by_app(&self, meeting_id: &str, speaker_key: &str) -> Result<()> {
+        self.conn().execute(
+            "UPDATE meeting_voices SET named = 2
+             WHERE meeting_id = ?1 AND speaker_key = ?2 AND named = 0",
+            params![meeting_id, speaker_key],
+        )?;
+        Ok(())
+    }
+
+    /// Marks whether the user named this meeting voice.
     pub fn set_voice_named(&self, meeting_id: &str, speaker_key: &str, named: bool) -> Result<()> {
         self.conn().execute(
             "UPDATE meeting_voices SET named = ?3 WHERE meeting_id = ?1 AND speaker_key = ?2",
@@ -417,26 +463,32 @@ impl Store {
     /// One profile per name the user gave a voice: the average of every
     /// meeting voice they named so, under its current label. A corrected name
     /// moves the voice to the new name; a deleted meeting stops counting.
-    /// `except` leaves one meeting's voices out.
+    /// Then one per name only Lipik gave (not `confirmed`), from the voices
+    /// it named. `except` leaves one meeting's voices out.
     pub fn voice_profiles(&self, except: Option<&str>) -> Result<Vec<VoiceProfile>> {
-        let rows: Vec<(Option<String>, Vec<u8>)> = {
+        let rows: Vec<(Option<String>, Vec<u8>, bool)> = {
             let conn = self.conn();
             let mut stmt = conn.prepare(
                 "SELECT (SELECT s.speaker FROM segments s
                          WHERE s.meeting_id = v.meeting_id AND s.speaker_key = v.speaker_key
                          ORDER BY s.id DESC LIMIT 1),
-                        v.embedding
-                 FROM meeting_voices v WHERE v.named = 1 AND v.meeting_id IS NOT ?1
-                 ORDER BY v.meeting_id",
+                        v.embedding, v.named = 1
+                 FROM meeting_voices v WHERE v.named IN (1, 2) AND v.meeting_id IS NOT ?1
+                 ORDER BY v.named, v.meeting_id",
             )?;
-            let rows = stmt.query_map(params![except], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            let rows =
+                stmt.query_map(params![except], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()?
         };
-        let mut by_name: Vec<(String, Vec<f32>, usize)> = Vec::new();
-        for (label, blob) in rows {
+        let mut by_name: Vec<(String, Vec<f32>, usize, bool)> = Vec::new();
+        for (label, blob, confirmed) in rows {
             let Some(label) = label.filter(|l| !is_default_label(l)) else {
                 continue;
             };
+            let known = |n: &str| n.eq_ignore_ascii_case(&label);
+            if !confirmed && by_name.iter().any(|(n, .., c)| *c && known(n)) {
+                continue;
+            }
             let voice = voice_from_blob(&blob);
             let norm = voice.iter().map(|x| x * x).sum::<f32>().sqrt();
             if norm == 0.0 {
@@ -444,22 +496,28 @@ impl Store {
             }
             match by_name
                 .iter_mut()
-                .find(|(n, sum, _)| n.eq_ignore_ascii_case(&label) && sum.len() == voice.len())
+                .find(|(n, sum, ..)| n.eq_ignore_ascii_case(&label) && sum.len() == voice.len())
             {
-                Some((_, sum, count)) => {
+                Some((_, sum, count, _)) => {
                     for (s, x) in sum.iter_mut().zip(&voice) {
                         *s += x / norm;
                     }
                     *count += 1;
                 }
-                None => by_name.push((label, voice.iter().map(|x| x / norm).collect(), 1)),
+                None => by_name.push((
+                    label,
+                    voice.iter().map(|x| x / norm).collect(),
+                    1,
+                    confirmed,
+                )),
             }
         }
         Ok(by_name
             .into_iter()
-            .map(|(name, sum, count)| VoiceProfile {
+            .map(|(name, sum, count, confirmed)| VoiceProfile {
                 name,
                 voice: sum.into_iter().map(|x| x / count as f32).collect(),
+                confirmed,
             })
             .collect())
     }
@@ -871,6 +929,40 @@ mod tests {
             .collect();
         assert_eq!(labels, vec!["Priya", "Me", "Priya", "Speaker 2"]);
         assert!(store.rename_speaker("m1", "s9", "Nobody").is_err());
+    }
+
+    #[test]
+    fn voices_lipik_named_make_profiles_until_the_user_names_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(&dir.path().join("notetaker.db")).unwrap();
+        for (id, voice) in [("m1", vec![1.0, 0.0]), ("m2", vec![0.0, 1.0])] {
+            store.insert_meeting(&meeting(id)).unwrap();
+            store
+                .replace_final_segments(id, &[seg("s1", "Speaker 1", 0)])
+                .unwrap();
+            store
+                .save_meeting_voices(id, &[("s1".into(), voice, 60_000)])
+                .unwrap();
+            store.rename_speaker(id, "s1", "Rohan").unwrap();
+        }
+        assert!(store.voice_profiles(None).unwrap().is_empty());
+
+        store.mark_voice_named_by_app("m1", "s1").unwrap();
+        let profiles = store.voice_profiles(None).unwrap();
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(profiles[0].name, "Rohan");
+        assert!(!profiles[0].confirmed);
+        assert_eq!(profiles[0].voice, vec![1.0, 0.0]);
+        let guessed = |id: &str| store.detail(id).unwrap().unwrap().guessed_speakers;
+        assert_eq!(guessed("m1"), vec!["s1"]);
+
+        store.set_voice_named("m2", "s1", true).unwrap();
+        store.mark_voice_named_by_app("m2", "s1").unwrap();
+        let profiles = store.voice_profiles(None).unwrap();
+        assert_eq!(profiles.len(), 1, "the user's naming replaces Lipik's");
+        assert!(guessed("m2").is_empty(), "the user confirmed it");
+        assert!(profiles[0].confirmed);
+        assert_eq!(profiles[0].voice, vec![0.0, 1.0]);
     }
 
     #[test]

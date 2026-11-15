@@ -8,12 +8,14 @@ import {
 import { toast } from "sonner";
 import {
   AppWindow,
+  Check,
   ChevronLeft,
   Copy,
   Ellipsis,
   Folder as FolderIcon,
   FolderPlus,
   RefreshCw,
+  X,
 } from "lucide-react";
 import {
   commands,
@@ -180,6 +182,54 @@ const SpeakerLabel = ({
   );
 };
 
+/** The names Lipik gave speakers on its own (from the voice, or from what
+ * was said): one click keeps a name for later meetings, one takes it back. */
+const GuessedNames = ({
+  detail,
+  onChanged,
+}: {
+  detail: MeetingDetail;
+  onChanged: () => void;
+}) => {
+  const guessed = detail.guessed_speakers.flatMap((key) => {
+    const name = detail.segments.find((s) => s.speaker_key === key)?.speaker;
+    return name ? [{ key, name }] : [];
+  });
+  if (!guessed.length) return null;
+  const rename = async (key: string, name: string) => {
+    const r = await commands
+      .notetakerRenameSpeaker(detail.meeting.id, key, name)
+      .catch(() => null);
+    if (r?.status !== "ok") toast(`Couldn't save: ${r?.error ?? "try again"}`);
+    onChanged();
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-[8px] border-b border-[var(--fk-border)] py-[10px] text-[13px] leading-[20px] text-[var(--fk-text-muted)]">
+      <span>Lipik named these speakers. Are they right?</span>
+      {guessed.map(({ key, name }) => (
+        <span
+          key={key}
+          className="inline-flex items-center gap-[2px] rounded-full bg-[var(--fk-surface)] py-[2px] pl-[10px] pr-[4px] font-medium text-[var(--fk-text)]"
+        >
+          {name}
+          <IconButton
+            label={`Yes, this is ${name}`}
+            onClick={() => void rename(key, name)}
+          >
+            <Check size={14} strokeWidth={2} />
+          </IconButton>
+          <IconButton
+            label={`No, this is not ${name}`}
+            onClick={() => void rename(key, `Speaker ${key.slice(1)}`)}
+          >
+            <X size={14} strokeWidth={2} />
+          </IconButton>
+        </span>
+      ))}
+    </div>
+  );
+};
+
 const transcriptText = (segments: Segment[]) =>
   segments.map((s) => `${speakerLabel(s.speaker)}: ${s.text}`).join("\n");
 
@@ -241,6 +291,9 @@ const Transcript = ({
         </p>
       ) : (
         <div ref={list}>
+          {!live && !writing && (
+            <GuessedNames detail={detail} onChanged={onRenamed} />
+          )}
           {groupBySpeaker(segments).map((g, i) => (
             <div
               key={`${g.items[0].start_ms}-${i}`}

@@ -1898,7 +1898,12 @@ export type MeetingDetail = { meeting: Meeting; segments: Segment[];
 /**
  * The user's own notes ("My notes"), markdown.
  */
-thoughts: string; summary: NoteSummary | null }
+thoughts: string; summary: NoteSummary | null; 
+/**
+ * Keys of the speakers whose name Lipik gave from the voice or from
+ * what was said, and the user has not confirmed or changed.
+ */
+guessed_speakers: string[] }
 /**
  * `Auto` decides per meeting by listening for Hindi; see `hinglish`.
  */

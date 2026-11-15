@@ -155,6 +155,7 @@ const initial = (): MeetingDetail => {
     segments: FINAL,
     thoughts: "",
     summary: SUMMARY,
+    guessed_speakers: [],
     ...rest,
   });
   switch (mode) {
@@ -362,6 +363,7 @@ const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       segments: [],
       thoughts: "",
       summary: null,
+      guessed_speakers: [],
     };
     window.setTimeout(() => {
       emit("notetaker-state", { recording: true, meeting_id: note.meeting.id });

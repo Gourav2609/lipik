@@ -128,6 +128,8 @@ type Sample = {
   segments: Segment[];
   thoughts: string;
   summary: NoteSummary | null;
+  /** Speaker keys whose name Lipik gave; see MeetingDetail. */
+  guessed?: string[];
 };
 
 const records: Sample[] = [
@@ -165,6 +167,7 @@ const records: Sample[] = [
       ["Me", 45, "Let's look at both and come back next week with numbers."],
     ]),
     thoughts: "Check how long we really need request logs.",
+    guessed: ["s1", "s2"],
     summary: {
       title: null,
       overview:
@@ -393,6 +396,7 @@ export const handlers: Record<string, MockHandler> = {
           segments: r.segments,
           thoughts: r.thoughts,
           summary: r.summary,
+          guessed_speakers: r.guessed ?? [],
         }
       : null;
   },
@@ -416,6 +420,7 @@ export const handlers: Record<string, MockHandler> = {
     r.segments = r.segments.map((s) =>
       s.speaker_key === speakerKey ? { ...s, speaker: String(name).trim() } : s,
     );
+    r.guessed = r.guessed?.filter((key) => key !== speakerKey);
     return null;
   },
   notetaker_saved_voices: () => savedVoices,

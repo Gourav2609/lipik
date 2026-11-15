@@ -257,6 +257,9 @@ pub struct MeetingDetail {
     /// The user's own notes ("My notes"), markdown.
     pub thoughts: String,
     pub summary: Option<NoteSummary>,
+    /// Keys of the speakers whose name Lipik gave from the voice or from
+    /// what was said, and the user has not confirmed or changed.
+    pub guessed_speakers: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Type)]
@@ -1236,6 +1239,8 @@ impl NotetakerManager {
             let mut results: Vec<(&str, Vec<Segment>)> = Vec::new();
             let mut speech: Vec<(&str, i64)> = Vec::new();
             let mut failed = None;
+            let raw_mic = dir.join("mic.wav");
+            let mut echo_pieces = 0;
             for (n, (source, path, offset)) in present.iter().enumerate() {
                 let parts = present.len() as f32;
                 let scale = if hinglish.is_some() {
@@ -1262,6 +1267,21 @@ impl NotetakerManager {
                     source,
                     split,
                     hinglish.as_ref(),
+                    // Taking the call out of the mic leaves a faint rest that
+                    // the speech model still writes words for.
+                    |piece| {
+                        let echo = piece.source == "mic"
+                            && mic.echo_delay_ms.is_some_and(|delay| {
+                                transcribe::call_in_mic(
+                                    (&raw_mic, &mic.path, meeting.mic_offset_ms.unwrap_or(0)),
+                                    (&system_wav, meeting.system_offset_ms.unwrap_or(0)),
+                                    delay.round() as i64,
+                                    piece,
+                                )
+                            });
+                        echo_pieces += echo as usize;
+                        echo
+                    },
                     emit,
                 ) {
                     Ok((segments, heard_ms)) => {
@@ -1278,6 +1298,11 @@ impl NotetakerManager {
             }
             transcribe::release_model(&self.app);
             let _ = std::fs::remove_file(&cleaned_mic);
+            if echo_pieces > 0 {
+                log::info!(
+                    "Notetaker left out {echo_pieces} mic pieces of {id} that were the call heard from the speakers"
+                );
+            }
             let used_hinglish = hinglish.is_some();
             drop(hinglish);
             match failed {
@@ -1949,6 +1974,64 @@ impl NotetakerManager {
         }
     }
 
+    /// Names the speakers that the transcript (hand-overs) and the notes
+    /// model's `guesses` identify, on their lines still on a default label,
+    /// and keeps their voices under those names for later meetings. Returns
+    /// how many lines changed.
+    fn name_speakers(
+        &self,
+        id: &str,
+        meeting: &Meeting,
+        segments: &[Segment],
+        guesses: &[diarize::SpeakerGuess],
+    ) -> Result<usize> {
+        let own = self.own_names(meeting);
+        let mut keys: Vec<&str> = segments
+            .iter()
+            .map(|s| s.speaker_key.as_str())
+            .filter(|k| k.starts_with('s'))
+            .collect();
+        keys.sort_unstable();
+        keys.dedup();
+        let voices: Vec<(String, Vec<f32>)> = keys
+            .into_iter()
+            .filter_map(|k| Some((k.to_string(), self.store.meeting_voice(id, k).ok()??)))
+            .collect();
+        let profiles = self.store.voice_profiles(Some(id)).unwrap_or_default();
+        let invited = diarize::expected_names(&meeting.attendees, &profiles);
+        let hints = diarize::voice_hints(&voices, &profiles);
+        let (named, verdicts) = diarize::judge_guesses(segments, guesses, &own, &invited, &hints);
+        log::info!(
+            "Notetaker named {} speakers of {id} ({} guesses rejected): {:?}",
+            named.len(),
+            verdicts.iter().filter(|v| v.rejected.is_some()).count(),
+            named
+                .iter()
+                .map(|n| (n.key.as_str(), n.rule, n.lines.len()))
+                .collect::<Vec<_>>()
+        );
+        let mut changed = 0;
+        for n in named {
+            let default = diarize::default_label(&n.key);
+            let lines = self
+                .store
+                .name_speaker_if_default(id, &n.key, &default, &n.name)?;
+            if lines > 0 {
+                self.store.mark_voice_named_by_app(id, &n.key)?;
+            }
+            changed += lines;
+        }
+        if changed > 0 {
+            let _ = NotetakerTranscript {
+                meeting_id: id.to_string(),
+                segments: self.store.segments(id)?,
+                replace: true,
+            }
+            .emit(&self.app);
+        }
+        Ok(changed)
+    }
+
     fn write_notes(&self, id: &str) -> Result<()> {
         let meeting = self
             .store
@@ -1973,6 +2056,13 @@ impl NotetakerManager {
             );
         }
 
+        // Hand-overs need no model: the notes then use these names, and a
+        // meeting whose notes fail keeps them.
+        let segments = match self.name_speakers(id, &meeting, &segments, &[])? {
+            0 => segments,
+            _ => self.store.segments(id)?,
+        };
+
         let model = ai::Model::for_app(&self.app);
         if let Some(reason) = model.unavailable_reason() {
             return finish(SummaryStatus::Unavailable, Some(reason));
@@ -1983,33 +2073,7 @@ impl NotetakerManager {
         match ai::summarize(&model, &meeting, &thoughts, &segments) {
             Ok(_) if self.cancelled(id) => Ok(()),
             Ok((summary, guesses)) => {
-                let own = self.own_names(&meeting);
-                let invited = diarize::invitees(&meeting.attendees);
-                let (named, verdicts) = diarize::judge_guesses(&segments, &guesses, &own, &invited);
-                log::info!(
-                    "Notetaker named {} speakers of {id} ({} guesses rejected): {:?}",
-                    named.len(),
-                    verdicts.iter().filter(|v| v.rejected.is_some()).count(),
-                    named
-                        .iter()
-                        .map(|n| (n.key.as_str(), n.rule, n.lines.len()))
-                        .collect::<Vec<_>>()
-                );
-                let mut changed = 0;
-                for n in named {
-                    let default = diarize::default_label(&n.key);
-                    changed += self
-                        .store
-                        .name_speaker_if_default(id, &n.key, &default, &n.name)?;
-                }
-                if changed > 0 {
-                    let _ = NotetakerTranscript {
-                        meeting_id: id.to_string(),
-                        segments: self.store.segments(id)?,
-                        replace: true,
-                    }
-                    .emit(&self.app);
-                }
+                self.name_speakers(id, &meeting, &segments, &guesses)?;
                 if let Some(title) = &summary.title {
                     self.store.set_auto_title(id, title)?;
                 }
@@ -3119,6 +3183,7 @@ mod tests {
     /// LIPIK_TEST_DB=<copy of notetaker.db> LIPIK_TEST_MEETING=<id>
     /// LIPIK_TEST_OUT=<out.json> cargo test --lib naming_check -- --ignored
     /// --nocapture. Optional: LIPIK_TEST_OLLAMA_URL, LIPIK_TEST_OLLAMA_MODEL,
+    /// LIPIK_TEST_NO_NOTES=1 to skip the notes model (hand-overs only),
     /// LIPIK_TEST_KEEP_LABELS=1 to start from the stored labels instead of
     /// "Speaker N" plus voice and calendar naming. LIPIK_TEST_QWEN=<Qwen3-ASR
     /// gguf> with LIPIK_TEST_AUDIO=<folder with copies of mic.wav and
@@ -3138,7 +3203,10 @@ mod tests {
         let id = var("LIPIK_TEST_MEETING");
         let store = Store::open_read_only(std::path::Path::new(&var("LIPIK_TEST_DB"))).unwrap();
         let meeting = store.meeting(&id).unwrap().expect("no such meeting");
-        let invited = diarize::invitees(&meeting.attendees);
+        let invited = diarize::expected_names(
+            &meeting.attendees,
+            &store.voice_profiles(Some(&id)).unwrap(),
+        );
         let own = own_names_in(&meeting);
         let ollama = || {
             ai::Ollama::new(
@@ -3293,15 +3361,34 @@ mod tests {
             }
         }
 
-        let model = ai::Model::Ollama(ollama());
-        if let Some(reason) = model.unavailable_reason() {
-            panic!("notes model unavailable: {reason}");
-        }
-        let thoughts = store.thoughts(&id).unwrap();
         let started = Instant::now();
-        let (_, guesses) = ai::summarize(&model, &meeting, &thoughts, &segments).unwrap();
+        let guesses = if std::env::var("LIPIK_TEST_NO_NOTES").is_ok() {
+            Vec::new()
+        } else {
+            let model = ai::Model::Ollama(ollama());
+            if let Some(reason) = model.unavailable_reason() {
+                panic!("notes model unavailable: {reason}");
+            }
+            let thoughts = store.thoughts(&id).unwrap();
+            ai::summarize(&model, &meeting, &thoughts, &segments)
+                .unwrap()
+                .1
+        };
         let took = started.elapsed().as_secs_f32();
-        let (named, verdicts) = diarize::judge_guesses(&segments, &guesses, &own, &invited);
+        let mut voiced: Vec<&str> = segments
+            .iter()
+            .map(|s| s.speaker_key.as_str())
+            .filter(|k| k.starts_with('s'))
+            .collect();
+        voiced.sort_unstable();
+        voiced.dedup();
+        let voices: Vec<(String, Vec<f32>)> = voiced
+            .into_iter()
+            .filter_map(|k| Some((k.to_string(), store.meeting_voice(&id, k).unwrap()?)))
+            .collect();
+        let hints = diarize::voice_hints(&voices, &store.voice_profiles(Some(&id)).unwrap());
+        println!("NAMING voice hints: {hints:?}");
+        let (named, verdicts) = diarize::judge_guesses(&segments, &guesses, &own, &invited, &hints);
         for n in &named {
             rules.insert(
                 n.key.clone(),
@@ -3789,5 +3876,62 @@ mod tests {
                 minutes(turn_ms)
             );
         }
+    }
+    /// Says, by hand, which stored microphone lines of one meeting are the
+    /// call heard from the speakers, the way the final pass decides it.
+    /// Prints counts and seconds; LIPIK_TEST_OUT gets a line per verdict.
+    /// LIPIK_TEST_DB=<copy of notetaker.db> LIPIK_TEST_MEETING=<id>
+    /// LIPIK_TEST_AUDIO=<folder with mic.wav and system.wav>
+    /// LIPIK_TEST_OUT=<out.tsv> cargo test --lib echo_lines_check -- --ignored
+    /// --nocapture
+    #[test]
+    #[ignore]
+    fn echo_lines_check() {
+        let var = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("{k} is not set"));
+        let id = var("LIPIK_TEST_MEETING");
+        let store = Store::open_read_only(std::path::Path::new(&var("LIPIK_TEST_DB"))).unwrap();
+        let meeting = store.meeting(&id).unwrap().expect("no such meeting");
+        let dir = PathBuf::from(var("LIPIK_TEST_AUDIO"));
+        let out = var("LIPIK_TEST_OUT");
+        let cleaned = PathBuf::from(format!("{out}.wav"));
+        let mic = mic_for_transcript(&dir, &meeting, &cleaned);
+        let Some(delay) = mic.echo_delay_ms else {
+            println!("ECHO none heard in the mic");
+            return;
+        };
+        let (raw_mic, system) = (dir.join("mic.wav"), dir.join("system.wav"));
+        let mut report = String::new();
+        let (mut echo, mut kept) = ((0, 0i64), (0, 0i64));
+        for line in store.segments(&id).unwrap() {
+            if line.source != "mic" {
+                continue;
+            }
+            let is_echo = transcribe::call_in_mic(
+                (&raw_mic, &mic.path, meeting.mic_offset_ms.unwrap_or(0)),
+                (&system, meeting.system_offset_ms.unwrap_or(0)),
+                delay.round() as i64,
+                &line,
+            );
+            let tally = if is_echo { &mut echo } else { &mut kept };
+            tally.0 += 1;
+            tally.1 += line.end_ms - line.start_ms;
+            report += &format!(
+                "{}\t{}\t{}\t{}\t{}\n",
+                if is_echo { "echo" } else { "kept" },
+                line.start_ms,
+                line.end_ms,
+                line.speaker,
+                line.text
+            );
+        }
+        let _ = std::fs::remove_file(&cleaned);
+        std::fs::write(&out, report).unwrap();
+        println!(
+            "ECHO delay {delay:.0} ms; echo lines {} ({} s); kept lines {} ({} s)",
+            echo.0,
+            echo.1 / 1000,
+            kept.0,
+            kept.1 / 1000
+        );
     }
 }

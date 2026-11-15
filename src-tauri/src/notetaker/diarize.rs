@@ -28,6 +28,10 @@ const MIN_CUT_TURN_MS: i64 = 1_000;
 /// Longer call audio is not split: the whole file is held in memory and the
 /// clustering grows with the square of its length.
 const MAX_AUDIO_SECONDS: u32 = 3 * 3600;
+/// Cosine similarity at which a voice backs a single hand-over to a saved
+/// voice's name (`voice_hints`). Measured on real standups: one person across
+/// meetings 0.73-0.95, different people up to 0.65.
+const VOICE_HINT: f32 = 0.7;
 /// Cosine similarity at which a voice is taken to be a saved voice profile.
 /// Measured on real calls: one person across meetings 0.85-0.98, different
 /// voices in one call up to 0.75.
@@ -749,10 +753,12 @@ pub fn overlap_ms(start_ms: i64, end_ms: i64, turns: &[Turn]) -> i64 {
         .sum()
 }
 
-/// A saved voice: its name and average embedding.
+/// A saved voice: its name and average embedding. `confirmed`: the user gave
+/// the name; otherwise Lipik worked it out in an earlier meeting.
 pub struct VoiceProfile {
     pub name: String,
     pub voice: Vec<f32>,
+    pub confirmed: bool,
 }
 
 /// How alike the spellings of a heard word and an invited first name must be.
@@ -1107,29 +1113,43 @@ fn introduces(words: &[String], at: usize, surname: &[String]) -> bool {
     }
 }
 
+/// The saved voice `voice` sounds most like, when it reaches `least` and
+/// beats the next saved voice by `VOICE_MARGIN`: its similarity and index.
+fn best_profile(voice: &[f32], profiles: &[&VoiceProfile], least: f32) -> Option<(f32, usize)> {
+    let mut sims: Vec<(f32, usize)> = profiles
+        .iter()
+        .enumerate()
+        .map(|(p, profile)| (cosine(voice, &profile.voice), p))
+        .collect();
+    sims.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let second = sims.get(1).map_or(f32::MIN, |s| s.0);
+    sims.first()
+        .copied()
+        .filter(|&(best, _)| best >= least && best - second >= VOICE_MARGIN)
+}
+
 /// Names known before the notes are written: a saved voice first, then the
 /// calendar when exactly one other person was invited and one voice was heard
 /// (never when a room or group mailbox was invited too: more people may come).
+/// A saved voice Lipik named itself counts only for someone invited, written
+/// as invited, or when nobody was invited to check against.
 pub fn known_names(
     speakers: &Speakers,
     profiles: &[VoiceProfile],
     attendees: &[Attendee],
 ) -> HashMap<usize, String> {
+    let invited = invitees(attendees);
+    let as_invited = |name: &str| invited.iter().find(|i| same_person(i, name));
+    let profiles: Vec<&VoiceProfile> = profiles
+        .iter()
+        .filter(|p| p.confirmed || invited.is_empty() || as_invited(&p.name).is_some())
+        .collect();
     let mut names: HashMap<usize, String> = HashMap::new();
     let mut matches: Vec<(f32, usize, usize)> = Vec::new();
     for (i, v) in speakers.voices.iter().enumerate() {
         let Some(v) = v else { continue };
-        let mut sims: Vec<(f32, usize)> = profiles
-            .iter()
-            .enumerate()
-            .map(|(p, profile)| (cosine(v, &profile.voice), p))
-            .collect();
-        sims.sort_by(|a, b| b.0.total_cmp(&a.0));
-        let second = sims.get(1).map_or(f32::MIN, |s| s.0);
-        if let Some(&(best, p)) = sims.first() {
-            if best >= VOICE_MATCH && best - second >= VOICE_MARGIN {
-                matches.push((best, i, p));
-            }
+        if let Some((best, p)) = best_profile(v, &profiles, VOICE_MATCH) {
+            matches.push((best, i, p));
         }
     }
     matches.sort_by(|a, b| b.0.total_cmp(&a.0));
@@ -1139,10 +1159,14 @@ pub fn known_names(
             continue;
         }
         used.insert(p);
-        names.insert(i, profiles[p].name.clone());
+        let profile = profiles[p];
+        let name = match as_invited(&profile.name) {
+            Some(invited) if !profile.confirmed => invited,
+            _ => &profile.name,
+        };
+        names.insert(i, name.clone());
     }
 
-    let invited = invitees(attendees);
     let hidden = attendees
         .iter()
         .any(|a| !a.is_me && display_name(a).is_none());
@@ -1150,6 +1174,47 @@ pub fn known_names(
         names.insert(0, invited[0].clone());
     }
     names
+}
+
+/// The names to listen for in a meeting: the people invited, or, when nobody
+/// was (a call without a calendar event), the people with a saved voice.
+pub fn expected_names(attendees: &[Attendee], profiles: &[VoiceProfile]) -> Vec<String> {
+    let invited = invitees(attendees);
+    if !invited.is_empty() {
+        return invited;
+    }
+    let mut names: Vec<String> = Vec::new();
+    for p in profiles {
+        if !names.iter().any(|n| same_person(n, &p.name)) {
+            names.push(p.name.clone());
+        }
+    }
+    names
+}
+
+/// For each voice (speaker key and embedding), the saved voice it sounds
+/// most like when that is too weak to name it alone (`VOICE_HINT`): one
+/// hand-over to that name is then enough (`handed_names`). A saved voice
+/// hints at one voice only, the one most like it.
+pub fn voice_hints(
+    voices: &[(String, Vec<f32>)],
+    profiles: &[VoiceProfile],
+) -> HashMap<String, String> {
+    let profiles: Vec<&VoiceProfile> = profiles.iter().collect();
+    let mut alike: Vec<(f32, &String, usize)> = voices
+        .iter()
+        .filter_map(|(key, voice)| {
+            let (likeness, p) = best_profile(voice, &profiles, VOICE_HINT)?;
+            Some((likeness, key, p))
+        })
+        .collect();
+    alike.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut used = HashSet::new();
+    alike
+        .into_iter()
+        .filter(|&(_, _, p)| used.insert(p))
+        .map(|(_, key, p)| (key.clone(), profiles[p].name.clone()))
+        .collect()
 }
 
 /// Time step for matching the huddle window with the audio.
@@ -1642,14 +1707,17 @@ pub(super) fn hand_overs(
 }
 
 /// Names given from hand-overs alone, with no model guess: an invitee goes
-/// to voice V when at least two hand-overs to them are answered by V, at
-/// least two thirds of all their answered hand-overs are answered by V, and
-/// V answers no hand-over to anyone else. Only voices still on their default
-/// label, never a name a voice already has or the user's.
+/// to voice V when at least two hand-overs to them are answered by V (one,
+/// when V also sounds like their saved voice: `voice_hints`), at least two
+/// thirds of all their answered hand-overs are answered by V, and V answers
+/// no hand-over to anyone else who does not have a voice already. Only
+/// voices still on their default label, never a name a voice already has or
+/// the user's.
 fn handed_names(
     segments: &[Segment],
     hand_overs: &[(usize, String, String)],
     own: &HashSet<String>,
+    voice_hints: &HashMap<String, String>,
 ) -> Vec<Naming> {
     let taken = named_labels(segments);
     let on_default = |key: &str| {
@@ -1673,10 +1741,13 @@ fn handed_names(
                 .filter(|(_, k, _)| k == key)
                 .map(|(i, ..)| *i)
                 .collect();
-            let elsewhere = hand_overs
-                .iter()
-                .any(|(_, k, n)| k == key && !same_person(n, name));
-            if lines.len() >= 2
+            let elsewhere = hand_overs.iter().any(|(_, k, n)| {
+                k == key && !same_person(n, name) && !taken.iter().any(|t| same_person(t, n))
+            });
+            let sounds_alike = voice_hints
+                .get(key.as_str())
+                .is_some_and(|hint| same_person(hint, name));
+            if (lines.len() >= 2 || sounds_alike)
                 && lines.len() * 3 >= to_name.len() * 2
                 && !elsewhere
                 && on_default(key)
@@ -1771,6 +1842,7 @@ pub fn judge_guesses(
     guesses: &[SpeakerGuess],
     own_names: &[String],
     invited: &[String],
+    voice_hints: &HashMap<String, String>,
 ) -> (Vec<Naming>, Vec<GuessVerdict>) {
     let own = own_set(own_names);
     let reserved = ["me", "them", "you", "others", "speaker", "unknown", "user"];
@@ -1917,7 +1989,7 @@ pub fn judge_guesses(
     for (_, key, name) in &hand_overs {
         handed.entry(key.clone()).or_default().push(name.clone());
     }
-    let fixed = handed_names(segments, &hand_overs, &own);
+    let fixed = handed_names(segments, &hand_overs, &own, voice_hints);
     let confused: HashSet<String> = handed
         .into_iter()
         .filter(|(_, names)| {
@@ -2341,10 +2413,12 @@ mod tests {
             VoiceProfile {
                 name: "Priya".into(),
                 voice: vec![0.98, 0.2],
+                confirmed: true,
             },
             VoiceProfile {
                 name: "Ravi".into(),
                 voice: vec![-1.0, 0.0],
+                confirmed: true,
             },
         ];
         let names = known_names(&speakers, &profiles, &[]);
@@ -2354,10 +2428,12 @@ mod tests {
             VoiceProfile {
                 name: "Asha".into(),
                 voice: vec![1.0, 0.01],
+                confirmed: true,
             },
             VoiceProfile {
                 name: "Bela".into(),
                 voice: vec![1.0, -0.01],
+                confirmed: true,
             },
         ];
         assert!(
@@ -2629,6 +2705,126 @@ mod tests {
     }
 
     #[test]
+    fn one_hand_over_is_enough_when_the_voice_sounds_like_the_name() {
+        let invited = invited(&["Mohan Rao", "Priya Nair"]);
+        let one = timed(&[
+            ("s1", "Mohan, aap bata do.", 3_000),
+            ("s4", "The export is done and the tests pass now.", 6_000),
+        ]);
+        let named = |sounds_like: &str| -> Vec<(String, String)> {
+            let hints = HashMap::from([("s4".to_string(), sounds_like.to_string())]);
+            judge_guesses(&one, &[], &[], &invited, &hints)
+                .0
+                .into_iter()
+                .map(|n| (n.key, n.name))
+                .collect()
+        };
+        assert_eq!(
+            named("Mohan"),
+            vec![("s4".to_string(), "Mohan Rao".to_string())]
+        );
+        assert!(named("Priya Nair").is_empty(), "sounds like someone else");
+    }
+
+    #[test]
+    fn a_hand_over_to_someone_who_has_a_voice_does_not_count_against_a_name() {
+        let invited = invited(&["Mohan Rao", "Priya Nair"]);
+        let mut lines = timed(&[
+            ("s1", "Mohan, aap bata do.", 3_000),
+            ("s2", "The export is done and the tests pass now.", 6_000),
+            ("s1", "Priya, your update?", 3_000),
+            ("s2", "She is away today, I will cover billing too.", 6_000),
+            ("s1", "Okay. Mohan, your update on billing?", 3_000),
+            (
+                "s2",
+                "Billing ships on Friday, nothing else from me.",
+                6_000,
+            ),
+            ("s3", "Hello, sorry, I joined late.", 3_000),
+        ]);
+        assert!(names_from_guesses(&lines, &[], &[], &invited).is_empty());
+        apply_name(&mut lines, "s3", "Priya Nair");
+        assert_eq!(
+            names_from_guesses(&lines, &[], &[], &invited),
+            vec![("s2".to_string(), "Mohan Rao".to_string())]
+        );
+    }
+
+    #[test]
+    fn a_voice_lipik_named_counts_only_for_someone_invited() {
+        let speakers = Speakers {
+            turns: Vec::new(),
+            voices: vec![Some(vec![1.0, 0.0]), Some(vec![0.0, 1.0])],
+            speech_ms: vec![60_000, 60_000],
+        };
+        let rohan = |confirmed| {
+            vec![VoiceProfile {
+                name: "Rohan".into(),
+                voice: vec![0.98, 0.2],
+                confirmed,
+            }]
+        };
+        let invite = |names: &[&str]| -> Vec<Attendee> {
+            names
+                .iter()
+                .map(|n| attendee(Some(n), None, false))
+                .collect()
+        };
+        let first = |profiles: &[VoiceProfile], attendees: &[Attendee]| {
+            known_names(&speakers, profiles, attendees).remove(&0)
+        };
+        assert_eq!(
+            first(&rohan(false), &invite(&["Rohan Mehta", "Asha Rao"])).as_deref(),
+            Some("Rohan Mehta"),
+            "written as invited"
+        );
+        assert_eq!(
+            first(&rohan(false), &invite(&["Asha Rao", "Bela Sen"])),
+            None
+        );
+        assert_eq!(first(&rohan(false), &[]).as_deref(), Some("Rohan"));
+        assert_eq!(
+            first(&rohan(true), &invite(&["Asha Rao", "Bela Sen"])).as_deref(),
+            Some("Rohan"),
+            "a name the user gave counts everywhere"
+        );
+    }
+
+    #[test]
+    fn a_voice_hint_needs_a_fair_and_clear_likeness() {
+        let profiles = vec![
+            VoiceProfile {
+                name: "Rohan".into(),
+                voice: vec![1.0, 0.0],
+                confirmed: false,
+            },
+            VoiceProfile {
+                name: "Asha".into(),
+                voice: vec![0.0, 1.0],
+                confirmed: true,
+            },
+        ];
+        let voices = vec![
+            ("s1".to_string(), vec![0.8, 0.6]),
+            ("s2".to_string(), vec![0.5, 0.5]),
+            ("s3".to_string(), vec![0.6, 0.8]),
+        ];
+        let hints = voice_hints(&voices, &profiles);
+        assert_eq!(hints.get("s1").map(String::as_str), Some("Rohan"));
+        assert_eq!(hints.get("s2"), None, "as close to both");
+        assert_eq!(hints.get("s3").map(String::as_str), Some("Asha"));
+        let far = vec![("s1".to_string(), vec![0.6, -0.8])];
+        assert!(voice_hints(&far, &profiles).is_empty());
+        let two = vec![
+            ("s1".to_string(), vec![0.8, 0.6]),
+            ("s2".to_string(), vec![0.96, 0.28]),
+        ];
+        let hints = voice_hints(&two, &profiles);
+        assert_eq!(hints.len(), 1, "one saved voice hints at one voice");
+        assert_eq!(hints.get("s2").map(String::as_str), Some("Rohan"));
+    }
+
+    #[test]
     fn a_guess_never_overrides_names_from_hand_overs() {
         let invited = invited(&["Mohan Rao", "Priya Nair"]);
         let lines = timed(&[
@@ -2847,7 +3043,7 @@ mod tests {
             vec![("s2".to_string(), "Mohan Rao".to_string())]
         );
         let guess = guess("Speaker 2", "Mohan", &[0, 2]);
-        let (named, _) = judge_guesses(&lines, &[guess], &[], &invited);
+        let (named, _) = judge_guesses(&lines, &[guess], &[], &invited, &HashMap::new());
         assert_eq!(named.len(), 1);
         assert_eq!(named[0].key, "s2");
     }
@@ -2869,7 +3065,7 @@ mod tests {
         own_names: &[String],
         invited: &[String],
     ) -> Vec<(String, String)> {
-        judge_guesses(segments, guesses, own_names, invited)
+        judge_guesses(segments, guesses, own_names, invited, &HashMap::new())
             .0
             .into_iter()
             .map(|n| (n.key, n.name))
