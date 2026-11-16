@@ -399,6 +399,18 @@ fn transcript(segments: &[Segment]) -> String {
         .join("\n\n")
 }
 
+/// The whole note as one Markdown file: the notes, then all of the
+/// transcript.
+pub fn meeting_file(d: &MeetingDetail) -> String {
+    let mut out = meeting_markdown(d, None);
+    if !d.segments.is_empty() {
+        out.push_str("\n\n## Transcript\n\n");
+        out.push_str(&transcript(&d.segments));
+    }
+    out.push('\n');
+    out
+}
+
 /// The note as Markdown, in the notes window's "Copy as Markdown" layout,
 /// with the date, attendees and link on top for the AI.
 /// `part`: which part of the transcript to add (`None`: no transcript).
@@ -557,6 +569,55 @@ mod tests {
         assert!(!last.is_empty());
         assert_eq!(transcript_part(&text, total + 1).0, "");
         assert_eq!(transcript_part("short", 1), ("short".to_string(), 1));
+    }
+
+    #[test]
+    fn a_saved_note_holds_the_notes_then_the_whole_transcript() {
+        use super::super::{MeetingStatus, NoteSummary, SummaryStatus};
+        let detail = MeetingDetail {
+            meeting: Meeting {
+                id: "20260101-100000-aaaa".into(),
+                title: "Lunch plans".into(),
+                title_auto: false,
+                start_ms: 0,
+                end_ms: Some(600_000),
+                app: None,
+                bundle_id: None,
+                calendar_event_id: None,
+                attendees: Vec::new(),
+                folder: None,
+                status: MeetingStatus::Ready,
+                summary_status: SummaryStatus::Ready,
+                summary_error: None,
+                mic_offset_ms: None,
+                system_offset_ms: None,
+                hinglish_redo: None,
+                hinglish_error: None,
+                has_audio: false,
+            },
+            segments: vec![Segment {
+                source: "mic".into(),
+                speaker: "Me".into(),
+                speaker_key: "me".into(),
+                start_ms: 0,
+                end_ms: 1_000,
+                text: "Pizza on Friday.".into(),
+            }],
+            thoughts: "Ask about the budget".into(),
+            summary: Some(NoteSummary {
+                overview: "Lunch was planned.".into(),
+                decisions: vec!["Order pizza".into()],
+                ..Default::default()
+            }),
+            guessed_speakers: Vec::new(),
+            template: None,
+        };
+        let file = meeting_file(&detail);
+        assert!(file.starts_with("# Lunch plans\n"));
+        let at = |text: &str| file.find(text).unwrap_or_else(|| panic!("no {text:?}"));
+        assert!(at("## My notes") < at("Lunch was planned."));
+        assert!(at("- Order pizza") < at("## Transcript"));
+        assert!(file.ends_with("## Transcript\n\nMe: Pizza on Friday.\n"));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import {
@@ -152,6 +153,24 @@ export const moveNote = (id: string, folder: string | null) =>
 
 export const regenerateNote = (id: string) =>
   succeeds(async () => unwrap(await commands.notetakerRegenerate(id)));
+
+/** Asks where to save, then writes the note and its transcript there. */
+export const saveNoteAsMarkdown = async (note: Note) => {
+  const name = note.title.replace(/[/\\:]/g, " ").trim() || "Meeting";
+  const path = await save({
+    defaultPath: `${name}.md`,
+    filters: [{ name: "Markdown", extensions: ["md"] }],
+  });
+  if (!path) return false;
+  return succeeds(async () =>
+    unwrap(await commands.notetakerExport(note.id, path)),
+  );
+};
+
+export const setNoteTemplate = (id: string, template: string) =>
+  succeeds(async () =>
+    unwrap(await commands.notetakerSetTemplate(id, template)),
+  );
 
 export const redoNoteInHinglish = (id: string) =>
   succeeds(async () => unwrap(await commands.notetakerRedoInHinglish(id)));

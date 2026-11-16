@@ -57,6 +57,78 @@ pub struct NotetakerSettings {
     /// Learn the user's voice from their dictation recordings, to tell them
     /// apart from other people at the same Mac.
     pub learn_own_voice: bool,
+    /// Layouts for notes: each adds its own sections to a meeting's notes.
+    pub templates: Vec<NamedText>,
+    /// The template new meetings get; `None` is the plain notes.
+    pub default_template: Option<String>,
+    /// Questions and requests kept to run on a meeting with one click.
+    pub prompts: Vec<NamedText>,
+}
+
+/// A template or a saved prompt: a name and the words given to the model.
+#[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
+pub struct NamedText {
+    pub id: String,
+    pub name: String,
+    pub text: String,
+}
+
+fn named(id: &str, name: &str, text: &str) -> NamedText {
+    NamedText {
+        id: id.to_string(),
+        name: name.to_string(),
+        text: text.to_string(),
+    }
+}
+
+fn default_templates() -> Vec<NamedText> {
+    vec![
+        named(
+            "standup",
+            "Standup",
+            "One section for each person who spoke, headed by their name: what they finished, what they are doing next, and what is blocking them.",
+        ),
+        named(
+            "one_to_one",
+            "One-to-one",
+            "Sections: Going well, Problems, Feedback given, Agreed next steps.",
+        ),
+        named(
+            "customer_call",
+            "Customer call",
+            "Sections: What the customer wants, Problems they raised, What we promised, Next steps and dates.",
+        ),
+        named(
+            "interview",
+            "Interview",
+            "Sections: Background, Strengths, Concerns, Questions the candidate asked.",
+        ),
+    ]
+}
+
+fn default_prompts() -> Vec<NamedText> {
+    vec![
+        named(
+            "follow_up",
+            "Follow-up email",
+            "Write a short follow-up email for this meeting: what was decided, and who does what by when. Plain text, ready to send.",
+        ),
+        named(
+            "my_todos",
+            "My to-dos",
+            "List only what I have to do after this meeting, with the deadline when one was said.",
+        ),
+        named(
+            "status_update",
+            "Status update",
+            "Write a status update of at most five lines about this meeting, for someone who was not there.",
+        ),
+        named(
+            "open_points",
+            "Open points",
+            "What was left unsettled or unanswered in this meeting?",
+        ),
+    ]
 }
 
 /// `Auto` decides per meeting by listening for Hindi; see `hinglish`.
@@ -81,6 +153,9 @@ impl Default for NotetakerSettings {
             language: MeetingLanguage::default(),
             meeting_window_names: false,
             learn_own_voice: true,
+            templates: default_templates(),
+            default_template: None,
+            prompts: default_prompts(),
         }
     }
 }
@@ -260,6 +335,10 @@ pub struct MeetingDetail {
     /// Keys of the speakers whose name Lipik gave from the voice or from
     /// what was said, and the user has not confirmed or changed.
     pub guessed_speakers: Vec<String>,
+    /// The id of the template the notes use: `None` follows the setting for
+    /// new meetings, and "" is the plain notes.
+    #[serde(default)]
+    pub template: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Type)]
@@ -1160,6 +1239,15 @@ impl NotetakerManager {
                 };
                 let _ = this.store.clear_process_attempts(&id);
                 this.processing.lock().unwrap().retain(|m| m != &id);
+                let notes_failed = this
+                    .store
+                    .meeting(&id)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|m| m.summary_status == SummaryStatus::Failed);
+                if notes_failed {
+                    this.retry_failed_notes(NOTES_RETRY_WAIT);
+                }
                 if wants_hinglish {
                     this.improve_with_hinglish(id);
                 }
@@ -2078,7 +2166,14 @@ impl NotetakerManager {
         let thoughts = self.store.thoughts(id)?;
         match ai::summarize(&model, &meeting, &thoughts, &segments) {
             Ok(_) if self.cancelled(id) => Ok(()),
-            Ok((summary, guesses)) => {
+            Ok((mut summary, guesses)) => {
+                if let Some(template) = self.template_text(id) {
+                    let sections = ai::template_sections(&model, &meeting, &template, &segments);
+                    if self.cancelled(id) {
+                        return Ok(());
+                    }
+                    summary.sections.splice(0..0, sections);
+                }
                 self.name_speakers(id, &meeting, &segments, &guesses)?;
                 if let Some(title) = &summary.title {
                     self.store.set_auto_title(id, title)?;
@@ -2088,6 +2183,36 @@ impl NotetakerManager {
             }
             Err(e) => finish(SummaryStatus::Failed, Some(format!("Notes failed: {e}"))),
         }
+    }
+
+    /// Saves the note (notes, the user's own notes and the transcript) as a
+    /// Markdown file at `path`.
+    pub fn export_markdown(&self, id: &str, path: &std::path::Path) -> Result<()> {
+        let detail = self
+            .get(id)?
+            .ok_or_else(|| anyhow!("No meeting with id {id}"))?;
+        std::fs::write(path, mcp::meeting_file(&detail))?;
+        Ok(())
+    }
+
+    /// What the template of meeting `id` asks for, or `None` for the plain
+    /// notes: the meeting's own choice, else the setting for new meetings.
+    fn template_text(&self, id: &str) -> Option<String> {
+        let settings = settings(&self.app);
+        let chosen = self.store.template(id).or(settings.default_template)?;
+        settings
+            .templates
+            .into_iter()
+            .find(|t| t.id == chosen)
+            .map(|t| t.text)
+            .filter(|text| !text.trim().is_empty())
+    }
+
+    /// Gives the meeting a template ("" for the plain notes) and writes its
+    /// notes again with it.
+    pub fn set_template(self: &Arc<Self>, id: &str, template: &str) -> Result<()> {
+        self.store.set_template(id, template)?;
+        self.regenerate(id)
     }
 
     /// Hides why the meeting's Hinglish redo failed.
@@ -2138,6 +2263,45 @@ impl NotetakerManager {
                 );
                 let _ = self.regenerate(&m.id);
             }
+        }
+    }
+
+    /// Writes again, one at a time, the notes that failed in the last two
+    /// weeks: a busy or sleeping Mac is the usual reason, and a later go
+    /// works. Each meeting gets `NOTES_RETRIES` of these; Regenerate is
+    /// always there after that. Waits while a meeting is being recorded.
+    pub fn retry_failed_notes(self: &Arc<Self>, after: std::time::Duration) {
+        static WAITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if WAITING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        let this = self.clone();
+        let spawned = std::thread::Builder::new()
+            .name("notetaker-notes-retry".into())
+            .spawn(move || {
+                std::thread::sleep(after);
+                WAITING.store(false, std::sync::atomic::Ordering::SeqCst);
+                let since = now_ms() - 14 * 24 * 3600 * 1000;
+                let Ok(failed) = this.store.failed_notes(since, NOTES_RETRIES) else {
+                    return;
+                };
+                for id in failed {
+                    if this.recording_meeting().is_some() {
+                        this.retry_failed_notes(NOTES_RETRY_WAIT);
+                        return;
+                    }
+                    if this.regenerate(&id).is_err() {
+                        continue;
+                    }
+                    let _ = this.store.add_notes_retry(&id);
+                    log::info!("Notetaker: writing the notes of {id} again by itself");
+                    while this.processing.lock().unwrap().contains(&id) {
+                        std::thread::sleep(std::time::Duration::from_secs(5));
+                    }
+                }
+            });
+        if spawned.is_err() {
+            WAITING.store(false, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -2378,6 +2542,18 @@ impl NotetakerManager {
                             .unwrap_or_default()
                     ));
                 }
+                // A question about one meeting (a saved prompt, say) gets all
+                // of its notes, not only what a search across meetings needs.
+                if meeting_id.is_some() {
+                    for k in &summary.key_points {
+                        text.push_str(&format!("\nKey point: {k}"));
+                    }
+                    for section in &summary.sections {
+                        for b in &section.bullets {
+                            text.push_str(&format!("\n{}: {b}", section.heading));
+                        }
+                    }
+                }
                 let score = ai::score_passage(&text, &keywords, m.start_ms, now) + summary_boost;
                 scored.push((score, passage(0, text)));
             }
@@ -2448,6 +2624,11 @@ impl NotetakerManager {
         self.store.chat_messages(thread_id)
     }
 }
+
+/// How often Lipik writes failed notes again by itself, and how long after
+/// a failure.
+const NOTES_RETRIES: i64 = 2;
+const NOTES_RETRY_WAIT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
 
 /// The mic recording with the call taken out, kept only while it is being
 /// transcribed.
@@ -2987,6 +3168,7 @@ pub fn init(app: &AppHandle) {
             app.manage(manager.clone());
             manager.resume_unfinished();
             manager.resume_hinglish_redos();
+            manager.retry_failed_notes(std::time::Duration::from_secs(120));
             detect::spawn(manager);
         }
         Err(e) => log::error!("Notetaker unavailable: {e}"),

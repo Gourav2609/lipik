@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Settings2 } from "lucide-react";
-import type { Citation } from "@/bindings";
+import { commands, type Citation, type NamedText } from "@/bindings";
 import { isFlowPreview } from "../dev/preview";
 import { useFlowStore } from "../state";
 import { Button, IconButton, PageHeader } from "../ui";
@@ -73,6 +73,17 @@ export default function Notetaker() {
   const [picked, setPicked] = useState<Selection | null>(initialSelection);
   const [view, setView] = useState<View>(initialView);
   const [history, setHistory] = useState<View[]>([]);
+  const [savedPrompts, setSavedPrompts] = useState<NamedText[]>([]);
+  const onNote = view.kind === "note";
+
+  // Read each time a note opens, so prompts edited in Settings show up.
+  useEffect(() => {
+    if (!onNote) return;
+    commands
+      .notetakerGetSettings()
+      .then((s) => setSavedPrompts(s.prompts))
+      .catch(() => {});
+  }, [onNote]);
   const asks = useRef(1);
   const [request, setRequest] = useState<AskRequest | null>(
     preview?.ask ? { question: preview.ask, n: 1 } : null,
@@ -158,6 +169,7 @@ export default function Notetaker() {
       <AskBox
         key="note"
         placeholder="Ask about this meeting"
+        saved={savedPrompts}
         onAsk={(q) =>
           ask(q, {
             kind: "chat",

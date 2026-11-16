@@ -535,6 +535,18 @@ pub fn reply_text(value: &Value, capped: bool) -> Result<String, String> {
 
 /// One chat request to a running server.
 pub async fn post_chat(conn: &Conn, body: &Value, capped: bool) -> Result<String, String> {
+    reply_text(&chat_response(conn, body).await?, capped)
+}
+
+/// One chat request whose reply may stop at the length cap: the text so
+/// far, and whether it was cut off.
+pub async fn post_chat_partial(conn: &Conn, body: &Value) -> Result<(String, bool), String> {
+    let value = chat_response(conn, body).await?;
+    let cut = value["choices"][0]["finish_reason"] == "length";
+    Ok((reply_text(&value, false)?, cut))
+}
+
+async fn chat_response(conn: &Conn, body: &Value) -> Result<Value, String> {
     let response = super::llm::CLIENT
         .post(format!("{}/v1/chat/completions", conn.url))
         .bearer_auth(&conn.key)
@@ -545,11 +557,10 @@ pub async fn post_chat(conn: &Conn, body: &Value, capped: bool) -> Result<String
     if !response.status().is_success() {
         return Err(format!("Clean-up engine returned {}", response.status()));
     }
-    let value: Value = response
+    response
         .json()
         .await
-        .map_err(|e| format!("Bad clean-up engine response: {e}"))?;
-    reply_text(&value, capped)
+        .map_err(|e| format!("Bad clean-up engine response: {e}"))
 }
 
 /// Process ids of `binary` whose parent is gone (adopted by launchd), from

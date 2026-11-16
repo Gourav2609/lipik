@@ -149,6 +149,13 @@ export default function General() {
               />
             }
           />
+          <SettingRow
+            title="Edit by voice"
+            description={
+              'Select some text, hold these keys and say what to change, like "make it shorter".'
+            }
+            control={<Shortcut id="transcribe_edit" />}
+          />
           {osType !== "linux" && (
             <SettingRow
               title="Cancel"

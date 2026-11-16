@@ -99,6 +99,13 @@ const makeSettings = (theme: "dark" | "light"): AppSettings => ({
       default_binding: "fn+space",
       current_binding: "fn+space",
     },
+    transcribe_edit: {
+      id: "transcribe_edit",
+      name: "Edit by voice",
+      description: "Changes the selected text the way you say.",
+      default_binding: "ctrl+option+space",
+      current_binding: "ctrl+option+space",
+    },
     cancel: {
       id: "cancel",
       name: "Cancel",

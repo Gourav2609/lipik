@@ -149,14 +149,53 @@ fn run(app: &AppHandle, index: u32) {
         return;
     };
 
+    let _ = rewrite_selection(
+        app,
+        &transform.name,
+        &transform_system_prompt(&transform.prompt),
+    );
+}
+
+/// What "edit by voice" is called in status messages.
+const VOICE_EDIT: &str = "Edit by voice";
+
+/// Rewrites the selected text the way `instruction` (what the user just
+/// said, like "make this shorter") asks, and pastes the result over it.
+pub fn edit_by_voice(app: &AppHandle, instruction: &str) {
+    let instruction = instruction.trim();
+    if instruction.is_empty() || BUSY.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let outcome = rewrite_selection(app, VOICE_EDIT, &voice_edit_prompt(instruction));
+    BUSY.store(false, Ordering::SeqCst);
+    // The rewrite shortcuts have no words to lose; here the user just spoke,
+    // so say why nothing changed.
+    match outcome {
+        Outcome::Done => {}
+        Outcome::NoSelection => crate::pill::emit_notice(app, "Select the text to change first"),
+        Outcome::Failed => crate::pill::emit_notice(app, "Couldn't change the text"),
+    }
+}
+
+fn voice_edit_prompt(instruction: &str) -> String {
+    transform_system_prompt(&format!(
+        "Rewrite the text the way the user asked aloud. They said: \"{instruction}\". \
+Do what they asked to the whole text, and keep its meaning and its facts."
+    ))
+}
+
+/// Copies the selection, has the local model rewrite it under
+/// `system_prompt`, and pastes the result over it. The clipboard gets its
+/// old content back.
+fn rewrite_selection(app: &AppHandle, name: &str, system_prompt: &str) -> Outcome {
     wait_for_modifiers_release();
     let clipboard = app.clipboard();
     let saved = save_clipboard(app);
     let _ = clipboard.clear();
     if let Err(e) = send_copy(app) {
         restore(app, saved);
-        emit_status(app, "error", &transform.name, Some(e));
-        return;
+        emit_status(app, "error", name, Some(e));
+        return Outcome::Failed;
     }
     let deadline = Instant::now() + Duration::from_millis(600);
     let mut selection = None;
@@ -171,15 +210,15 @@ fn run(app: &AppHandle, index: u32) {
     }
     let Some(selection) = selection else {
         restore(app, saved);
-        emit_status(app, "no_selection", &transform.name, None);
-        return;
+        emit_status(app, "no_selection", name, None);
+        return Outcome::NoSelection;
     };
 
-    emit_status(app, "running", &transform.name, None);
+    emit_status(app, "running", name, None);
     crate::utils::show_processing_overlay(app);
     let result = tauri::async_runtime::block_on(llm::chat(
         &llm::endpoint(app),
-        &transform_system_prompt(&transform.prompt),
+        system_prompt,
         &selection,
         TRANSFORM_TIMEOUT,
     ));
@@ -189,26 +228,39 @@ fn run(app: &AppHandle, index: u32) {
         Ok(out) if !out.trim().is_empty() => out,
         Ok(_) => {
             restore(app, saved);
-            emit_status(app, "error", &transform.name, Some("Empty result".into()));
-            return;
+            emit_status(app, "error", name, Some("Empty result".into()));
+            return Outcome::Failed;
         }
         Err(e) => {
             restore(app, saved);
-            emit_status(app, "error", &transform.name, Some(e));
-            return;
+            emit_status(app, "error", name, Some(e));
+            return Outcome::Failed;
         }
     };
 
     // paste() keeps whatever is on the clipboard when it starts, so put the
     // user's original clipboard back first.
     restore(app, saved.clone());
-    match crate::utils::paste(output, app.clone()) {
-        Ok(()) => emit_status(app, "done", &transform.name, None),
-        Err(e) => emit_status(app, "error", &transform.name, Some(e)),
-    }
+    let outcome = match crate::utils::paste(output, app.clone()) {
+        Ok(()) => {
+            emit_status(app, "done", name, None);
+            Outcome::Done
+        }
+        Err(e) => {
+            emit_status(app, "error", name, Some(e));
+            Outcome::Failed
+        }
+    };
     if crate::settings::get_settings(app).clipboard_handling == ClipboardHandling::DontModify {
         restore(app, saved);
     }
+    outcome
+}
+
+enum Outcome {
+    Done,
+    NoSelection,
+    Failed,
 }
 
 #[derive(Clone)]
@@ -295,4 +347,55 @@ fn wait_for_modifiers_release() {
 #[cfg(not(target_os = "macos"))]
 fn wait_for_modifiers_release() {
     std::thread::sleep(Duration::from_millis(150));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_voice_edit_prompt_carries_what_was_said() {
+        let prompt = voice_edit_prompt("make this shorter");
+        assert!(prompt.contains("They said: \"make this shorter\"."));
+        assert!(prompt.contains("The user message is the text to work on"));
+    }
+
+    /// Runs spoken instructions on sample text with the built-in model and
+    /// prints what comes back: LIPIK_TEST_GGUF=<model file> cargo test --lib
+    /// voice_edit_check -- --ignored --nocapture. Needs a llama-server next
+    /// to the test binary.
+    #[test]
+    #[ignore]
+    fn voice_edit_check() {
+        struct StopEngine;
+        impl Drop for StopEngine {
+            fn drop(&mut self) {
+                super::super::engine::ENGINE.stop();
+            }
+        }
+        let _stop = StopEngine;
+        let endpoint = llm::Endpoint {
+            url: String::new(),
+            model: "eval".to_string(),
+            builtin: Some(std::env::var("LIPIK_TEST_GGUF").unwrap().into()),
+        };
+        let text = "Hi Asha, I wanted to quickly reach out and let you know that the report \
+you asked me for last week is going to be a little bit late, probably by around two days, because \
+the numbers from the finance team came in later than we had expected them to.";
+        for said in [
+            "make this shorter",
+            "make it more formal",
+            "turn this into two bullet points",
+            "change two days to Friday",
+            "isko Hinglish mein likho",
+        ] {
+            let out = tauri::async_runtime::block_on(llm::chat(
+                &endpoint,
+                &voice_edit_prompt(said),
+                text,
+                TRANSFORM_TIMEOUT,
+            ));
+            println!("== {said}\n{out:?}\n");
+        }
+    }
 }

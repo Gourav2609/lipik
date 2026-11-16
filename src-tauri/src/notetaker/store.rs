@@ -101,6 +101,10 @@ static MIGRATIONS: &[M] = &[
           AND s.speaker NOT LIKE '%@%'
           AND lower(s.speaker) NOT IN ('me', 'them'));",
     ),
+    M::up(
+        "ALTER TABLE meetings ADD COLUMN notes_retries INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE meetings ADD COLUMN template TEXT;",
+    ),
 ];
 
 /// Segments read by a store that skipped the migrations (the AI tools server
@@ -320,6 +324,7 @@ impl Store {
         let segments = self.segments(id)?;
         Ok(Some(MeetingDetail {
             guessed_speakers: self.guessed_speakers(id, &segments).unwrap_or_default(),
+            template: self.template(id),
             segments,
             thoughts: self.thoughts(id)?,
             summary: self.summary(id)?,
@@ -669,6 +674,55 @@ impl Store {
         self.conn().execute(
             "UPDATE meetings SET title = ?2, updated_ms = ?3 WHERE id = ?1 AND title_auto = 1",
             params![id, title, now_ms()],
+        )?;
+        Ok(())
+    }
+
+    /// The id of the template the meeting's notes use: `None` follows the
+    /// setting for new meetings, and "" is the plain notes. Also `None` on a
+    /// database from before templates, opened read-only.
+    pub fn template(&self, id: &str) -> Option<String> {
+        self.conn()
+            .query_row(
+                "SELECT template FROM meetings WHERE id = ?1",
+                params![id],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .ok()
+            .flatten()
+    }
+
+    /// Sets the template the meeting's notes use ("" is the plain notes).
+    pub fn set_template(&self, id: &str, template: &str) -> Result<()> {
+        let changed = self.conn().execute(
+            "UPDATE meetings SET template = ?2, updated_ms = ?3 WHERE id = ?1",
+            params![id, template, now_ms()],
+        )?;
+        if changed == 0 {
+            return Err(anyhow!("No meeting with id {id}"));
+        }
+        Ok(())
+    }
+
+    /// Meetings since `since_ms` whose notes failed and that Lipik has tried
+    /// again by itself fewer than `most` times, oldest first.
+    pub fn failed_notes(&self, since_ms: i64, most: i64) -> Result<Vec<String>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id FROM meetings
+             WHERE status = 'ready' AND summary_status = 'failed'
+               AND start_ms >= ?1 AND notes_retries < ?2
+             ORDER BY start_ms",
+        )?;
+        let ids = stmt.query_map(params![since_ms, most], |r| r.get(0))?;
+        Ok(ids.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Counts one go at the notes that Lipik started by itself.
+    pub fn add_notes_retry(&self, id: &str) -> Result<()> {
+        self.conn().execute(
+            "UPDATE meetings SET notes_retries = notes_retries + 1 WHERE id = ?1",
+            params![id],
         )?;
         Ok(())
     }

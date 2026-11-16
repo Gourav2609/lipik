@@ -25,6 +25,9 @@ const THOUGHTS_CHARS: usize = 4_000;
 const ASK_CONTEXT_CHARS: usize = 24_000;
 /// Longest wait for one short plain-text reply.
 const TEXT_TIMEOUT: Duration = Duration::from_secs(20);
+/// Longest wait for one JSON reply (a part's notes, a merge, an answer).
+const JSON_TIMEOUT: Duration = Duration::from_secs(600);
+const TOOK_TOO_LONG: &str = "The AI model took longer than 10 minutes";
 
 /// Shown while the built-in model downloads; notes are written once it lands.
 pub const NOTES_WAIT_FOR_MODEL: &str =
@@ -112,25 +115,55 @@ impl Model {
 
     /// A JSON reply of at most `max_tokens`; a longer one is an error.
     fn chat_json(&self, system: &str, user: &str, max_tokens: u32) -> Result<Value> {
+        let reply = self.chat_reply(system, user, max_tokens)?;
+        if reply.cut {
+            bail!(engine::CUT_OFF);
+        }
+        parse_json_reply(&reply.content)
+    }
+
+    /// The text of a JSON reply, cut off or not.
+    fn chat_reply(&self, system: &str, user: &str, max_tokens: u32) -> Result<Reply> {
+        // The model answers one request at a time. Two meetings' notes at
+        // once would each count the other's minutes against its own limit.
+        static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
         let path = match self {
-            Model::Ollama(ollama) => return ollama.chat_json(system, user, max_tokens),
+            Model::Ollama(ollama) => return ollama.chat_reply(system, user, max_tokens),
             Model::Builtin { path, .. } => path,
         };
         let body = builtin_body(system, user, max_tokens);
-        let content = tauri::async_runtime::block_on(async {
+        let (content, cut) = tauri::async_runtime::block_on(async {
             let request = async {
                 let conn = ENGINE.ensure(path, CONTEXT_TOKENS).await?;
-                let reply = engine::post_chat(&conn, &body, true).await;
+                let reply = engine::post_chat_partial(&conn, &body).await;
                 ENGINE.touch();
                 reply
             };
-            tokio::time::timeout(Duration::from_secs(600), request)
+            tokio::time::timeout(JSON_TIMEOUT, request)
                 .await
-                .map_err(|_| "The AI model took longer than 10 minutes".to_string())?
+                .map_err(|_| TOOK_TOO_LONG.to_string())?
         })
         .map_err(|e| anyhow!(e))?;
-        parse_json_reply(&content)
+        let reply = Reply { content, cut };
+        #[cfg(test)]
+        tests::dump_reply(&reply);
+        Ok(reply)
     }
+
+    /// Stops the built-in engine, so the next request starts a fresh one.
+    fn restart(&self) {
+        if let Model::Builtin { .. } = self {
+            ENGINE.stop();
+        }
+    }
+}
+
+/// A model's reply to a JSON request.
+struct Reply {
+    content: String,
+    /// It stopped at the length cap, so the JSON is not closed.
+    cut: bool,
 }
 
 /// A notes request to the built-in engine: the clean-up request's settings
@@ -229,7 +262,7 @@ impl Ollama {
         Ok(without_thinking(content).to_string())
     }
 
-    fn chat_json(&self, system: &str, user: &str, max_tokens: u32) -> Result<Value> {
+    fn chat_reply(&self, system: &str, user: &str, max_tokens: u32) -> Result<Reply> {
         let body = json!({
             "model": self.model,
             "stream": false,
@@ -243,10 +276,14 @@ impl Ollama {
         });
         let url = format!("{}/api/chat", self.url);
         let response: Value = tauri::async_runtime::block_on(async {
-            let client = reqwest::Client::builder()
-                .timeout(Duration::from_secs(600))
-                .build()?;
-            let response = client.post(&url).json(&body).send().await?;
+            let client = reqwest::Client::builder().timeout(JSON_TIMEOUT).build()?;
+            let response = client.post(&url).json(&body).send().await.map_err(|e| {
+                if e.is_timeout() {
+                    anyhow!(TOOK_TOO_LONG)
+                } else {
+                    e.into()
+                }
+            })?;
             let status = response.status();
             let value: Value = response.json().await?;
             if !status.is_success() {
@@ -257,16 +294,16 @@ impl Ollama {
             }
             Ok::<Value, anyhow::Error>(value)
         })?;
-        if response["done_reason"] == "length" {
-            bail!(engine::CUT_OFF);
-        }
         if response["prompt_eval_count"].as_u64().unwrap_or(0) >= CONTEXT_TOKENS as u64 - 16 {
             log::warn!("Notetaker prompt filled the Ollama context; its start may have been cut");
         }
         let content = response["message"]["content"]
             .as_str()
             .ok_or_else(|| anyhow!("Ollama sent no message"))?;
-        parse_json_reply(content)
+        Ok(Reply {
+            content: content.to_string(),
+            cut: response["done_reason"] == "length",
+        })
     }
 }
 
@@ -321,21 +358,20 @@ fn approx_tokens(text: &str) -> usize {
     ascii / 4 + other + 1
 }
 
-fn split_parts(lines: &[String]) -> Vec<String> {
-    let mut parts = vec![String::new()];
+/// The transcript as runs of lines (from, to), each about `PART_TOKENS`.
+fn split_ranges(lines: &[String]) -> Vec<(usize, usize)> {
+    let mut ranges = vec![(0, 0)];
     let mut tokens = 0;
-    for line in lines {
+    for (i, line) in lines.iter().enumerate() {
         let line_tokens = approx_tokens(line);
         if tokens > 0 && tokens + line_tokens > PART_TOKENS {
-            parts.push(String::new());
+            ranges.push((i, i));
             tokens = 0;
         }
-        let current = parts.last_mut().unwrap();
-        current.push_str(line);
-        current.push('\n');
+        ranges.last_mut().unwrap().1 = i + 1;
         tokens += line_tokens;
     }
-    parts
+    ranges
 }
 
 fn capped_thoughts(thoughts: &str) -> String {
@@ -362,7 +398,7 @@ const NOTES_SHAPE: &str = r#"{
   "numbers": [{"value": "the number exactly as written in the line", "what": "what it counts, specifically", "unclear": false, "line": 33}],
   "key_points": ["specific facts explained or shown: how something works, what was found"],
   "action_items": [{"text": "what has to be done", "owner": "a name said in the meeting, or null", "due": "the deadline words exactly as said, or null", "line": 20}],
-  "speakers": [{"speaker": "Speaker 2", "name": "the person's name", "lines": [12, 30]}]
+  "speakers": [{"speaker": "Speaker 2", "name": "the person's name", "line": 12, "other_line": 30}]
 }"#;
 
 const NOTES_RULES: &str = "Rules:\n\
@@ -433,7 +469,8 @@ keep it as a proposal or open question.\n"
         "\nTranscript:\n{transcript}\n{NOTES_RULES}\
 For 'speakers', only name a 'Speaker N' when the transcript makes it clear who that is: \
 someone says their name right before they speak, or they introduce themselves. \
-'lines' are the line numbers (#index) where that name is said. Never name 'Me' or 'Them'. \
+'line' is the line number (#index) of a line where that name is said, and 'other_line' is a second such line, or null. \
+A name is a person's name, never 'Speaker 3'. Never name 'Me' or 'Them'. \
 Use names from the invite list when they match, even if the transcript spells them differently. Leave out anyone you are not sure about.\n\
 Reply with JSON in this shape:\n{NOTES_SHAPE}"
     ));
@@ -538,6 +575,30 @@ impl Number {
 }
 
 impl Notes {
+    /// How many items the notes hold.
+    fn size(&self) -> usize {
+        self.decisions.len()
+            + self.proposals.len()
+            + self.open_questions.len()
+            + self.numbers.len()
+            + self.key_points.len()
+            + self.action_items.len()
+    }
+
+    /// Drops items that say what an earlier one in the same list said: a
+    /// model stuck repeating itself writes the same item over and over.
+    fn drop_repeats(&mut self) {
+        fn first_of_each<T>(list: &mut Vec<T>, text: impl Fn(&T) -> &str) {
+            let mut seen = HashSet::new();
+            list.retain(|item| seen.insert(text(item).trim().to_lowercase()));
+        }
+        first_of_each(&mut self.decisions, |d| &d.text);
+        first_of_each(&mut self.proposals, |p| &p.proposal);
+        first_of_each(&mut self.open_questions, |q| q);
+        first_of_each(&mut self.key_points, |k| k);
+        first_of_each(&mut self.action_items, |a| &a.item.text);
+    }
+
     fn is_empty(&self) -> bool {
         self.overview.is_empty()
             && self.decisions.is_empty()
@@ -1086,7 +1147,13 @@ fn raw_notes(v: &Value) -> RawNotes {
             Some(SpeakerGuess {
                 speaker: text(&s["speaker"])?,
                 name: text(&s["name"])?,
-                lines: items(&s["lines"]).filter_map(segment_index).collect(),
+                // Two single fields: a list of lines here sent the model
+                // counting up through every line until the reply was cut off.
+                lines: items(&s["lines"])
+                    .chain([&s["line"], &s["other_line"]])
+                    .filter_map(segment_index)
+                    .take(8)
+                    .collect(),
             })
         })
         .collect();
@@ -1107,6 +1174,8 @@ fn notes_from(value: &Value, what: &str) -> Result<RawNotes> {
         );
         bail!("The model's reply for {what} had no notes. Try Regenerate.");
     }
+    let mut raw = raw;
+    raw.notes.drop_repeats();
     Ok(raw)
 }
 
@@ -1144,12 +1213,9 @@ pub fn summarize(
     let parts = part_notes(model, meeting, thoughts, segments)?;
     let mut notes = merged(model, meeting, parts.notes);
     if !parts.skipped.is_empty() {
-        let list: Vec<String> = parts.skipped.iter().map(usize::to_string).collect();
-        notes.overview.push_str(&format!(
-            " (Part {} of {} of the transcript is not in these notes: the AI model's notes for it ran too long.)",
-            list.join(", "),
-            parts.total
-        ));
+        notes
+            .overview
+            .push_str(&skipped_note(&parts.skipped, segments));
     }
     Ok((
         checked(notes, meeting, segments).into_summary(),
@@ -1157,50 +1223,67 @@ pub fn summarize(
     ))
 }
 
+/// Says which stretches of the meeting the notes leave out.
+fn skipped_note(skipped: &[(usize, usize)], segments: &[Segment]) -> String {
+    let spans: Vec<String> = skipped
+        .iter()
+        .filter_map(|&(from, to)| {
+            Some(format!(
+                "{} to {}",
+                clock(segments.get(from)?.start_ms),
+                clock(segments.get(to.checked_sub(1)?)?.end_ms)
+            ))
+        })
+        .collect();
+    format!(
+        " (These notes leave out {} of the meeting: the AI model could not write notes for it.)",
+        spans.join(" and ")
+    )
+}
+
 struct Parts {
     notes: Vec<Notes>,
     speakers: Vec<SpeakerGuess>,
-    /// Parts (from 1) left out because their notes ran too long twice.
-    skipped: Vec<usize>,
-    total: usize,
+    /// Line ranges (from, to) left out because no notes came for them.
+    skipped: Vec<(usize, usize)>,
 }
 
-/// Checked notes for each part of the transcript, in order.
+/// The model answered, but not with notes that can be used: asking about
+/// less of the transcript may work. Any other error (no reply in time, the
+/// engine not running) is the Mac's doing, and smaller pieces would not help.
+#[derive(Debug)]
+struct BadReply(String);
+
+impl std::fmt::Display for BadReply {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for BadReply {}
+
+fn bad_reply(e: anyhow::Error) -> anyhow::Error {
+    BadReply(e.to_string()).into()
+}
+
+/// Checked notes for each part of the transcript, in order. A part the
+/// model can't write notes for is tried again as two halves; what still
+/// fails is left out, so one bad stretch does not lose the whole meeting.
 fn part_notes(
     model: &Model,
     meeting: &Meeting,
     thoughts: &str,
     segments: &[Segment],
 ) -> Result<Parts> {
-    let parts = split_parts(&transcript_lines(segments));
+    let lines = transcript_lines(segments);
+    let ranges = split_ranges(&lines);
+    let total = ranges.len();
     let mut out = Parts {
         notes: Vec::new(),
         speakers: Vec::new(),
         skipped: Vec::new(),
-        total: parts.len(),
     };
-    for (i, part) in parts.iter().enumerate() {
-        let numbering = (parts.len() > 1).then_some((i + 1, parts.len()));
-        let value = match notes_reply(
-            model,
-            &notes_prompt(meeting, thoughts, part, numbering),
-            PART_REPLY_TOKENS,
-        ) {
-            Err(e) if e.to_string() == engine::CUT_OFF && parts.len() > 1 => {
-                log::warn!(
-                    "Notetaker: notes for part {} ran too long twice; leaving it out",
-                    i + 1
-                );
-                out.skipped.push(i + 1);
-                continue;
-            }
-            reply => reply?,
-        };
-        let what = match numbering {
-            Some((i, n)) => format!("part {i} of {n}"),
-            None => "the meeting".to_string(),
-        };
-        let mut raw = notes_from(&value, &what)?;
+    let keep = |out: &mut Parts, mut raw: RawNotes| {
         raw.notes.numbers.retain(|n| number_heard(n, segments));
         for n in &mut raw.notes.numbers {
             n.unclear |= !number_is_on_line(n, segments);
@@ -1209,27 +1292,319 @@ fn part_notes(
         raw.notes.check_dues(segments);
         out.speakers.extend(raw.speakers);
         out.notes.push(raw.notes);
+    };
+    let ask = |range: (usize, usize), numbering: Option<(usize, usize)>| {
+        let transcript = lines[range.0..range.1].join("\n") + "\n";
+        let prompt = notes_prompt(meeting, thoughts, &transcript, numbering);
+        let what = match numbering {
+            Some((i, n)) => format!("part {i} of {n}"),
+            None => "the meeting".to_string(),
+        };
+        notes_reply(model, &prompt, PART_REPLY_TOKENS, &what)
+    };
+    for (i, &range) in ranges.iter().enumerate() {
+        let numbering = (total > 1).then_some((i + 1, total));
+        let reply = match ask(range, numbering) {
+            Err(e) if !e.is::<BadReply>() => {
+                log::warn!(
+                    "Notetaker: no reply for part {} ({e}); restarting the model and asking again",
+                    i + 1
+                );
+                model.restart();
+                ask(range, numbering)
+            }
+            reply => reply,
+        };
+        let partial = match reply {
+            Ok((raw, true)) => {
+                keep(&mut out, raw);
+                continue;
+            }
+            // Still no reply after a restart: the Mac is busy or asleep,
+            // or the model can't run.
+            Err(e) if !e.is::<BadReply>() => return Err(e),
+            Ok((raw, false)) => Some(raw),
+            Err(e) => {
+                log::warn!("Notetaker: no notes for part {} ({e})", i + 1);
+                None
+            }
+        };
+        log::warn!("Notetaker: writing notes for part {} as two halves", i + 1);
+        let middle = range.0 + (range.1 - range.0) / 2;
+        let mut halves = Vec::new();
+        for half in [(range.0, middle), (middle, range.1)] {
+            // A half says it is a part, so what it leaves unsettled stays a
+            // proposal.
+            match ask(half, Some((i + 1, total.max(2)))) {
+                Ok((raw, true)) => halves.push(raw),
+                Err(e) if !e.is::<BadReply>() => return Err(e),
+                _ => break,
+            }
+        }
+        match (halves.len(), partial) {
+            (2, _) => halves.into_iter().for_each(|raw| keep(&mut out, raw)),
+            // The cut-off notes of the whole part say more than one half.
+            (_, Some(raw)) => keep(&mut out, raw),
+            (1, None) => {
+                halves.into_iter().for_each(|raw| keep(&mut out, raw));
+                out.skipped.push((middle, range.1));
+            }
+            (_, None) => out.skipped.push(range),
+        }
     }
     if out.notes.is_empty() {
-        bail!("The AI model's notes ran too long for every part of this meeting. Try Regenerate.");
+        bail!("The AI model could not write notes for any part of this meeting. Try Regenerate.");
     }
     Ok(out)
 }
 
-/// A notes reply; one cut off at `max_tokens` (the model kept repeating
-/// itself) is asked for once more, shorter.
-fn notes_reply(model: &Model, prompt: &str, max_tokens: u32) -> Result<Value> {
-    match model.chat_json(NOTES_SYSTEM, prompt, max_tokens) {
-        Err(e) if e.to_string() == engine::CUT_OFF => {
-            log::warn!("Notetaker: the notes reply ran too long; asking for a shorter one");
-            let shorter = format!(
-                "{prompt}\nYour first reply ran too long and was cut off. Keep every list to at most 8 items \
-and every quote under 15 words."
-            );
-            model.chat_json(NOTES_SYSTEM, &shorter, max_tokens)
-        }
-        reply => reply,
+/// Notes from one reply, and whether they are whole. A reply cut off at
+/// `max_tokens` (the model kept repeating itself) still holds notes up to
+/// the cut: they count as whole when they reach the last list. Otherwise
+/// the model is asked once more for a shorter reply, and when that is cut
+/// off too the fuller of the two comes back as not whole.
+fn notes_reply(
+    model: &Model,
+    prompt: &str,
+    max_tokens: u32,
+    what: &str,
+) -> Result<(RawNotes, bool)> {
+    let first = model.chat_reply(NOTES_SYSTEM, prompt, max_tokens)?;
+    if !first.cut {
+        let raw = parse_json_reply(&first.content)
+            .and_then(|v| notes_from(&v, what))
+            .map_err(bad_reply)?;
+        return Ok((raw, true));
     }
+    let saved = repair_cut_json(without_thinking(&first.content));
+    let whole = |value: &Option<Value>, reply: &Reply| {
+        value
+            .as_ref()
+            .filter(|_| reply.content.contains("\"speakers\""))
+            .and_then(whole_notes)
+    };
+    if let Some(raw) = whole(&saved, &first) {
+        log::warn!(
+            "Notetaker: the notes reply for {what} ran too long; it was whole up to the cut"
+        );
+        return Ok((raw, true));
+    }
+    log::warn!("Notetaker: the notes reply for {what} ran too long; asking for a shorter one");
+    let shorter = format!(
+        "{prompt}\nYour first reply ran too long and was cut off. Keep every list to at most 8 items \
+and every quote under 15 words. Never repeat an item."
+    );
+    let second = match model.chat_reply(NOTES_SYSTEM, &shorter, max_tokens) {
+        Ok(reply) if !reply.cut => {
+            if let Ok(raw) = parse_json_reply(&reply.content).and_then(|v| notes_from(&v, what)) {
+                return Ok((raw, true));
+            }
+            None
+        }
+        Ok(reply) => {
+            let value = repair_cut_json(without_thinking(&reply.content));
+            if let Some(raw) = whole(&value, &reply) {
+                return Ok((raw, true));
+            }
+            value
+        }
+        Err(e) => return Err(e),
+    };
+    let fuller = [saved, second]
+        .into_iter()
+        .flatten()
+        .map(|v| raw_notes(&v))
+        .filter(|raw| !raw.notes.is_empty())
+        .max_by_key(|raw| raw.notes.size());
+    match fuller {
+        Some(mut raw) => {
+            log::warn!("Notetaker: both notes replies for {what} ran too long");
+            raw.notes.drop_repeats();
+            Ok((raw, false))
+        }
+        None => Err(BadReply(engine::CUT_OFF.to_string()).into()),
+    }
+}
+
+/// The notes in a repaired reply whose cut came in or after its last list
+/// ('speakers', which the caller checks had begun): the lists of notes come
+/// before it in the shape, so the last of them is there and closed.
+fn whole_notes(value: &Value) -> Option<RawNotes> {
+    if !value["action_items"].is_array() {
+        return None;
+    }
+    let mut raw = raw_notes(value);
+    raw.notes.drop_repeats();
+    (!raw.notes.is_empty()).then_some(raw)
+}
+
+/// The JSON of a reply that was cut off mid-way, closed after its last
+/// whole item: `{"a": [{"b": 1}, {"b"` becomes `{"a": [{"b": 1}]}`.
+fn repair_cut_json(text: &str) -> Option<Value> {
+    let start = text.find('{')?;
+    let text = &text[start..];
+    // Places a whole value ends inside a list or object, with the brackets
+    // still open there.
+    let mut ends: Vec<(usize, Vec<char>)> = Vec::new();
+    let mut open: Vec<char> = Vec::new();
+    let (mut in_string, mut escaped) = (false, false);
+    for (i, c) in text.char_indices() {
+        if in_string {
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                '"' => {
+                    in_string = false;
+                    if open.last() == Some(&']') {
+                        ends.push((i + 1, open.clone()));
+                    }
+                }
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' => in_string = true,
+            '{' => open.push('}'),
+            '[' => open.push(']'),
+            '}' | ']' => {
+                if open.pop() != Some(c) {
+                    return None;
+                }
+                if open.is_empty() {
+                    return serde_json::from_str(&text[..=i]).ok();
+                }
+                ends.push((i + 1, open.clone()));
+            }
+            _ => {}
+        }
+    }
+    ends.iter().rev().take(64).find_map(|(end, open)| {
+        let closed: String = text[..*end]
+            .chars()
+            .chain(open.iter().rev().copied())
+            .collect();
+        serde_json::from_str(&closed).ok()
+    })
+}
+
+const TEMPLATE_SYSTEM: &str = "You add sections to meeting notes, following the user's template. \
+Lines of the transcript look like '#index [time] speaker: text'. 'Me' is the user who recorded the meeting. \
+The transcript comes from speech recognition, so some words are misheard. Write in the language the meeting was mostly held in. \
+Write only what the transcript says: never invent names, dates, numbers, decisions, or work that was done. Reply with JSON only.";
+const TEMPLATE_REPLY_TOKENS: u32 = 1_500;
+/// Most sections a template adds, and most bullets in one.
+const TEMPLATE_SECTIONS: usize = 10;
+const TEMPLATE_BULLETS: usize = 10;
+
+fn template_prompt(
+    meeting: &Meeting,
+    template: &str,
+    transcript: &str,
+    part: Option<(usize, usize)>,
+) -> String {
+    let mut prompt = format!("Meeting: {}\n", meeting_name(meeting));
+    if let Some(me) = me_name(&meeting.attendees) {
+        prompt.push_str(&format!("'Me' is {me}.\n"));
+    }
+    if let Some((i, n)) = part {
+        prompt.push_str(&format!("This is part {i} of {n} of the transcript.\n"));
+    }
+    prompt.push_str(&format!(
+        "\nTranscript:\n{transcript}\nThe user's template for the notes:\n{}\n\n\
+Write the sections the template asks for, from this transcript, with the headings the template gives. \
+Each bullet is one short, specific sentence. At most 8 sections and 6 bullets in a section. \
+A section the transcript says nothing about gets no bullets.\n\
+Reply with JSON in this shape:\n{{\"sections\": [{{\"heading\": \"...\", \"bullets\": [\"...\"]}}]}}",
+        capped_thoughts(template)
+    ));
+    prompt
+}
+
+/// The sections in a template reply, without empty ones.
+fn sections_from(value: &Value) -> Vec<NoteSection> {
+    items(&value["sections"])
+        .filter_map(|s| {
+            let bullets: Vec<String> = texts(&s["bullets"])
+                .into_iter()
+                .filter(|b| !is_filler(b))
+                .collect();
+            Some(NoteSection {
+                heading: text(&s["heading"])?,
+                bullets,
+            })
+        })
+        .filter(|s| !s.bullets.is_empty())
+        .collect()
+}
+
+/// Adds `more` to `sections`: bullets of a heading already there join it,
+/// and a bullet said before is left out.
+fn add_sections(sections: &mut Vec<NoteSection>, more: Vec<NoteSection>) {
+    for section in more {
+        let heading = section.heading.trim();
+        let at = match sections
+            .iter()
+            .position(|s| s.heading.eq_ignore_ascii_case(heading))
+        {
+            Some(at) => at,
+            None if sections.len() >= TEMPLATE_SECTIONS => continue,
+            None => {
+                sections.push(NoteSection {
+                    heading: heading.to_string(),
+                    bullets: Vec::new(),
+                });
+                sections.len() - 1
+            }
+        };
+        let at = &mut sections[at];
+        for bullet in section.bullets {
+            let said = at
+                .bullets
+                .iter()
+                .any(|b| b.trim().eq_ignore_ascii_case(bullet.trim()));
+            if !said && at.bullets.len() < TEMPLATE_BULLETS {
+                at.bullets.push(bullet);
+            }
+        }
+    }
+}
+
+/// The sections a template asks for, written from the transcript one part
+/// at a time. A part the model fails on only leaves its bullets out: the
+/// template never costs a meeting its notes.
+pub fn template_sections(
+    model: &Model,
+    meeting: &Meeting,
+    template: &str,
+    segments: &[Segment],
+) -> Vec<NoteSection> {
+    let lines = transcript_lines(segments);
+    let ranges = split_ranges(&lines);
+    let mut sections = Vec::new();
+    for (i, range) in ranges.iter().enumerate() {
+        let transcript = lines[range.0..range.1].join("\n") + "\n";
+        let numbering = (ranges.len() > 1).then_some((i + 1, ranges.len()));
+        let prompt = template_prompt(meeting, template, &transcript, numbering);
+        let value = match model.chat_reply(TEMPLATE_SYSTEM, &prompt, TEMPLATE_REPLY_TOKENS) {
+            Ok(reply) if reply.cut => repair_cut_json(without_thinking(&reply.content)),
+            Ok(reply) => parse_json_reply(&reply.content).ok(),
+            Err(e) => {
+                log::warn!("Notetaker: no template sections for part {} ({e})", i + 1);
+                // No reply at all: the model is not answering, so the other
+                // parts would only wait as long.
+                break;
+            }
+        };
+        match value {
+            Some(value) => add_sections(&mut sections, sections_from(&value)),
+            None => log::warn!(
+                "Notetaker: the template reply for part {} could not be read",
+                i + 1
+            ),
+        }
+    }
+    sections
 }
 
 /// One set of notes from the parts' notes, merged `MERGE_GROUP` at a time.
@@ -1253,10 +1628,14 @@ fn merged(model: &Model, meeting: &Meeting, parts: Vec<Notes>) -> Notes {
 
 fn merge_group(model: &Model, meeting: &Meeting, group: Vec<Notes>) -> Notes {
     let reply = merge_prompt(meeting, &group)
-        .and_then(|prompt| notes_reply(model, &prompt, MERGE_REPLY_TOKENS))
-        .and_then(|reply| notes_from(&reply, "the merged notes"));
+        .and_then(|prompt| notes_reply(model, &prompt, MERGE_REPLY_TOKENS, "the merged notes"));
     match reply {
-        Ok(raw) => reconcile(raw.notes, &group),
+        Ok((raw, true)) => reconcile(raw.notes, &group),
+        // Merged notes cut short would lose the lists after the cut.
+        Ok((_, false)) => {
+            log::warn!("Notetaker: the merged notes were cut short; joining the parts instead");
+            joined(group)
+        }
         Err(e) => {
             log::warn!("Notetaker: merging part notes failed ({e}); joining them instead");
             joined(group)
@@ -2117,6 +2496,35 @@ mod tests {
         assert!(prompt.contains("Never turn a proposal"));
     }
 
+    /// With LIPIK_TEST_DUMP=<folder>, every reply of the built-in model is
+    /// saved there (private: it holds meeting text).
+    pub(super) fn dump_reply(reply: &Reply) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        static LAST: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+        let Ok(dir) = std::env::var("LIPIK_TEST_DUMP") else {
+            return;
+        };
+        let n = N.fetch_add(1, Ordering::SeqCst);
+        let since = LAST
+            .lock()
+            .unwrap()
+            .replace(std::time::Instant::now())
+            .map_or(0.0, |t| t.elapsed().as_secs_f32());
+        println!(
+            "reply {n}: {} chars, cut {}, {since:.0} s after the last",
+            reply.content.len(),
+            reply.cut
+        );
+        let _ = std::fs::write(
+            format!(
+                "{dir}/reply-{n}{}.json",
+                if reply.cut { "-cut" } else { "" }
+            ),
+            &reply.content,
+        );
+    }
+
     /// Writes notes for one saved meeting with the built-in model, for
     /// comparing prompts on real meetings (kept private):
     /// LIPIK_TEST_DB=<copy of notetaker.db> LIPIK_TEST_MEETING=<id>
@@ -2180,13 +2588,137 @@ mod tests {
         let notes = merged(&model, &meeting, parts.notes);
         let summary = checked(notes, &meeting, &segments).into_summary();
         println!("{:.0} s", started.elapsed().as_secs_f32());
+        // LIPIK_TEST_TEMPLATE=<what a template asks for> also writes its
+        // sections, to <out>.template.json.
+        if let Ok(template) = std::env::var("LIPIK_TEST_TEMPLATE") {
+            let sections = template_sections(&model, &meeting, &template, &segments);
+            println!(
+                "template: {} sections, {:.0} s in all",
+                sections.len(),
+                started.elapsed().as_secs_f32()
+            );
+            std::fs::write(
+                format!("{out}.template.json"),
+                serde_json::to_string_pretty(&sections).unwrap(),
+            )
+            .unwrap();
+        }
         std::fs::write(out, serde_json::to_string_pretty(&summary).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_cut_off_reply_is_closed_after_its_last_whole_item() {
+        let cut = r#"{"title": "Lunch", "decisions": [{"text": "Order pizza", "line": 3}, {"text": "Ask Ra"#;
+        let value = repair_cut_json(cut).unwrap();
+        assert_eq!(value["title"], "Lunch");
+        assert_eq!(
+            value["decisions"],
+            json!([{"text": "Order pizza", "line": 3}])
+        );
+
+        // A cut inside a list of plain strings keeps the whole strings.
+        let cut = r#"{"numbers": [], "key_points": ["One {odd} \"quoted\" point", "Two", "Thr"#;
+        let value = repair_cut_json(cut).unwrap();
+        assert_eq!(
+            value["key_points"],
+            json!(["One {odd} \"quoted\" point", "Two"])
+        );
+
+        // A whole reply comes back as it is, and text with no item is nothing.
+        assert_eq!(
+            repair_cut_json(r#"{"a": [1]} trailing"#).unwrap(),
+            json!({"a": [1]})
+        );
+        assert!(repair_cut_json(r#"{"title": "Lun"#).is_none());
+        assert!(repair_cut_json("no json here").is_none());
+    }
+
+    #[test]
+    fn cut_off_notes_are_whole_only_when_they_reach_the_last_list() {
+        // Stuck counting lines for the first speaker: the notes are all there.
+        let reached = repair_cut_json(
+            r#"{"overview": "Talked about lunch.", "action_items": [{"text": "Book a table"}], "speakers": [{"speaker": "Speaker 1", "name": "Asha", "lines": [1, 2, 3, 4"#,
+        )
+        .unwrap();
+        let raw = whole_notes(&reached).unwrap();
+        assert_eq!(raw.notes.action_items.len(), 1);
+        assert!(raw.speakers.is_empty());
+
+        let short = repair_cut_json(
+            r#"{"overview": "Talked about lunch.", "numbers": [{"value": "12", "what": "tables"}, {"value": "12", "wh"#,
+        )
+        .unwrap();
+        assert!(whole_notes(&short).is_none());
+    }
+
+    #[test]
+    fn items_a_stuck_model_repeats_are_kept_once() {
+        let mut raw = raw_notes(&json!({
+            "overview": "x",
+            "key_points": ["The sync runs nightly", "the sync runs nightly ", "It reads the vendor table"],
+            "action_items": [{"text": "Send the list"}, {"text": "Send the list"}],
+        }));
+        raw.notes.drop_repeats();
+        assert_eq!(raw.notes.key_points.len(), 2);
+        assert_eq!(raw.notes.action_items.len(), 1);
+    }
+
+    #[test]
+    fn the_note_about_left_out_lines_gives_their_times() {
+        let segments: Vec<Segment> = (0..4)
+            .map(|i| Segment {
+                start_ms: i * 60_000,
+                end_ms: (i + 1) * 60_000,
+                ..seg("words")
+            })
+            .collect();
+        assert_eq!(
+            skipped_note(&[(1, 3)], &segments),
+            " (These notes leave out 01:00 to 03:00 of the meeting: the AI model could not write notes for it.)"
+        );
+    }
+
+    #[test]
+    fn template_sections_of_all_parts_join_by_heading() {
+        let part = |heading: &str, bullets: &[&str]| {
+            sections_from(&json!({ "sections": [{ "heading": heading, "bullets": bullets }] }))
+        };
+        let mut sections = Vec::new();
+        add_sections(&mut sections, part("Asha", &["Finished the export."]));
+        add_sections(
+            &mut sections,
+            part(
+                "asha ",
+                &["finished the export.", "Starts the import next."],
+            ),
+        );
+        add_sections(&mut sections, part("Blockers", &[]));
+        add_sections(
+            &mut sections,
+            part("Ravi", &["There was a discussion on the plan."]),
+        );
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].heading, "Asha");
+        assert_eq!(
+            sections[0].bullets,
+            ["Finished the export.", "Starts the import next."]
+        );
+    }
+
+    #[test]
+    fn parts_cover_every_line_once() {
+        let lines = vec!["#0 [00:00] Me: ".to_string() + &"word ".repeat(2_000); 7];
+        let ranges = split_ranges(&lines);
+        assert!(ranges.len() > 1);
+        assert_eq!(ranges.first().unwrap().0, 0);
+        assert_eq!(ranges.last().unwrap().1, lines.len());
+        assert!(ranges.windows(2).all(|w| w[0].1 == w[1].0));
     }
 
     #[test]
     fn parts_count_tokens_not_bytes() {
         let hindi = format!("#0 [00:00] Them: {}", "नमस्ते ".repeat(200));
-        let parts = split_parts(&vec![hindi; 20]);
+        let parts = split_ranges(&vec![hindi; 20]);
         assert!(parts.len() > 1, "{} parts", parts.len());
     }
 

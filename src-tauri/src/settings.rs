@@ -1050,6 +1050,20 @@ pub fn get_default_settings() -> AppSettings {
             current_binding: default_post_process_shortcut.to_string(),
         },
     );
+    #[cfg(target_os = "macos")]
+    let default_edit_shortcut = "ctrl+option+space";
+    #[cfg(not(target_os = "macos"))]
+    let default_edit_shortcut = "ctrl+alt+space";
+    bindings.insert(
+        "transcribe_edit".to_string(),
+        ShortcutBinding {
+            id: "transcribe_edit".to_string(),
+            name: "Edit by voice".to_string(),
+            description: "Changes the selected text the way you say.".to_string(),
+            default_binding: default_edit_shortcut.to_string(),
+            current_binding: default_edit_shortcut.to_string(),
+        },
+    );
     bindings.insert(
         "cancel".to_string(),
         ShortcutBinding {

@@ -19,6 +19,31 @@ let settings: NotetakerSettings = {
   language: "auto",
   meeting_window_names: false,
   learn_own_voice: true,
+  templates: [
+    {
+      id: "standup",
+      name: "Standup",
+      text: "One section for each person who spoke, headed by their name: what they finished, what they are doing next, and what is blocking them.",
+    },
+    {
+      id: "customer_call",
+      name: "Customer call",
+      text: "Sections: What the customer wants, Problems they raised, What we promised, Next steps and dates.",
+    },
+  ],
+  default_template: null,
+  prompts: [
+    {
+      id: "follow_up",
+      name: "Follow-up email",
+      text: "Write a short follow-up email for this meeting: what was decided, and who does what by when. Plain text, ready to send.",
+    },
+    {
+      id: "my_todos",
+      name: "My to-dos",
+      text: "List only what I have to do after this meeting, with the deadline when one was said.",
+    },
+  ],
 };
 
 let calendar = (params.get("calendar") ?? "not_determined") as CalendarAccess;

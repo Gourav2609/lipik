@@ -144,6 +144,31 @@ pub async fn notetaker_folders(manager: Manager<'_>) -> Result<Vec<FolderInfo>, 
     blocking(move || m.folders()).await
 }
 
+/// Saves the note with its transcript as a Markdown file at `path`.
+#[tauri::command]
+#[specta::specta]
+pub async fn notetaker_export(
+    manager: Manager<'_>,
+    id: String,
+    path: String,
+) -> Result<(), String> {
+    let m = manager.inner().clone();
+    blocking(move || m.export_markdown(&id, std::path::Path::new(&path))).await
+}
+
+/// Gives the meeting a notes template ("" for the plain notes) and writes
+/// its notes again.
+#[tauri::command]
+#[specta::specta]
+pub async fn notetaker_set_template(
+    manager: Manager<'_>,
+    id: String,
+    template: String,
+) -> Result<(), String> {
+    let m = manager.inner().clone();
+    blocking(move || m.set_template(&id, &template)).await
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn notetaker_regenerate(manager: Manager<'_>, id: String) -> Result<(), String> {

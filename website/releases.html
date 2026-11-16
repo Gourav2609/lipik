@@ -47,8 +47,8 @@
         "description": "Free, open-source voice dictation for Mac. Hold fn, speak, and clean text is typed in any app. Speech to text and clean-up run on your Mac. Indian English and Hinglish in Roman letters, and meeting notes with no bot.",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "macOS (Apple silicon, M1 or later)",
-        "softwareVersion": "0.1.17",
-        "dateModified": "2026-11-15",
+        "softwareVersion": "0.1.18",
+        "dateModified": "2026-11-16",
         "downloadUrl": "https://github.com/Gourav2609/lipik/releases/latest/download/Lipik.dmg",
         "url": "https://lipik.pages.dev/",
         "releaseNotes": "https://lipik.pages.dev/releases",
@@ -128,7 +128,7 @@
           <p class="rel-sub">
             What changed in each version of Lipik. The newest is at the top.
           </p>
-          <p class="rel-sub">Latest: 0.1.17, 15 Nov 2026.</p>
+          <p class="rel-sub">Latest: 0.1.18, 16 Nov 2026.</p>
           <p class="rel-sub">
             To install or update, paste this into Terminal and press Return. It
             keeps your settings, history and permissions:
@@ -149,6 +149,63 @@
         </div>
       </section>
       <section class="wrap rel-list" id="releases" aria-live="polite">
+        <article class="rel" id="v0.1.18">
+          <header class="rel-head">
+            <h2>Lipik 0.1.18</h2>
+            <p class="rel-meta">
+              <time datetime="2026-11-16">16 November 2026</time>
+              <a href="https://github.com/Gourav2609/lipik/releases/tag/v0.1.18"
+                >On GitHub</a
+              >
+            </p>
+          </header>
+          <div class="rel-body">
+            <p>
+              Meeting notes that arrive, note templates, saved prompts, saving a
+              note as a file, and editing text by voice.
+            </p>
+            <h3>What's new</h3>
+            <ul>
+              <li>
+                <strong>Meeting notes arrive far more reliably.</strong> The AI
+                model sometimes got stuck repeating itself, and Lipik then threw
+                the notes away. Now it keeps what was written, asks again in
+                smaller pieces when it must, and leaves out only the stretch it
+                could not handle, saying which minutes. Notes that still fail
+                are tried again by themselves, 30 minutes later and at the next
+                start. On our own meetings, the ones that had failed now get
+                full notes, and short meetings take about half the time.
+              </li>
+              <li>
+                <strong>Note templates.</strong> A template adds its own
+                sections to a meeting's notes. Standup, One-to-one, Customer
+                call and Interview come built in, and you can write your own in
+                Settings → Meetings → Templates. Pick one for all new meetings
+                there, or for one meeting from its menu (Notes template). A
+                template makes the notes take a little longer.
+              </li>
+              <li>
+                <strong>Saved prompts.</strong> Things you often ask of a
+                meeting are one click away under its notes: Follow-up email, My
+                to-dos, Status update and Open points come built in. Add your
+                own in Settings → Meetings → Saved prompts.
+              </li>
+              <li>
+                <strong>Save a note as a file.</strong> A meeting's menu has
+                Save as Markdown: the notes, your own notes and the whole
+                transcript in one file.
+              </li>
+              <li>
+                <strong>Edit by voice.</strong> Select some text, hold
+                Control+Option+Space and say what to change, like "make it
+                shorter" or "turn this into bullet points". Lipik rewrites the
+                selection on your Mac. Change the keys in Settings → Dictation.
+                It is new: plain rewrites work well, translating to Hinglish
+                does not yet.
+              </li>
+            </ul>
+          </div>
+        </article>
         <article class="rel" id="v0.1.17">
           <header class="rel-head">
             <h2>Lipik 0.1.17</h2>

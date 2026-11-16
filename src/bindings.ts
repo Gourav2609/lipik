@@ -1418,6 +1418,29 @@ async notetakerFolders() : Promise<Result<FolderInfo[], string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Saves the note with its transcript as a Markdown file at `path`.
+ */
+async notetakerExport(id: string, path: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_export", { id, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Gives the meeting a notes template ("" for the plain notes) and writes
+ * its notes again.
+ */
+async notetakerSetTemplate(id: string, template: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("notetaker_set_template", { id, template }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async notetakerRegenerate(id: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("notetaker_regenerate", { id }) };
@@ -1903,7 +1926,16 @@ thoughts: string; summary: NoteSummary | null;
  * Keys of the speakers whose name Lipik gave from the voice or from
  * what was said, and the user has not confirmed or changed.
  */
-guessed_speakers: string[] }
+guessed_speakers: string[]; 
+/**
+ * The id of the template the notes use: `None` follows the setting for
+ * new meetings, and "" is the plain notes.
+ */
+template?: string | null }
+/**
+ * A template or a saved prompt: a name and the words given to the model.
+ */
+export type NamedText = { id: string; name: string; text: string }
 /**
  * `Auto` decides per meeting by listening for Hindi; see `hinglish`.
  */
@@ -1987,7 +2019,19 @@ meeting_window_names: boolean;
  * Learn the user's voice from their dictation recordings, to tell them
  * apart from other people at the same Mac.
  */
-learn_own_voice: boolean }
+learn_own_voice: boolean; 
+/**
+ * Layouts for notes: each adds its own sections to a meeting's notes.
+ */
+templates: NamedText[]; 
+/**
+ * The template new meetings get; `None` is the plain notes.
+ */
+default_template: string | null; 
+/**
+ * Questions and requests kept to run on a meeting with one click.
+ */
+prompts: NamedText[] }
 export type NotetakerState = { recording: boolean; meeting_id: string | null }
 export type NotetakerStatus = { recording: boolean; 
 /**

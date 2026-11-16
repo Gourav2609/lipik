@@ -8,6 +8,7 @@ import {
   type NotetakerSettings as Settings,
 } from "@/bindings";
 import { Button, Toggle } from "../ui";
+import { NamedTexts } from "./NamedTexts";
 import { SettingsPage } from "./SettingsPage";
 import {
   FIELD_CLASS,
@@ -39,6 +40,9 @@ const DEFAULTS: Settings = {
   language: "auto",
   meeting_window_names: false,
   learn_own_voice: true,
+  templates: [],
+  default_template: null,
+  prompts: [],
 };
 
 const NOTIFY_OPTIONS = [
@@ -492,6 +496,63 @@ export default function NotetakerSettings() {
                 disabled
               />
             }
+          />
+        </SettingsCard>
+      </Section>
+      <Section title="Templates">
+        <SettingsCard>
+          <SettingRow
+            title="Template for new meetings"
+            description="A template adds its own sections to a meeting's notes. Change one meeting's template from its menu."
+            control={
+              <Select
+                label="Template for new meetings"
+                value={
+                  s.templates.some((t) => t.id === s.default_template)
+                    ? (s.default_template ?? "")
+                    : ""
+                }
+                options={[
+                  { value: "", label: "Plain notes" },
+                  ...s.templates.map((t) => ({ value: t.id, label: t.name })),
+                ]}
+                disabled={loading}
+                onChange={(v) => update({ default_template: v || null })}
+              />
+            }
+          />
+          <NamedTexts
+            items={s.templates}
+            addLabel="New template"
+            namePlaceholder="Weekly review"
+            textPlaceholder="Sections: What shipped, What slipped, Plan for next week."
+            disabled={loading}
+            onChange={(templates) =>
+              update({
+                templates,
+                default_template: templates.some(
+                  (t) => t.id === s.default_template,
+                )
+                  ? s.default_template
+                  : null,
+              })
+            }
+          />
+        </SettingsCard>
+      </Section>
+      <Section title="Saved prompts">
+        <SettingsCard>
+          <SettingRow
+            title="One click under a meeting's notes"
+            description={`Things you ask of a meeting often. ${APP_NAME} answers from that meeting's notes and transcript.`}
+          />
+          <NamedTexts
+            items={s.prompts}
+            addLabel="New prompt"
+            namePlaceholder="Thank-you note"
+            textPlaceholder="Write a two-line thank-you note to the people in this meeting."
+            disabled={loading}
+            onChange={(prompts) => update({ prompts })}
           />
         </SettingsCard>
       </Section>

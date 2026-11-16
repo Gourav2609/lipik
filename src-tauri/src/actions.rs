@@ -79,6 +79,18 @@ pub trait ShortcutAction: Send + Sync {
 // Transcribe Action
 struct TranscribeAction {
     post_process: bool,
+    /// What is said is an instruction for changing the selected text, not
+    /// text to type.
+    edit: bool,
+}
+
+impl TranscribeAction {
+    fn for_binding(binding_id: &str) -> Self {
+        Self {
+            post_process: binding_id == "transcribe_with_post_process",
+            edit: binding_id == "transcribe_edit",
+        }
+    }
 }
 
 /// Field name for structured output JSON schema
@@ -487,7 +499,7 @@ impl ShortcutAction for TranscribeAction {
             long_form: false,
         };
         let live = if live_decode(expected_model, settings.long_form_chunking) != LiveDecode::None {
-            tm.start_stream(!self.post_process)
+            tm.start_stream(!self.post_process && !self.edit)
         } else {
             0
         };
@@ -609,10 +621,7 @@ pub fn resume_transcription(app: &AppHandle, binding_id: &str, samples: Vec<f32>
     app.state::<Arc<TranscriptionManager>>()
         .initiate_model_load();
     RECORDING_SESSION.fetch_add(1, Ordering::SeqCst);
-    TranscribeAction {
-        post_process: binding_id == "transcribe_with_post_process",
-    }
-    .finish(app, binding_id, Some(samples));
+    TranscribeAction::for_binding(binding_id).finish(app, binding_id, Some(samples));
 }
 
 impl TranscribeAction {
@@ -659,6 +668,7 @@ impl TranscribeAction {
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = self.post_process;
+        let edit = self.edit;
         let cancel_generation = rm.cancel_generation();
         let dictation = LIVE_DICTATION.swap(0, Ordering::SeqCst);
 
@@ -754,6 +764,22 @@ impl TranscribeAction {
                     }
 
                     match transcription_result {
+                        // Edit by voice: the words are an instruction for
+                        // the selected text. Nothing is typed and nothing
+                        // goes to history.
+                        Ok(instruction) if edit => {
+                            let _ = std::fs::remove_file(hm.recordings_dir().join(&file_name));
+                            let ah = ah.clone();
+                            let finished = tauri::async_runtime::spawn_blocking(move || {
+                                crate::textflow::transforms::edit_by_voice(&ah, &instruction);
+                                utils::hide_recording_overlay(&ah);
+                                set_tray_state(&ah, TrayIconState::Idle);
+                            })
+                            .await;
+                            if let Err(e) = finished {
+                                error!("Edit by voice stopped early: {e}");
+                            }
+                        }
                         Ok(transcription) => {
                             debug!(
                                 "Transcription completed in {:?} ({} words)",
@@ -1031,16 +1057,16 @@ impl ShortcutAction for TestAction {
 // Static Action Map
 pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::new(|| {
     let mut map = HashMap::new();
-    map.insert(
-        "transcribe".to_string(),
-        Arc::new(TranscribeAction {
-            post_process: false,
-        }) as Arc<dyn ShortcutAction>,
-    );
-    map.insert(
-        "transcribe_with_post_process".to_string(),
-        Arc::new(TranscribeAction { post_process: true }) as Arc<dyn ShortcutAction>,
-    );
+    for id in [
+        "transcribe",
+        "transcribe_with_post_process",
+        "transcribe_edit",
+    ] {
+        map.insert(
+            id.to_string(),
+            Arc::new(TranscribeAction::for_binding(id)) as Arc<dyn ShortcutAction>,
+        );
+    }
     map.insert(
         "cancel".to_string(),
         Arc::new(CancelAction) as Arc<dyn ShortcutAction>,

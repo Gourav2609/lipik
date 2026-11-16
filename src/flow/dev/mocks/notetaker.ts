@@ -130,6 +130,7 @@ type Sample = {
   summary: NoteSummary | null;
   /** Speaker keys whose name Lipik gave; see MeetingDetail. */
   guessed?: string[];
+  template?: string;
 };
 
 const records: Sample[] = [
@@ -397,6 +398,7 @@ export const handlers: Record<string, MockHandler> = {
           thoughts: r.thoughts,
           summary: r.summary,
           guessed_speakers: r.guessed ?? [],
+          template: r.template ?? null,
         }
       : null;
   },
@@ -453,6 +455,12 @@ export const handlers: Record<string, MockHandler> = {
     const r = find(id);
     if (!r) throw "No such meeting";
     throw "Ollama isn't running. Start it, then choose Try again.";
+  },
+  notetaker_set_template: ({ id, template }) => {
+    const r = find(id);
+    if (!r) throw "No such meeting";
+    r.template = String(template);
+    return null;
   },
   notetaker_redo_in_hinglish: ({ id }) => {
     const r = find(id);

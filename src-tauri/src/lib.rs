@@ -883,6 +883,8 @@ pub fn run(cli_args: CliArgs) {
             notetaker::commands::notetaker_move_to_folder,
             notetaker::commands::notetaker_folders,
             notetaker::commands::notetaker_regenerate,
+            notetaker::commands::notetaker_set_template,
+            notetaker::commands::notetaker_export,
             notetaker::commands::notetaker_redo_in_hinglish,
             notetaker::commands::notetaker_dismiss_hinglish_error,
             notetaker::commands::notetaker_upcoming,

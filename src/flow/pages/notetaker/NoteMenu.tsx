@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, ChevronLeft } from "lucide-react";
+import { commands, type NamedText } from "@/bindings";
 import { Popover } from "../../overlays/Popover";
 import { Button, TextInput } from "../../ui";
 import {
@@ -10,6 +11,8 @@ import {
   redoNoteInHinglish,
   regenerateNote,
   renameNote,
+  saveNoteAsMarkdown,
+  setNoteTemplate,
   type Folder,
   type Note,
 } from "./data";
@@ -53,7 +56,7 @@ const SubHeader = ({
   </button>
 );
 
-export type NoteMenuMode = "main" | "rename" | "folder" | "delete";
+export type NoteMenuMode = "main" | "rename" | "folder" | "template" | "delete";
 
 const WIDTH = 240;
 
@@ -80,6 +83,31 @@ export const NoteMenu = ({
   const [mode, setMode] = useState<NoteMenuMode>(initialMode);
   const [title, setTitle] = useState(note.title);
   const [folderName, setFolderName] = useState("");
+  const [templates, setTemplates] = useState<{
+    list: NamedText[];
+    chosen: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (mode !== "template") return;
+    void Promise.all([
+      commands.notetakerGetSettings(),
+      commands.notetakerGet(note.id),
+    ])
+      .then(([settings, detail]) => {
+        const own = detail.status === "ok" ? detail.data?.template : null;
+        setTemplates({
+          list: settings.templates,
+          chosen: own ?? settings.default_template ?? "",
+        });
+      })
+      .catch(() => setTemplates({ list: [], chosen: "" }));
+  }, [mode, note.id]);
+
+  const pickTemplate = (template: string) => {
+    if (template === templates?.chosen) return onClose();
+    void run(() => setNoteTemplate(note.id, template));
+  };
 
   const run = async (action: () => Promise<boolean>) => {
     onClose();
@@ -104,7 +132,7 @@ export const NoteMenu = ({
     onChanged();
   };
 
-  const top = Math.min(anchor.bottom + 6, window.innerHeight - 300);
+  const top = Math.min(anchor.bottom + 6, window.innerHeight - 364);
   const left = Math.max(8, anchor.right - WIDTH);
 
   return (
@@ -128,6 +156,9 @@ export const NoteMenu = ({
           <MenuItem onClick={() => void run(() => openInWindow(note.id))}>
             Open in window
           </MenuItem>
+          <MenuItem onClick={() => void run(() => saveNoteAsMarkdown(note))}>
+            Save as Markdown
+          </MenuItem>
           <MenuItem onClick={() => setMode("rename")}>Rename</MenuItem>
           <MenuItem onClick={() => setMode("folder")}>
             {note.folder ? "Move to folder" : "Add to folder"}
@@ -137,6 +168,9 @@ export const NoteMenu = ({
             onClick={() => void run(() => regenerateNote(note.id))}
           >
             Write summary again
+          </MenuItem>
+          <MenuItem disabled={isBusy(note)} onClick={() => setMode("template")}>
+            Notes template
           </MenuItem>
           {note.hasAudio && (
             <MenuItem
@@ -191,6 +225,21 @@ export const NoteMenu = ({
               }
             />
           </div>
+        </div>
+      )}
+      {mode === "template" && (
+        <div>
+          <SubHeader label="Notes template" onBack={() => setMode("main")} />
+          {templates &&
+            [{ id: "", name: "Plain notes" }, ...templates.list].map((t) => (
+              <MenuItem key={t.id} onClick={() => pickTemplate(t.id)}>
+                <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                {t.id === templates.chosen && <Check size={15} />}
+              </MenuItem>
+            ))}
+          <p className="px-[12px] pb-[8px] pt-[4px] text-[12.5px] leading-[17px] text-[var(--fk-text-muted)]">
+            Choosing one writes the notes again.
+          </p>
         </div>
       )}
       {mode === "delete" && (

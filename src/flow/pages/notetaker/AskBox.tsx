@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowUp, History, MessageSquareText } from "lucide-react";
+import type { NamedText } from "@/bindings";
 import { isFlowPreview } from "../../dev/preview";
 import { Button } from "../../ui";
 
@@ -22,11 +23,14 @@ export const AskBox = ({
   onPastChats,
   placeholder,
   busy = false,
+  saved = [],
 }: {
   onAsk: (question: string) => void;
   onPastChats?: () => void;
   placeholder?: string;
   busy?: boolean;
+  /** Saved prompts, each asked with one click. */
+  saved?: NamedText[];
 }) => {
   const [value, setValue] = useState("");
   const [prompts, setPrompts] = useState(() => ({
@@ -60,7 +64,7 @@ export const AskBox = ({
 
   const prompt = PROMPTS[prompts.now];
 
-  return (
+  const box = (
     <div className="flex h-[48px] items-center gap-[12px] rounded-[14px] bg-[var(--fk-menu-bg)] pl-[16px] pr-[8px] shadow-[var(--fk-elev-2)] transition-shadow duration-[var(--fk-t-quick)] focus-within:shadow-[var(--fk-elev-2),var(--fk-focus)]">
       <MessageSquareText
         size={18}
@@ -132,6 +136,27 @@ export const AskBox = ({
           </Button>
         )
       )}
+    </div>
+  );
+  if (saved.length === 0) return box;
+
+  return (
+    <div>
+      <div className="mb-[8px] flex gap-[6px] overflow-x-auto">
+        {saved.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            title={p.text}
+            disabled={busy}
+            onClick={() => onAsk(p.text)}
+            className="h-[28px] shrink-0 rounded-full bg-[var(--fk-menu-bg)] px-[12px] text-[13px] font-medium text-[var(--fk-text-muted)] shadow-[var(--fk-elev-1)] transition-colors duration-[var(--fk-t-quick)] enabled:hover:text-[var(--fk-text)] disabled:opacity-45"
+          >
+            {p.name}
+          </button>
+        ))}
+      </div>
+      {box}
     </div>
   );
 };
