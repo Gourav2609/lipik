@@ -150,6 +150,18 @@ export default function General() {
             }
           />
           <SettingRow
+            title="Show words as I speak"
+            description="A small panel by the pill shows what was heard. Faint words may still change before they are typed."
+            control={
+              <Toggle
+                label="Show words as I speak"
+                checked={getSetting("live_words") ?? false}
+                disabled={isUpdating("live_words")}
+                onChange={(v) => updateSetting("live_words", v)}
+              />
+            }
+          />
+          <SettingRow
             title="Edit by voice"
             description={
               'Select some text, hold these keys and say what to change, like "make it shorter".'

@@ -27,11 +27,22 @@ const KEPT: usize = 3;
 
 type Finish = Box<dyn Fn(String) -> String + Send + Sync>;
 
+/// What the live panel shows for the text heard so far. `whole`: clean-up
+/// rewrites all of it at the end (a style other than formal), so `pieces` is
+/// empty and every word may change.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, specta::Type, tauri_specta::Event)]
+pub struct LivePreviewEvent {
+    pub pieces: Vec<pipeline::LivePiece>,
+    pub whole: bool,
+}
+
 static SESSIONS: Lazy<Mutex<Vec<Arc<Session>>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 struct Session {
     /// The dictation (its live transcription) this session belongs to.
     id: u64,
+    /// The live panel is on, so each change is shown there.
+    live: bool,
     app: AppHandle,
     setup: Setup,
     /// Turns committed text into what the transcription returns (filler
@@ -96,11 +107,21 @@ pub fn begin(app: &AppHandle, id: u64, finish: impl Fn(String) -> String + Send 
     else {
         return;
     };
+    let live = crate::settings::get_settings(app).live_words;
     if !setup.sends_parts() {
+        if live {
+            use tauri_specta::Event;
+            let _ = LivePreviewEvent {
+                pieces: Vec::new(),
+                whole: true,
+            }
+            .emit(app);
+        }
         return;
     }
     let session = Arc::new(Session {
         id,
+        live,
         app: app.clone(),
         setup,
         finish: Box::new(finish),
@@ -228,6 +249,9 @@ async fn work(session: Arc<Session>) {
             let latest = state.latest.take();
             latest.map(|text| (state.heard.has_new_sentence(&text), text))
         };
+        if let Some((_, text)) = &latest {
+            show(&session, text);
+        }
         let Some((new, text)) = latest else {
             if tokio::time::timeout(IDLE, session.wake.notified())
                 .await
@@ -247,7 +271,7 @@ async fn work(session: Arc<Session>) {
             close(&session);
             return;
         }
-        let prepared = pipeline::prepare(&session.app, &(session.finish)(text));
+        let prepared = pipeline::prepare(&session.app, &(session.finish)(text.clone()));
         let endpoint = llm::endpoint(&session.app);
         for job in pipeline::early_jobs(&prepared, &session.setup) {
             let needed = llm::messages_context(&job.messages);
@@ -290,7 +314,25 @@ async fn work(session: Arc<Session>) {
                 }
             }
             let _ = done.send(true);
+            show(&session, &text);
         }
+    }
+}
+
+/// Sends the live panel the text heard so far as clean-up has it now.
+fn show(session: &Session, committed: &str) {
+    if !session.live {
+        return;
+    }
+    let prepared = pipeline::prepare(&session.app, &(session.finish)(committed.to_string()));
+    let replies = lock(&session.state).replies.clone();
+    if let Some(pieces) = pipeline::preview(&prepared, &session.setup, &replies) {
+        use tauri_specta::Event;
+        let _ = LivePreviewEvent {
+            pieces,
+            whole: false,
+        }
+        .emit(&session.app);
     }
 }
 

@@ -244,8 +244,13 @@ if (isPillPreview) {
       { index: "1", name: "USB Audio Device", is_default: false },
     ],
     get_selected_microphone: () => "MacBook Pro Microphone",
-    get_app_settings: (real) =>
-      side ? { ...(real as object), pill_side: side } : real,
+    get_app_settings: (real) => ({
+      ...(real as object),
+      ...(side ? { pill_side: side } : {}),
+      // `?live=1` shows the words beside the pill; feed them with
+      // __pillEmit("stream-text-event", …) and ("live-preview-event", …).
+      live_words: params.get("live") === "1",
+    }),
     notetaker_status: () =>
       params.get("pillScene") === "reloadMistake"
         ? { recording: true, meeting_id: "m1" }

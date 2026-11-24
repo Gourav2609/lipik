@@ -524,6 +524,9 @@ pub struct AppSettings {
     pub mute_while_recording: bool,
     #[serde(default)]
     pub append_trailing_space: bool,
+    /// Show the words beside the pill while the user speaks.
+    #[serde(default)]
+    pub live_words: bool,
     #[serde(default = "default_app_language")]
     pub app_language: String,
     #[serde(default = "default_theme")]
@@ -1137,6 +1140,7 @@ pub fn get_default_settings() -> AppSettings {
         post_process_selected_prompt_id: None,
         mute_while_recording: true,
         append_trailing_space: false,
+        live_words: false,
         app_language: default_app_language(),
         theme: default_theme(),
         experimental_enabled: false,

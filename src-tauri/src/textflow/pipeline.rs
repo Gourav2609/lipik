@@ -509,6 +509,78 @@ pub(super) fn early_jobs(prepared: &Prepared, setup: &Setup) -> Vec<Job> {
         .collect()
 }
 
+/// One stretch of the text heard so far, as the live panel shows it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize, specta::Type)]
+pub struct LivePiece {
+    pub text: String,
+    /// Clean-up has not finished with it: its wording may still change.
+    pub pending: bool,
+}
+
+/// The text heard so far as it will read once cleaned, for the live panel:
+/// the rules text, with each part that needs the model shown cleaned when
+/// its reply is in `replies` (checked as at release) and marked pending
+/// otherwise. The sentence still being said is always pending. `None` for a
+/// list, whose parts are not cleaned one by one.
+pub(super) fn preview(
+    prepared: &Prepared,
+    setup: &Setup,
+    replies: &std::collections::HashMap<String, String>,
+) -> Option<Vec<LivePiece>> {
+    let rules_text = rules::apply(&prepared.masked, &setup.vocabulary);
+    let parts = gate::parts(&rules_text, &setup.vocabulary);
+    if !gate::in_order(&rules_text, &parts)
+        || parts
+            .iter()
+            .any(|p| p.reasons.contains(&gate::Reason::List))
+    {
+        return None;
+    }
+    let finished = rules_text.trim_end().ends_with(['.', '!', '?']);
+    let open_from = if finished {
+        rules_text.len()
+    } else {
+        gate::last_sentence_start(&rules_text)
+    };
+    let relevant = relevant_vocabulary(&setup.vocabulary, &prepared.masked);
+    let mut pieces: Vec<LivePiece> = Vec::new();
+    let mut add = |text: &str, pending: bool| {
+        let text = prepared.unmask(text).unwrap_or_else(|| text.to_string());
+        if text.is_empty() {
+            return;
+        }
+        match pieces.last_mut() {
+            Some(last) if last.pending == pending => last.text.push_str(&text),
+            _ => pieces.push(LivePiece { text, pending }),
+        }
+    };
+    let mut pos = 0;
+    for part in parts {
+        if !gate::fits(&rules_text, pos, &part) || part.start >= open_from {
+            continue;
+        }
+        add(&rules_text[pos..part.start], false);
+        let core = &rules_text[part.start..part.end];
+        let job = job(prepared, setup, &rules_text, part.clone(), &relevant);
+        match replies.get(job.key()) {
+            Some(reply) if part.fragment => add(
+                &accept_fragment(core, reply, &prepared.masked, &relevant),
+                false,
+            ),
+            Some(reply) => add(
+                &accept_part(core, reply, &prepared.masked, &relevant),
+                false,
+            ),
+            None => add(core, true),
+        }
+        pos = part.end;
+    }
+    let settled = open_from.max(pos);
+    add(&rules_text[pos..settled], false);
+    add(&rules_text[settled..], true);
+    Some(pieces)
+}
+
 /// Sends each job through `ask` (by its index in `jobs`) and puts the
 /// accepted replies into the rules text: the text to paste, with snippet
 /// markers. `None` when the whole text was sent and the call failed.
@@ -1262,6 +1334,23 @@ mod tests {
             vocabulary: Vec::new(),
             label: "Slack".to_string(),
         }
+    }
+
+    /// The live panel shows settled sentences as they are, marks the ones
+    /// that wait for the model and the one still being said, and swaps a
+    /// waiting one for its cleaned wording when the reply is in.
+    #[test]
+    fn the_live_preview_marks_what_may_still_change() {
+        let setup = slack();
+        let text = "We ship the release on Monday. Send it at four, um, no, five. And then";
+        let heard = prepared(text, &[]);
+        let none = std::collections::HashMap::new();
+        let pieces = preview(&heard, &setup, &none).unwrap();
+        let shown: String = pieces.iter().map(|p| p.text.as_str()).collect();
+        assert!(shown.starts_with("We ship the release on Monday."));
+        assert!(!pieces[0].pending, "{pieces:?}");
+        assert!(pieces.last().unwrap().pending, "{pieces:?}");
+        assert!(pieces.last().unwrap().text.contains("And then"));
     }
 
     fn keys(jobs: &[Job]) -> Vec<String> {

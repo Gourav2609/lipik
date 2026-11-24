@@ -9,7 +9,7 @@ import React, {
 import { useTranslation } from "react-i18next";
 import "@fontsource-variable/figtree";
 import "./Pill.css";
-import { commands, events, type PillSide } from "@/bindings";
+import { commands, events, type LivePiece, type PillSide } from "@/bindings";
 import { LipikMark } from "@/flow/ui/LipikMark";
 import type { ModelStateEvent } from "@/lib/types/events";
 import { formatKeyCombination } from "@/lib/utils/keyboard";
@@ -237,6 +237,18 @@ const NOTE_MORE = GEO.note.h / 2 + 4 + NOTE_MORE_SIZE / 2;
 const MIC_LABEL_EDGE = 46;
 const MIC_LABEL_DELAY = 100;
 
+/** The words beside the pill while speaking: this far off the pill, this wide. */
+const LIVE = { gap: 12, w: 320 };
+/** What has been heard in this dictation. `cleaned`: clean-up has sent its
+    view (`pieces`, or `whole` when it rewrites everything at the end). */
+const NOTHING_HEARD = {
+  committed: "",
+  tentative: "",
+  pieces: [] as LivePiece[],
+  whole: false,
+  cleaned: false,
+};
+
 const NOTEPAD = { kind: "Window", label: "notepad" } as const;
 
 const CURVES = {
@@ -371,6 +383,8 @@ const Pill: React.FC = () => {
     null,
   );
   const [popupH, setPopupH] = useState(POPUP.minH);
+  const [liveWords, setLiveWords] = useState(false);
+  const [heard, setHeard] = useState(NOTHING_HEARD);
   const [menu, setMenu] = useState(false);
   const [menuHot, setMenuHot] = useState<string | null>(null);
   const [mic, setMic] = useState<{
@@ -496,6 +510,7 @@ const Pill: React.FC = () => {
           const binding = r.data.bindings?.transcribe?.current_binding;
           if (binding) setShortcut(formatKeyCombination(binding, "macos"));
           setSide(r.data.pill_side ?? "right");
+          setLiveWords(r.data.live_words ?? false);
         })
         .catch(() => {});
     loadShortcut();
@@ -549,6 +564,9 @@ const Pill: React.FC = () => {
                 axAfterRec.current = !ok;
               })
               .catch(() => {});
+          setHeard(NOTHING_HEARD);
+          // The setting may have changed since the pill last read it.
+          loadShortcut();
           recStart.current = performance.now();
           level.current = { target: 0, value: 0 };
           loudness.current = freshLoudness();
@@ -590,6 +608,12 @@ const Pill: React.FC = () => {
           pendingText.current = null;
         }
       }),
+      events.streamTextEvent.listen((e) =>
+        setHeard((h) => ({ ...h, ...e.payload })),
+      ),
+      events.livePreviewEvent.listen((e) =>
+        setHeard((h) => ({ ...h, ...e.payload, cleaned: true })),
+      ),
       listen("recording-ready", () =>
         later(
           "arm",
@@ -1097,6 +1121,13 @@ const Pill: React.FC = () => {
   const showTip = mode === "hover" && hover && !menu && !meetings && !card;
   const loadingLabel = mode === "proc" && modelLoading;
   const noticeLabel = !showTip && !loadingLabel && mode !== "gone" && notice;
+  const liveShown =
+    liveWords &&
+    phase !== "idle" &&
+    mode !== "gone" &&
+    (heard.committed !== "" ||
+      heard.tentative !== "" ||
+      heard.pieces.length > 0);
   const hot = micHover && hotReady && mode === "hover";
   const drop = drag && covers ? slots() : null;
   const showTab =
@@ -1486,6 +1517,33 @@ const Pill: React.FC = () => {
             setToast((cur) => (cur?.key === toast.key ? null : cur));
           }}
         />
+      )}
+      {liveShown && (
+        <div
+          className={`pill-live ${bottom ? "bottom" : side}`}
+          style={
+            bottom
+              ? { left: cx, bottom: GEO.rec.edge + GEO.rec.w + lift + LIVE.gap }
+              : { [side]: GEO.rec.edge + GEO.rec.w + LIVE.gap, top: cy }
+          }
+        >
+          <div className="pill-live-clip">
+            <p style={{ width: LIVE.w }}>
+              {heard.cleaned && !heard.whole ? (
+                heard.pieces.map((p, i) => (
+                  <span key={i} className={p.pending ? "pending" : ""}>
+                    {p.text}
+                  </span>
+                ))
+              ) : (
+                <span className={heard.whole ? "pending" : ""}>
+                  {heard.committed}
+                </span>
+              )}{" "}
+              <span className="tentative">{heard.tentative}</span>
+            </p>
+          </div>
+        </div>
       )}
       {popup && (
         <Popup

@@ -746,6 +746,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::resume_all_bindings,
             shortcut::change_mute_while_recording_setting,
             shortcut::change_append_trailing_space_setting,
+            shortcut::change_live_words_setting,
             shortcut::change_lazy_stream_close_setting,
             shortcut::change_vad_enabled_setting,
             shortcut::change_long_form_chunking_setting,
@@ -903,6 +904,7 @@ pub fn run(cli_args: CliArgs) {
         .events(collect_events![
             managers::history::HistoryUpdatePayload,
             managers::transcription::StreamTextEvent,
+            textflow::early::LivePreviewEvent,
             managers::transcription::StreamPhaseEvent,
             notetaker::NotetakerCallDetected,
             notetaker::NotetakerCallEnded,
