@@ -155,7 +155,7 @@ export default function General() {
             control={
               <Toggle
                 label="Show words as I speak"
-                checked={getSetting("live_words") ?? false}
+                checked={getSetting("live_words") ?? true}
                 disabled={isUpdating("live_words")}
                 onChange={(v) => updateSetting("live_words", v)}
               />

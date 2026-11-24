@@ -510,7 +510,7 @@ const Pill: React.FC = () => {
           const binding = r.data.bindings?.transcribe?.current_binding;
           if (binding) setShortcut(formatKeyCombination(binding, "macos"));
           setSide(r.data.pill_side ?? "right");
-          setLiveWords(r.data.live_words ?? false);
+          setLiveWords(r.data.live_words ?? true);
         })
         .catch(() => {});
     loadShortcut();
